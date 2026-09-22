@@ -1,0 +1,59 @@
+{% extends 'ui/base.html' %}
+{% block title %}Controle de Revisões | Gestão de Frotas{% endblock %}
+{% block heading %}Controle de Revisões{% endblock %}
+{% block content %}
+<section class="welcome" style="margin-bottom:20px;">
+    <div>
+        <form method="get" action="" style="display:flex;gap:10px;">
+            <input type="text" name="q" value="{{ q }}" placeholder="Buscar por placa ou modelo..." style="padding:10px;width:400px;border-radius:4px;border:1px solid #ccc;" />
+            <button type="submit" class="primary-action">Buscar</button>
+        </form>
+    </div>
+    <div style="display:flex; gap:10px;">
+        <a class="primary-action" href="{% url 'km_import' %}" style="background:#27ae60;">⬆ Importar KM (CSV)</a>
+    </div>
+</section>
+<section class="grid">
+    <article class="panel" style="grid-column:1/-1;">
+        {% if vehicles_data %}
+        <table>
+            <thead><tr><th>VEÍCULO (PLACA)</th><th>MARCA/MODELO</th><th>KM ATUAL</th><th>PRÓX. REVISÃO</th><th>FALTAM</th><th>STATUS</th><th>AÇÕES</th></tr></thead>
+            <tbody>
+                {% for v in vehicles_data %}
+                <tr>
+                    <td><strong>{{ v.plate }}</strong></td>
+                    <td>{{ v.brand_model }}</td>
+                    <td>{{ v.km_atual }} km</td>
+                    <td>{{ v.km_prox_revisao }} km</td>
+                    <td>
+                        {% if v.km_faltando <= 0 %}
+                            <span style="color:#c0392b; font-weight:bold;">{{ v.km_faltando }} km</span>
+                        {% else %}
+                            {{ v.km_faltando }} km
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if v.revisao_status == 'VENCIDA' %}
+                            <span class="tag" style="background:#ffe8e9;color:#df4b54;">VENCIDA</span>
+                        {% elif v.revisao_status == 'PROXIMA' %}
+                            <span class="tag" style="background:#fff1dc;color:#e98914;">PRÓXIMA</span>
+                        {% else %}
+                            <span class="tag" style="background:#e8f8ef;color:#22965a;">EM DIA</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div style="display:flex; gap:10px;">
+                            <a href="{% url 'vehicle_dossier' v.id %}">Ver Prontuário</a>
+                            <a href="{% url 'maintenance_create' %}?plate={{ v.plate }}" style="color:#2869e5; font-weight:bold;">+ Lançar</a>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty">Nenhum veículo com meta de revisão encontrada.</div>
+        {% endif %}
+    </article>
+</section>
+{% endblock %}

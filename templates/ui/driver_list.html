@@ -1,0 +1,63 @@
+{% extends 'ui/base.html' %}
+{% block title %}Motoristas | Gestão de Frotas{% endblock %}
+{% block heading %}Motoristas{% endblock %}
+{% block content %}
+<section class="welcome" style="margin-bottom:20px;">
+    <div>
+        <form method="get" action="" style="display:flex;gap:10px;">
+            <input type="text" name="q" value="{{ q }}" placeholder="Buscar por nome ou telefone..." style="padding:10px;width:400px;border-radius:4px;border:1px solid #ccc;" />
+            <button type="submit" class="primary-action">Buscar</button>
+        </form>
+    </div>
+    <a class="primary-action" href="{% url 'driver_create' %}">+ Novo Motorista</a>
+</section>
+<section class="grid">
+    <article class="panel" style="grid-column:1/-1;">
+        {% if drivers %}
+        <table>
+            <thead><tr><th>NOME</th><th>TELEFONE</th><th>CNH / CAT</th><th>VALIDADE CNH</th><th>VEÍCULO VINCULADO</th><th>AÇÕES</th></tr></thead>
+            <tbody>
+                {% for d in drivers %}
+                <tr>
+                    <td><strong>{{ d.name }}</strong></td>
+                    <td>{{ d.phone|default:"-" }}</td>
+                    <td>{{ d.cnh_number|default:"-" }} {{ d.cnh_category }}</td>
+                    <td>
+                        {% if d.cnh_expiration %}
+                            {% if d.cnh_expiration < today %}
+                                <span style="color:#c0392b; font-weight:bold;">{{ d.cnh_expiration|date:"d/m/Y" }} (Vencida)</span>
+                            {% else %}
+                                {{ d.cnh_expiration|date:"d/m/Y" }}
+                            {% endif %}
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if d.active_assignments %}
+                            {% for a in d.active_assignments %}
+                                {% for p in a.vehicle.plate_history.all %}
+                                    {% if not p.ends_on and p.kind == 'CURRENT' %}
+                                        <strong>{{ p.plate }}</strong> - {{ a.vehicle.brand.name }} {{ a.vehicle.model.name }}
+                                        <br>
+                                    {% endif %}
+                                {% endfor %}
+                            {% endfor %}
+                        {% else %}
+                            <span style="color:#999">-</span>
+                        {% endif %}
+                    </td>
+                    <td style="white-space:nowrap;">
+                        <a class="table-action" href="{% url 'driver_assign_vehicle' d.id %}">Vincular veículo</a>
+                        <a class="table-action secondary" href="{% url 'driver_edit' d.id %}">Editar</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty">Nenhum motorista encontrado.</div>
+        {% endif %}
+    </article>
+</section>
+{% endblock %}

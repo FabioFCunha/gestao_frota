@@ -1,0 +1,41 @@
+{% extends 'ui/base.html' %}
+{% block title %}Multas | Gestão de Frotas{% endblock %}
+{% block heading %}Multas{% endblock %}
+{% block content %}
+<section class="welcome" style="margin-bottom:20px;">
+    <div>
+        <form method="get" action="" style="display:flex;gap:10px;">
+            <input type="text" name="q" value="{{ q }}" placeholder="Buscar por placa, auto de infração ou órgão..." style="padding:10px;width:400px;border-radius:4px;border:1px solid #ccc;" />
+            <button type="submit" class="primary-action">Buscar</button>
+        </form>
+    </div>
+    <a class="primary-action" href="{% url 'fine_create' %}">+ Nova Multa</a>
+</section>
+<section class="grid">
+    <article class="panel" style="grid-column:1/-1;">
+        {% if fines %}
+        <table>
+            <thead><tr><th>VEÍCULO (PLACA)</th><th>AUTO Nº</th><th>ÓRGÃO</th><th>VALOR</th><th>SITUAÇÃO</th><th>DATA</th></tr></thead>
+            <tbody>
+                {% for f in fines %}
+                <tr>
+                    <td>
+                        {% for p in f.vehicle.plate_history.all %}
+                            {% if not p.ends_on %}{{ p.plate }}{% endif %}
+                        {% empty %}Sem placa{% endfor %}
+                    </td>
+                    <td><strong>{{ f.auto_number }}</strong></td>
+                    <td>{{ f.agency|default:"-" }}</td>
+                    <td>{% if f.amount %}R$ {{ f.amount }}{% else %}-{% endif %}</td>
+                    <td><span class="tag">{{ f.status.name }}</span></td>
+                    <td>{{ f.date|date:"d/m/Y" }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty">Nenhuma multa registrada.</div>
+        {% endif %}
+    </article>
+</section>
+{% endblock %}

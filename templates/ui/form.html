@@ -1,0 +1,41 @@
+{% extends 'ui/base.html' %}
+{% block title %}{{ title }} | Gestão de Frotas{% endblock %}
+{% block heading %}{{ title }}{% endblock %}
+
+{% block content %}
+<section class="welcome" style="margin-bottom:20px;">
+    <div><h2>Preencha os dados abaixo</h2></div>
+    <a class="primary-action" href="{% url back_url %}">← Voltar</a>
+</section>
+
+{% if messages %}
+<div style="margin-bottom:20px;">
+    {% for message in messages %}
+    <div style="padding:10px; border-radius:4px; {% if message.tags == 'error' %}background:#ffcccc; color:#cc0000;{% else %}background:#d4edda; color:#155724;{% endif %}">
+        {{ message }}
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<section class="grid">
+    <article class="panel" style="grid-column:1/-1; max-width:1000px; margin:0 auto; width: 100%;">
+        <form method="post" {% if enctype %}enctype="{{ enctype }}"{% endif %}>
+            {% csrf_token %}
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
+            {% for field in form %}
+                <div style="display:flex; flex-direction:column; {% if field.name == 'notes' %}grid-column: 1/-1;{% endif %}">
+                    <label style="font-weight:bold; margin-bottom:5px;">{{ field.label }} {% if field.field.required %}<span style="color:red">*</span>{% endif %}</label>
+                    {{ field }}
+                    {% if field.help_text %}<small style="color:#666;">{{ field.help_text }}</small>{% endif %}
+                    {% if field.errors %}<small style="color:red;">{{ field.errors.0 }}</small>{% endif %}
+                </div>
+            {% endfor %}
+            </div>
+            <div style="margin-top:30px; text-align:right;">
+                <button type="submit" class="primary-action">Salvar</button>
+            </div>
+        </form>
+    </article>
+</section>
+{% endblock %}

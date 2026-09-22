@@ -1,0 +1,175 @@
+{% extends 'ui/base.html' %}
+{% block title %}Prontuário | Gestão de Frotas{% endblock %}
+{% block heading %}Prontuário do Veículo{% endblock %}
+
+{% block content %}
+<section class="welcome" style="margin-bottom:20px;">
+    <div>
+        <h2>
+            {% for p in current_plates %}{{ p.plate }} {% endfor %}
+            — {{ vehicle.brand.name|default:"" }} {{ vehicle.model.name|default:"" }}
+        </h2>
+        <p>Status: <span class="tag">{{ vehicle.status.name }}</span> {% if vehicle.armored %}| <strong style="color:#c0392b">BLINDADO</strong>{% endif %}</p>
+    </div>
+    <a class="primary-action" href="{% url 'vehicle_list' %}">← Voltar</a>
+</section>
+
+<!-- PLACAS -->
+<section class="grid">
+    <article class="panel">
+        <div class="panel-title"><div><h3>🪪 Placas</h3></div></div>
+        <table>
+            <thead><tr><th>PLACA</th><th>TIPO</th><th>DESDE</th><th>STATUS</th></tr></thead>
+            <tbody>
+                {% for p in all_plates %}
+                <tr>
+                    <td><strong>{{ p.plate }}</strong></td>
+                    <td>{% if p.kind == 'CURRENT' %}Oficial{% else %}Reservada{% endif %}</td>
+                    <td>{{ p.starts_on|date:"d/m/Y" }}</td>
+                    <td>{% if not p.ends_on %}<span class="tag">Ativa</span>{% else %}Encerrada em {{ p.ends_on|date:"d/m/Y" }}{% endif %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </article>
+
+    <!-- IDENTIFICAÇÃO -->
+    <article class="panel">
+        <div class="panel-title"><div><h3>🚗 Identificação</h3></div></div>
+        <ul style="list-style:none;padding:0;line-height:2;">
+            <li><strong>Marca:</strong> {{ vehicle.brand.name|default:"-" }}</li>
+            <li><strong>Modelo:</strong> {{ vehicle.model.name|default:"-" }}</li>
+            <li><strong>Cor:</strong> {{ vehicle.color|default:"-" }}</li>
+            <li><strong>RENAVAM:</strong> {{ vehicle.renavam|default:"-" }}</li>
+            <li><strong>Blindado:</strong> {% if vehicle.armored %}SIM{% else %}NÃO{% endif %}</li>
+        </ul>
+    </article>
+</section>
+
+<!-- KM E REVISÃO -->
+<section class="grid">
+    <article class="panel">
+        <div class="panel-title"><div><h3>📊 Quilometragem e Revisão</h3></div></div>
+        <div style="display:flex;gap:30px;flex-wrap:wrap;padding:10px 0;">
+            <div style="text-align:center;">
+                <p style="font-size:2em;font-weight:bold;margin:0;">{{ km_atual|default:0 }}</p>
+                <small>KM Atual</small>
+            </div>
+            {% if km_prox_revisao %}
+            <div style="text-align:center;">
+                <p style="font-size:2em;font-weight:bold;margin:0;">{{ km_prox_revisao }}</p>
+                <small>Próxima Revisão</small>
+            </div>
+            <div style="text-align:center;">
+                {% if revisao_status == 'VENCIDA' %}
+                    <p style="font-size:2em;font-weight:bold;margin:0;color:#c0392b;">{{ km_faltando }} km</p>
+                    <small><strong style="color:#c0392b">⚠ REVISÃO VENCIDA</strong></small>
+                {% elif revisao_status == 'PROXIMA' %}
+                    <p style="font-size:2em;font-weight:bold;margin:0;color:#e67e22;">{{ km_faltando }} km</p>
+                    <small><strong style="color:#e67e22">⚡ REVISÃO PRÓXIMA</strong></small>
+                {% else %}
+                    <p style="font-size:2em;font-weight:bold;margin:0;color:#27ae60;">{{ km_faltando }} km</p>
+                    <small style="color:#27ae60">✓ Em dia</small>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+        {% if km_history %}
+        <table style="margin-top:10px;">
+            <thead><tr><th>KM</th><th>DATA</th><th>ORIGEM</th></tr></thead>
+            <tbody>
+                {% for km in km_history %}
+                <tr><td>{{ km.mileage }}</td><td>{{ km.date|date:"d/m/Y H:i" }}</td><td>{{ km.get_origin_display }}</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+    </article>
+
+    <!-- OPERACIONAL -->
+    <article class="panel">
+        <div class="panel-title"><div><h3>👤 Operacional</h3></div></div>
+        <ul style="list-style:none;padding:0;line-height:2;">
+            <li><strong>Motorista:</strong> {% if active_driver %}{{ active_driver.name }} {% if active_driver.phone %}({{ active_driver.phone }}){% endif %}{% else %}{{ motorista|default:"-" }}{% endif %}</li>
+            <li><strong>Oficina:</strong> {{ oficina|default:"-" }}</li>
+            <li><strong>Unidade:</strong> {{ vehicle.unit.name|default:"-" }}</li>
+            <li><strong>Base:</strong> {{ vehicle.base.name|default:"-" }}</li>
+            <li><strong>Locadora:</strong> {{ vehicle.renter.name|default:"-" }}</li>
+            {% if vehicle.contract %}
+            <li><strong>Contrato:</strong> {{ vehicle.contract.number }} (até {{ vehicle.contract.ends_on|date:"d/m/Y" }})</li>
+            {% endif %}
+        </ul>
+        {% if obs_list %}
+        <div style="margin-top:15px;padding:10px;background:#f9f9f9;border-radius:4px;">
+            <strong>Observações:</strong>
+            <ul style="margin:5px 0 0 15px;">
+                {% for obs in obs_list %}
+                <li>{{ obs }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+    </article>
+</section>
+
+<!-- MANUTENÇÕES -->
+<section class="grid">
+    <article class="panel" style="grid-column:1/-1;">
+        <div class="panel-title"><div><h3>⚒ Manutenções</h3></div></div>
+        {% if maintenances %}
+        <table>
+            <thead><tr><th>TIPO</th><th>SERVIÇO</th><th>OFICINA</th><th>SITUAÇÃO</th><th>ENTRADA</th><th>SAÍDA</th></tr></thead>
+            <tbody>
+                {% for m in maintenances %}
+                <tr>
+                    <td>{{ m.type.name }}</td>
+                    <td>{{ m.service|default:"-" }}</td>
+                    <td>{{ m.workshop.name|default:"-" }}</td>
+                    <td><span class="tag">{{ m.status.name }}</span></td>
+                    <td>{{ m.entered_at|date:"d/m/Y" }}</td>
+                    <td>{{ m.exited_at|date:"d/m/Y"|default:"-" }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty">Nenhuma manutenção registrada para este veículo.</div>
+        {% endif %}
+    </article>
+</section>
+
+<!-- MULTAS E VISTORIAS -->
+<section class="grid">
+    <article class="panel">
+        <div class="panel-title"><div><h3>⚑ Multas</h3></div></div>
+        {% if fines %}
+        <table>
+            <thead><tr><th>AUTO</th><th>SITUAÇÃO</th><th>DATA</th></tr></thead>
+            <tbody>
+                {% for f in fines %}
+                <tr><td>{{ f.auto_number }}</td><td><span class="tag">{{ f.status.name }}</span></td><td>{{ f.date|date:"d/m/Y" }}</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty">Nenhuma multa registrada.</div>
+        {% endif %}
+    </article>
+
+    <article class="panel">
+        <div class="panel-title"><div><h3>🔍 Vistorias</h3></div></div>
+        {% if inspections %}
+        <table>
+            <thead><tr><th>TIPO</th><th>SITUAÇÃO</th><th>KM</th><th>DATA</th></tr></thead>
+            <tbody>
+                {% for i in inspections %}
+                <tr><td>{{ i.type.name }}</td><td><span class="tag">{{ i.status.name }}</span></td><td>{{ i.mileage|default:"-" }}</td><td>{{ i.date|date:"d/m/Y" }}</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty">Nenhuma vistoria registrada.</div>
+        {% endif %}
+    </article>
+</section>
+{% endblock %}

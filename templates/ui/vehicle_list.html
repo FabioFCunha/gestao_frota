@@ -1,0 +1,52 @@
+{% extends 'ui/base.html' %}
+{% block title %}Veículos | Gestão de Frotas{% endblock %}
+{% block heading %}Veículos da Frota{% endblock %}
+
+{% block content %}
+<section class="welcome" style="margin-bottom: 20px;">
+    <div>
+        <form method="get" action="" style="display:flex; gap:10px;">
+            <input type="text" name="q" value="{{ q }}" placeholder="Busca global (Placa, Renavam, Contrato)..." style="padding:10px; width:400px; border-radius:4px; border:1px solid #ccc;" />
+            <button type="submit" class="primary-action">Buscar</button>
+        </form>
+    </div>
+    <a class="primary-action" href="{% url 'vehicle_create' %}">+ Novo Veículo</a>
+</section>
+
+<section class="grid">
+    <article class="panel" style="grid-column: 1 / -1;">
+        {% if vehicles %}
+        <table>
+            <thead>
+                <tr>
+                    <th>SEI / ACAUTELAMENTO</th>
+                    <th>PLACA</th>
+                    <th>MARCA/MODELO</th>
+                    <th>SITUAÇÃO</th>
+                    <th>AÇÕES</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for vehicle in vehicles %}
+                <tr>
+                    <td>{{ vehicle.custody_info|default:"-" }}</td>
+                    <td><strong>
+                        {% for p in vehicle.plate_history.all %}
+                            {% if not p.ends_on and p.kind == 'CURRENT' %}{{ p.plate }}{% endif %}
+                        {% empty %}
+                            Sem placa
+                        {% endfor %}
+                    </strong></td>
+                    <td>{{ vehicle.brand.name|default:"-" }} / {{ vehicle.model.name|default:"-" }}</td>
+                    <td><span class="tag">{{ vehicle.status.name }}</span></td>
+                    <td><a href="{% url 'vehicle_dossier' vehicle.id %}">Ver Prontuário</a></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty">Nenhum veículo encontrado com os filtros atuais.</div>
+        {% endif %}
+    </article>
+</section>
+{% endblock %}
