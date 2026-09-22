@@ -44,7 +44,7 @@ class VehicleViewSet(viewsets.ModelViewSet):
         "inspections"
     ).all()
     serializer_class = VehicleSerializer
-    search_fields = ["plate_history__plate", "renavam", "contract__number", "contract__sei_number"]
+    search_fields = ["plate_history__plate", "renavam", "contract__number"]
     filterset_fields = {"status": ["exact"], "armored": ["exact"], "renter": ["exact"], "unit": ["exact"], "base": ["exact"], "driver_assignments__driver": ["exact"]}
 
     def perform_create(self, serializer):
@@ -77,7 +77,6 @@ class VehicleViewSet(viewsets.ModelViewSet):
             'maintenances__status',
             'maintenances__type',
             'fines__status',
-            'fines__type',
             'sei_processes__status',
             'documents__document__status',
             'documents__document__versions'
@@ -88,7 +87,14 @@ class VehicleViewSet(viewsets.ModelViewSet):
         data = {
             "vehicle": VehicleSerializer(vehicle).data,
             "plate_history": [
-                {"plate": p.plate, "start_date": p.start_date, "end_date": p.end_date, "is_current": p.is_current, "is_reserved": p.is_reserved} 
+                {
+                    "plate": p.plate,
+                    "kind": p.kind,
+                    "start_date": p.starts_on,
+                    "end_date": p.ends_on,
+                    "is_current": p.kind == VehiclePlate.CURRENT and p.ends_on is None,
+                    "is_reserved": p.kind == VehiclePlate.RESERVED and p.ends_on is None,
+                }
                 for p in vehicle.plate_history.all()
             ],
             "mileage": [
