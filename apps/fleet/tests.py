@@ -184,6 +184,7 @@ class MaintenanceCompletionCancellationTests(TestCase):
         self.unavailable_status = VehicleStatus.objects.get(name="Indisponível")
         
         self.open = MaintenanceStatus.objects.get(name="Aberta")
+        self.in_progress = MaintenanceStatus.objects.get(name="Em andamento")
         self.concluded = MaintenanceStatus.objects.get(name="Concluída")
         self.canceled = MaintenanceStatus.objects.get(name="Cancelada")
         
@@ -262,6 +263,36 @@ class MaintenanceCompletionCancellationTests(TestCase):
         complete_maintenance(maintenance=maintenance, user=self.user, resulting_status="Ativo")
         with self.assertRaises(ValueError):
             cancel_maintenance(maintenance=maintenance, user=self.user, resulting_status="Ativo")
+
+    def test_status_em_andamento_exists(self):
+        self.assertTrue(self.in_progress.active)
+
+    def test_prevent_new_maintenance_when_existing_is_in_progress(self):
+        from .services import open_maintenance
+
+        existing = Maintenance.objects.create(
+            vehicle=self.vehicle,
+            type=self.type,
+            status=self.in_progress,
+        )
+
+        new_maintenance = Maintenance.objects.create(
+            vehicle=self.vehicle,
+            type=self.type,
+            status=self.open,
+        )
+
+        with self.assertRaises(ValueError):
+            open_maintenance(
+                maintenance=new_maintenance,
+                user=self.user,
+            )
+
+        existing.refresh_from_db()
+        new_maintenance.refresh_from_db()
+
+        self.assertEqual(existing.status, self.in_progress)
+        self.assertEqual(new_maintenance.status, self.open)
 
     def test_prevent_multiple_open_maintenances(self):
         from .services import open_maintenance

@@ -51,14 +51,18 @@ def open_maintenance(*, maintenance: Maintenance, user):
         
     vehicle = maintenance.vehicle
     
-    # Previne múltiplas manutenções abertas
-    existing_open = Maintenance.objects.filter(
-        vehicle=vehicle, 
-        status__name__iexact="Aberta"
+    # Previne m?ltiplas manuten??es operacionais simult?neas.
+    # "Aberta" e "Em andamento" ocupam a manuten??o operacional do ve?culo.
+    existing_active = Maintenance.objects.filter(
+        vehicle=vehicle,
+        status__name__in=["Aberta", "Em andamento"]
     ).exclude(id=maintenance.id).exists()
-    
-    if existing_open:
-        raise ValueError("O veículo já possui uma manutenção aberta. Conclua ou cancele a atual antes de abrir outra.")
+
+    if existing_active:
+        raise ValueError(
+            "O ve?culo j? possui uma manuten??o aberta ou em andamento. "
+            "Conclua ou cancele a atual antes de abrir outra."
+        )
         
     previous = vehicle.status
     
