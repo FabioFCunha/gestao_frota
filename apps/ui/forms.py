@@ -136,15 +136,16 @@ class MaintenanceForm(forms.ModelForm):
         max_length=8, label='Placa do veículo',
         widget=forms.TextInput(attrs={**INPUT, 'placeholder': 'ABC1D23'}),
     )
-    field_order = ['plate', 'type', 'status', 'workshop', 'service', 'entered_at', 'exited_at', 'notes']
+    field_order = ['plate', 'type', 'status', 'workshop', 'mileage', 'service', 'entered_at', 'exited_at', 'notes']
 
     class Meta:
         model = Maintenance
-        fields = ['type', 'status', 'workshop', 'service', 'entered_at', 'exited_at', 'notes']
+        fields = ['type', 'status', 'workshop', 'mileage', 'service', 'entered_at', 'exited_at', 'notes']
         labels = {
             'type': 'Tipo',
             'status': 'Situação',
             'workshop': 'Oficina',
+            'mileage': 'KM da manutenção',
             'service': 'Serviço',
             'entered_at': 'Entrada',
             'exited_at': 'Saída',
@@ -154,6 +155,7 @@ class MaintenanceForm(forms.ModelForm):
             'type': forms.Select(attrs=SELECT),
             'status': forms.Select(attrs=SELECT),
             'workshop': forms.Select(attrs=SELECT),
+            'mileage': forms.NumberInput(attrs={**INPUT, 'min': 0, 'placeholder': 'Ex: 40200'}),
             'service': forms.TextInput(attrs={**INPUT, 'placeholder': 'Ex: Revisão 40.000km, Troca de pneu...'}),
             'entered_at': forms.DateTimeInput(attrs={**INPUT, 'type': 'datetime-local'}),
             'exited_at': forms.DateTimeInput(attrs={**INPUT, 'type': 'datetime-local'}),

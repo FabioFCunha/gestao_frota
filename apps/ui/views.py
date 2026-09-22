@@ -87,18 +87,15 @@ def vehicle_dossier(request, pk):
         elif line.startswith('[OBS]'):
             obs_list.append(line.replace('[OBS]', '').strip())
 
-    # Calculate revision status
-    km_atual = latest_km.mileage if latest_km else 0
-    km_faltando = None
-    revisao_status = None
-    if km_prox_revisao and km_atual:
-        km_faltando = km_prox_revisao - km_atual
-        if km_faltando <= 0:
-            revisao_status = 'VENCIDA'
-        elif km_faltando <= 2000:
-            revisao_status = 'PROXIMA'
-        else:
-            revisao_status = 'OK'
+    # Calculate revision status using the official WW Trans rule.
+    from apps.fleet.services import get_vehicle_revision_status
+
+    revision = get_vehicle_revision_status(vehicle=vehicle)
+
+    km_atual = revision["current_km"]
+    km_prox_revisao = revision["next_revision_km"]
+    km_faltando = revision["km_remaining"]
+    revisao_status = revision["status"]
 
     context = {
         'vehicle': vehicle,
@@ -158,11 +155,11 @@ def driver_list(request):
 
 @login_required
 def maintenance_list(request):
-    import re
-    from apps.fleet.models import Vehicle, VehicleMileage
-    
+    from apps.fleet.models import Vehicle
+    from apps.fleet.services import get_vehicle_revision_status
+
     qs = Vehicle.objects.select_related('brand', 'model').prefetch_related('plate_history')
-    
+
     q = request.GET.get('q', '')
     if q:
         qs = qs.filter(
@@ -172,12 +169,6 @@ def maintenance_list(request):
         ).distinct()
 
     vehicles_data = []
-    
-    # We need current mileages
-    mileages = {}
-    for m in VehicleMileage.objects.order_by('-date'):
-        if m.vehicle_id not in mileages:
-            mileages[m.vehicle_id] = m.mileage
 
     for v in qs:
         # Get active plate
@@ -186,50 +177,36 @@ def maintenance_list(request):
             if not p.ends_on and p.kind == 'CURRENT':
                 plate = p.plate
                 break
-                
-        # Parse next revision from notes
-        km_prox_revisao = None
-        notes = v.notes or ''
-        for line in notes.split('\n'):
-            line = line.strip()
-            if line.startswith('[KM_PROX_REVISAO]'):
-                try:
-                    km_prox_revisao = int(line.replace('[KM_PROX_REVISAO]', '').strip())
-                except ValueError:
-                    pass
 
-        km_atual = mileages.get(v.id, 0)
-        km_faltando = None
-        revisao_status = None
-        
-        if km_prox_revisao and km_atual:
-            km_faltando = km_prox_revisao - km_atual
-            if km_faltando <= 0:
-                revisao_status = 'VENCIDA'
-            elif km_faltando <= 2000:
-                revisao_status = 'PROXIMA'
-            else:
-                revisao_status = 'OK'
-                
-        if km_prox_revisao:
-            vehicles_data.append({
-                'id': v.id,
-                'plate': plate,
-                'brand_model': f"{v.brand.name if v.brand else ''} {v.model.name if v.model else ''}",
-                'km_atual': km_atual,
-                'km_prox_revisao': km_prox_revisao,
-                'km_faltando': km_faltando,
-                'revisao_status': revisao_status
-            })
+        # Official WW Trans revision rule.
+        revision = get_vehicle_revision_status(vehicle=v)
 
-    # Sort by urgency (vencida first, then proxima, then OK)
+        vehicles_data.append({
+            'id': v.id,
+            'plate': plate,
+            'brand_model': f"{v.brand.name if v.brand else ''} {v.model.name if v.model else ''}",
+            'km_atual': revision['current_km'],
+            'km_prox_revisao': revision['next_revision_km'],
+            'km_faltando': revision['km_remaining'],
+            'revisao_status': revision['status'],
+            'last_revision_km': revision['last_revision_km'],
+        })
+
+    # Sort by urgency:
+    # DEVIDA -> PROXIMA -> OK -> SEM_HISTORICO
     def sort_key(x):
-        status = x['revisao_status']
-        if status == 'VENCIDA': return 0
-        if status == 'PROXIMA': return 1
-        return 2
+        status_order = {
+            'DEVIDA': 0,
+            'PROXIMA': 1,
+            'OK': 2,
+            'SEM_HISTORICO': 3,
+        }
+        return (
+            status_order.get(x['revisao_status'], 4),
+            x['km_faltando'] if x['km_faltando'] is not None else 999999,
+        )
 
-    vehicles_data.sort(key=lambda x: (sort_key(x), x['km_faltando'] if x['km_faltando'] is not None else 999999))
+    vehicles_data.sort(key=sort_key)
 
     context = {"vehicles_data": vehicles_data, "q": q}
     return render(request, "ui/maintenance_list.html", context)

@@ -303,6 +303,248 @@ class MaintenanceCompletionCancellationTests(TestCase):
         with self.assertRaises(ValueError):
             open_maintenance(maintenance=m2, user=self.user)
 
+    def test_revision_40200_sets_next_revision_50200(self):
+        from .models import VehicleMileage
+        from .services import get_vehicle_revision_status
+
+        revision_type = MaintenanceType.objects.get(name="Revisão")
+
+        Maintenance.objects.create(
+            vehicle=self.vehicle,
+            type=revision_type,
+            status=self.concluded,
+            mileage=40200,
+        )
+
+        VehicleMileage.objects.create(
+            vehicle=self.vehicle,
+            mileage=40200,
+            recorded_by=self.user,
+        )
+
+        result = get_vehicle_revision_status(vehicle=self.vehicle)
+
+        self.assertEqual(result["last_revision_km"], 40200)
+        self.assertEqual(result["next_revision_km"], 50200)
+        self.assertEqual(result["status"], "OK")
+
+    def test_revision_status_ok_at_47199(self):
+        from .models import VehicleMileage
+        from .services import get_vehicle_revision_status
+
+        revision_type = MaintenanceType.objects.get(name="Revisão")
+
+        Maintenance.objects.create(
+            vehicle=self.vehicle,
+            type=revision_type,
+            status=self.concluded,
+            mileage=40200,
+        )
+
+        VehicleMileage.objects.create(
+            vehicle=self.vehicle,
+            mileage=47199,
+            recorded_by=self.user,
+        )
+
+        result = get_vehicle_revision_status(vehicle=self.vehicle)
+
+        self.assertEqual(result["km_remaining"], 3001)
+        self.assertEqual(result["status"], "OK")
+
+    def test_revision_status_proxima_at_47200(self):
+        from .models import VehicleMileage
+        from .services import get_vehicle_revision_status
+
+        revision_type = MaintenanceType.objects.get(name="Revisão")
+
+        Maintenance.objects.create(
+            vehicle=self.vehicle,
+            type=revision_type,
+            status=self.concluded,
+            mileage=40200,
+        )
+
+        VehicleMileage.objects.create(
+            vehicle=self.vehicle,
+            mileage=47200,
+            recorded_by=self.user,
+        )
+
+        result = get_vehicle_revision_status(vehicle=self.vehicle)
+
+        self.assertEqual(result["km_remaining"], 3000)
+        self.assertEqual(result["status"], "PROXIMA")
+
+    def test_revision_status_devida_at_50200(self):
+        from .models import VehicleMileage
+        from .services import get_vehicle_revision_status
+
+        revision_type = MaintenanceType.objects.get(name="Revisão")
+
+        Maintenance.objects.create(
+            vehicle=self.vehicle,
+            type=revision_type,
+            status=self.concluded,
+            mileage=40200,
+        )
+
+        VehicleMileage.objects.create(
+            vehicle=self.vehicle,
+            mileage=50200,
+            recorded_by=self.user,
+        )
+
+        result = get_vehicle_revision_status(vehicle=self.vehicle)
+
+        self.assertEqual(result["km_remaining"], 0)
+        self.assertEqual(result["status"], "DEVIDA")
+
+    def test_revision_status_devida_above_next_revision(self):
+        from .models import VehicleMileage
+        from .services import get_vehicle_revision_status
+
+        revision_type = MaintenanceType.objects.get(name="Revisão")
+
+        Maintenance.objects.create(
+            vehicle=self.vehicle,
+            type=revision_type,
+            status=self.concluded,
+            mileage=40200,
+        )
+
+        VehicleMileage.objects.create(
+            vehicle=self.vehicle,
+            mileage=50500,
+            recorded_by=self.user,
+        )
+
+        result = get_vehicle_revision_status(vehicle=self.vehicle)
+
+        self.assertEqual(result["km_remaining"], -300)
+        self.assertEqual(result["status"], "DEVIDA")
+
+    def test_canceled_revision_is_ignored(self):
+        from .models import VehicleMileage
+        from .services import get_vehicle_revision_status
+
+        revision_type = MaintenanceType.objects.get(name="Revisão")
+
+        Maintenance.objects.create(
+            vehicle=self.vehicle,
+            type=revision_type,
+            status=self.canceled,
+            mileage=40200,
+        )
+
+        VehicleMileage.objects.create(
+            vehicle=self.vehicle,
+            mileage=45000,
+            recorded_by=self.user,
+        )
+
+        result = get_vehicle_revision_status(vehicle=self.vehicle)
+
+        self.assertFalse(result["has_history"])
+        self.assertEqual(result["status"], "SEM_HISTORICO")
+
+    def test_in_progress_revision_is_ignored(self):
+        from .models import VehicleMileage
+        from .services import get_vehicle_revision_status
+
+        revision_type = MaintenanceType.objects.get(name="Revisão")
+
+        Maintenance.objects.create(
+            vehicle=self.vehicle,
+            type=revision_type,
+            status=self.in_progress,
+            mileage=40200,
+        )
+
+        VehicleMileage.objects.create(
+            vehicle=self.vehicle,
+            mileage=45000,
+            recorded_by=self.user,
+        )
+
+        result = get_vehicle_revision_status(vehicle=self.vehicle)
+
+        self.assertFalse(result["has_history"])
+        self.assertEqual(result["status"], "SEM_HISTORICO")
+
+    def test_other_maintenance_type_is_ignored(self):
+        from .models import VehicleMileage
+        from .services import get_vehicle_revision_status
+
+        Maintenance.objects.create(
+            vehicle=self.vehicle,
+            type=self.type,
+            status=self.concluded,
+            mileage=40200,
+        )
+
+        VehicleMileage.objects.create(
+            vehicle=self.vehicle,
+            mileage=45000,
+            recorded_by=self.user,
+        )
+
+        result = get_vehicle_revision_status(vehicle=self.vehicle)
+
+        self.assertFalse(result["has_history"])
+        self.assertEqual(result["status"], "SEM_HISTORICO")
+
+    def test_completed_revision_at_50300_resets_cycle_to_60300(self):
+        from .models import VehicleMileage
+        from .services import get_vehicle_revision_status
+
+        revision_type = MaintenanceType.objects.get(name="Revisão")
+
+        Maintenance.objects.create(
+            vehicle=self.vehicle,
+            type=revision_type,
+            status=self.concluded,
+            mileage=40200,
+        )
+
+        Maintenance.objects.create(
+            vehicle=self.vehicle,
+            type=revision_type,
+            status=self.concluded,
+            mileage=50300,
+        )
+
+        VehicleMileage.objects.create(
+            vehicle=self.vehicle,
+            mileage=50300,
+            recorded_by=self.user,
+        )
+
+        result = get_vehicle_revision_status(vehicle=self.vehicle)
+
+        self.assertEqual(result["last_revision_km"], 50300)
+        self.assertEqual(result["next_revision_km"], 60300)
+        self.assertEqual(result["status"], "OK")
+
+    def test_revision_without_history_returns_sem_historico(self):
+        from .models import VehicleMileage
+        from .services import get_vehicle_revision_status
+
+        VehicleMileage.objects.create(
+            vehicle=self.vehicle,
+            mileage=45000,
+            recorded_by=self.user,
+        )
+
+        result = get_vehicle_revision_status(vehicle=self.vehicle)
+
+        self.assertFalse(result["has_history"])
+        self.assertIsNone(result["last_revision_km"])
+        self.assertIsNone(result["next_revision_km"])
+        self.assertEqual(result["current_km"], 45000)
+        self.assertEqual(result["status"], "SEM_HISTORICO")
+
+
 class InfraMigrationTests(TestCase):
     def test_migration_creates_default_statuses(self):
         # Como o Django já roda as migrations no setup do test DB, 

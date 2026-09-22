@@ -2,6 +2,94 @@ from django.db import transaction
 from .models import AuditLog, Driver, Maintenance, VehicleHistory, VehicleStatus, VehicleDriverAssignment, Vehicle
 
 
+# === WW TRANS: REGRA DE REVISÃO PREVENTIVA ===
+
+REVISION_INTERVAL_KM = 10_000
+REVISION_ALERT_KM = 3_000
+
+
+def get_vehicle_revision_status(*, vehicle):
+    """
+    Calcula a situação da revisão preventiva do veículo.
+
+    A próxima revisão é sempre 10.000 km após a última revisão
+    efetivamente concluída e registrada com quilometragem.
+
+    Apenas manutenções:
+      - do tipo "Revisão";
+      - com status "Concluída";
+      - com KM informado
+
+    podem estabelecer uma nova referência.
+
+    Sem histórico de revisão, o sistema não inventa uma referência.
+    """
+    from .models import MaintenanceType, MaintenanceStatus, VehicleMileage
+
+    revision_type = MaintenanceType.objects.filter(
+        name__iexact="Revisão",
+        active=True,
+    ).first()
+
+    completed_status = MaintenanceStatus.objects.filter(
+        name__iexact="Concluída",
+        active=True,
+    ).first()
+
+    current_mileage = (
+        VehicleMileage.objects
+        .filter(vehicle=vehicle)
+        .order_by("-date", "-created_at")
+        .values_list("mileage", flat=True)
+        .first()
+    ) or 0
+
+    last_revision = None
+
+    if revision_type and completed_status:
+        last_revision = (
+            Maintenance.objects
+            .filter(
+                vehicle=vehicle,
+                type=revision_type,
+                status=completed_status,
+                mileage__isnull=False,
+            )
+            .order_by("-mileage", "-entered_at", "-created_at")
+            .first()
+        )
+
+    if not last_revision:
+        return {
+            "last_revision_km": None,
+            "next_revision_km": None,
+            "current_km": current_mileage,
+            "km_remaining": None,
+            "status": "SEM_HISTORICO",
+            "has_history": False,
+        }
+
+    last_revision_km = last_revision.mileage
+    next_revision_km = last_revision_km + REVISION_INTERVAL_KM
+    km_remaining = next_revision_km - current_mileage
+
+    if km_remaining <= 0:
+        status = "DEVIDA"
+    elif km_remaining <= REVISION_ALERT_KM:
+        status = "PROXIMA"
+    else:
+        status = "OK"
+
+    return {
+        "last_revision_km": last_revision_km,
+        "next_revision_km": next_revision_km,
+        "current_km": current_mileage,
+        "km_remaining": km_remaining,
+        "status": status,
+        "has_history": True,
+    }
+
+
 @transaction.atomic
 def change_vehicle_status(*, vehicle: Vehicle, status_name: str, user, reason: str = ""):
     try:
@@ -829,7 +917,7 @@ def get_dashboard_metrics(filters: dict) -> dict:
     
     # 6. SEI Processes
     # SEI processes are related via generic relation, or maybe we just show global SEI?
-    # The prompt says: "Não assumir que multas, documentos ou processos devem necessariamente ser filtrados da mesma maneira se a relação com veículo não existir."
+    # The prompt says: "N?o assumir que multas, documentos ou processos devem necessariamente ser filtrados da mesma maneira se a rela??o com ve?culo n?o existir."
     # Let's just return global SEI and Documents if filters aren't applicable.
     # Actually, if we filter by vehicle, SEI processes related to that vehicle could be found, but it's expensive.
     # Let's just return global for SEI and Documents.
@@ -838,7 +926,7 @@ def get_dashboard_metrics(filters: dict) -> dict:
         "total": SEIProcess.objects.count(),
         "by_status": {item['status__name']: item['count'] for item in sei_counts}
     }
-    
+
     doc_counts = Document.objects.values('status__name').annotate(count=Count('id'))
     doc_metrics = {
         "total": Document.objects.count(),
@@ -905,40 +993,47 @@ def get_operational_alerts(filters: dict) -> dict:
         status__name__in=["Reprovada", "Com ressalvas"]
     ).select_related('vehicle').values("id", "vehicle__plate_history__plate", "status__name", "date")
 
-    # 6. Revisões Vencidas (from notes and mileage)
-    from .models import Vehicle, VehicleMileage
-    mileages = {}
-    for m in VehicleMileage.objects.order_by('-date'):
-        if m.vehicle_id not in mileages:
-            mileages[m.vehicle_id] = m.mileage
-            
+    # 6. Revisoes preventivas
+    # Regra oficial WW Trans:
+    # - intervalo de 10.000 km;
+    # - alerta nos ultimos 3.000 km;
+    # - somente Revisao + Concluida + KM informado estabelece o ciclo.
+    from .models import Vehicle
+
     revisoes_vencidas = []
-    qs_vehicles = Vehicle.objects.exclude(notes='').exclude(notes__isnull=True).prefetch_related('plate_history')
+
+    qs_vehicles = Vehicle.objects.prefetch_related('plate_history')
+
     for v in qs_vehicles:
-        km_prox_revisao = None
-        for line in v.notes.split('\n'):
-            line = line.strip()
-            if line.startswith('[KM_PROX_REVISAO]'):
-                try: km_prox_revisao = int(line.replace('[KM_PROX_REVISAO]', '').strip())
-                except ValueError: pass
-        
-        km_atual = mileages.get(v.id, 0)
-        if km_prox_revisao and km_atual and km_atual >= km_prox_revisao:
-            plate = "-"
-            for p in v.plate_history.all():
-                if not p.ends_on and p.kind == 'CURRENT':
-                    plate = p.plate
-                    break
-            revisoes_vencidas.append({
-                'vehicle_id': v.id,
-                'plate': plate,
-                'km_atual': km_atual,
-                'km_prox_revisao': km_prox_revisao,
-                'ultrapassado': km_atual - km_prox_revisao
-            })
-            
-    # Sort by most overdue
-    revisoes_vencidas.sort(key=lambda x: x['ultrapassado'], reverse=True)
+        revision = get_vehicle_revision_status(vehicle=v)
+
+        if revision['status'] not in ('DEVIDA', 'PROXIMA'):
+            continue
+
+        plate = "-"
+        for p in v.plate_history.all():
+            if not p.ends_on and p.kind == 'CURRENT':
+                plate = p.plate
+                break
+
+        revisoes_vencidas.append({
+            'vehicle_id': v.id,
+            'plate': plate,
+            'km_atual': revision['current_km'],
+            'km_prox_revisao': revision['next_revision_km'],
+            'km_faltando': revision['km_remaining'],
+            'status': revision['status'],
+            'last_revision_km': revision['last_revision_km'],
+            'ultrapassado': max(0, -revision['km_remaining']),
+        })
+
+    # Revisoes devidas primeiro; depois as proximas mais urgentes.
+    revisoes_vencidas.sort(
+        key=lambda x: (
+            0 if x['status'] == 'DEVIDA' else 1,
+            x['km_faltando'] if x['km_faltando'] is not None else 999999,
+        )
+    )
 
     return {
         "expiring_contracts": list(expiring_contracts),
