@@ -798,6 +798,34 @@ class DocumentTests(TestCase):
                 user=self.user
             )
 
+    def test_document_version_serializer_uses_existing_timestamps(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from .services import create_document
+        from .serializers import DocumentVersionSerializer
+
+        file_obj = SimpleUploadedFile(
+            "serializer-test.pdf",
+            b"serializer test",
+            content_type="application/pdf",
+        )
+
+        doc = create_document(
+            title="Doc Serializer",
+            document_type_id=self.doc_type.id,
+            document_date="2023-01-01",
+            file_obj=file_obj,
+            user=self.user,
+        )
+
+        version = doc.versions.first()
+        data = DocumentVersionSerializer(version).data
+
+        self.assertIn("created_at", data)
+        self.assertIn("updated_at", data)
+        self.assertIn("uploaded_by", data)
+        self.assertNotIn("uploaded_at", data)
+        self.assertEqual(data["original_filename"], "serializer-test.pdf")
+
     def test_add_version(self):
         from django.core.files.uploadedfile import SimpleUploadedFile
         from .services import create_document, add_document_version
