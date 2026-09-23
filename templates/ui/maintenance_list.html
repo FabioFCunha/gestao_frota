@@ -77,7 +77,14 @@
                                     data-km="{{ v.km_atual }}"
                                     data-next="{{ v.km_prox_revisao|default:'' }}"
                                     data-status="{{ v.revisao_status }}"
-                                    data-active-id="{% if v.active_revision %}{{ v.active_revision.id }}{% endif %}">
+                                    data-active-id="{% if v.active_revision %}{{ v.active_revision.id }}{% endif %}"
+                                    data-revision-id="{{ v.last_revision_id|default:'' }}"
+                                    data-sent-date="{% if v.active_revision %}{{ v.active_revision.entered_at|date:'Y-m-d' }}{% else %}{{ v.last_revision_entered_at|date:'Y-m-d' }}{% endif %}"
+                                    data-return-date="{% if v.active_revision %}{{ v.active_revision.exited_at|date:'Y-m-d' }}{% else %}{{ v.last_revision_exited_at|date:'Y-m-d' }}{% endif %}"
+                                    data-completion-km="{% if v.active_revision %}{{ v.active_revision.completion_mileage|default:'' }}{% else %}{{ v.last_revision_completion_mileage|default:'' }}{% endif %}"
+                                    data-workshop="{% if v.active_revision and v.active_revision.workshop %}{{ v.active_revision.workshop.id }}{% else %}{{ v.last_revision.workshop.id|default:'' }}{% endif %}"
+                                    data-workshop-name="{% if v.active_revision %}{{ v.active_revision.workshop_name|default:'' }}{% else %}{{ v.last_revision_workshop_name|default:'' }}{% endif %}"
+                                    data-service="{% if v.active_revision %}{{ v.active_revision.service|default:'' }}{% else %}{{ v.last_revision_service|default:'' }}{% endif %}">
                                 Editar
                             </button>
                         </div>
@@ -93,7 +100,7 @@
 </section>
 
 <div id="revision-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.48);z-index:2000;align-items:center;justify-content:center;padding:20px;">
-    <div class="panel" style="width:min(680px,96vw);max-height:90vh;overflow:auto;">
+    <div class="panel" style="width:min(720px,96vw);max-height:90vh;overflow:auto;">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:15px;margin-bottom:18px;">
             <div>
                 <div style="font-size:.78rem;font-weight:700;color:#64748b;letter-spacing:.08em;">GESTÃO DE REVISÃO</div>
@@ -118,19 +125,36 @@
             <div id="revision-fields">
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:15px;">
                     <div>
+                        <label style="font-weight:bold;display:block;margin-bottom:5px;">{{ revision_action_form.sent_date.label }}</label>
+                        {{ revision_action_form.sent_date }}
+                    </div>
+                    <div>
+                        <label style="font-weight:bold;display:block;margin-bottom:5px;">{{ revision_action_form.return_date.label }}</label>
+                        {{ revision_action_form.return_date }}
+                        <small style="display:block;color:#64748b;margin-top:4px;">Sem data de retorno = veículo permanece EM REVISÃO.</small>
+                    </div>
+                </div>
+
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:15px;margin-top:15px;">
+                    <div>
                         <label style="font-weight:bold;display:block;margin-bottom:5px;">{{ revision_action_form.workshop.label }}</label>
                         {{ revision_action_form.workshop }}
                     </div>
                     <div>
-                        <label style="font-weight:bold;display:block;margin-bottom:5px;">{{ revision_action_form.service.label }}</label>
-                        {{ revision_action_form.service }}
+                        <label style="font-weight:bold;display:block;margin-bottom:5px;">{{ revision_action_form.workshop_name.label }}</label>
+                        {{ revision_action_form.workshop_name }}
                     </div>
+                </div>
+
+                <div style="margin-top:15px;">
+                    <label style="font-weight:bold;display:block;margin-bottom:5px;">{{ revision_action_form.service.label }}</label>
+                    {{ revision_action_form.service }}
                 </div>
 
                 <div id="completion-block" style="margin-top:15px;">
                     <label style="font-weight:bold;display:block;margin-bottom:5px;">{{ revision_action_form.completion_mileage.label }}</label>
                     {{ revision_action_form.completion_mileage }}
-                    <small style="color:#64748b;">Informe a KM registrada quando a viatura retornar da oficina.</small>
+                    <small style="color:#64748b;">Quando houver retorno, esta KM passa a ser a nova referência para +10.000 km.</small>
                 </div>
 
                 <div id="status-block" style="margin-top:15px;">
@@ -164,19 +188,25 @@
     const status = document.getElementById('revision-status');
     const action = document.getElementById('revision-action');
     const maintenanceId = document.getElementById('revision-maintenance-id');
-    const completionBlock = document.getElementById('completion-block');
-    const statusBlock = document.getElementById('status-block');
+    const sentDate = document.getElementById('id_sent_date');
+    const returnDate = document.getElementById('id_return_date');
     const completionInput = document.getElementById('id_completion_mileage');
     const resultStatus = document.getElementById('id_resulting_status');
+    const workshop = document.getElementById('id_workshop');
+    const workshopName = document.getElementById('id_workshop_name');
+    const service = document.getElementById('id_service');
+    const notes = document.getElementById('id_notes');
     const help = document.getElementById('revision-help');
-    const submit = document.getElementById('revision-submit');
 
     function resetFields() {
-        document.getElementById('id_workshop').value = '';
-        document.getElementById('id_service').value = '';
+        sentDate.value = '';
+        returnDate.value = '';
         completionInput.value = '';
         resultStatus.value = '';
-        document.getElementById('id_notes').value = '';
+        workshop.value = '';
+        workshopName.value = '';
+        service.value = '';
+        notes.value = '';
     }
 
     function openModal(button) {
@@ -188,36 +218,37 @@
         const next = button.dataset.next || '';
         const currentStatus = button.dataset.status || '';
         const activeId = button.dataset.activeId || '';
+        const revisionId = button.dataset.revisionId || '';
 
         title.textContent = 'Revisão — ' + plate;
         currentKm.textContent = km + ' km';
         nextKm.textContent = next ? next + ' km' : 'Sem referência';
         status.textContent = activeId ? 'EM REVISÃO' : currentStatus;
         form.action = '/manutencoes/' + id + '/revisao/';
-        maintenanceId.value = activeId;
+        maintenanceId.value = activeId || revisionId;
+        action.value = activeId ? 'edit' : (revisionId ? 'edit' : (currentStatus === 'SEM_HISTORICO' ? 'initialize' : 'open'));
 
-        if (activeId) {
-            action.value = 'complete';
-            completionBlock.style.display = 'block';
-            statusBlock.style.display = 'block';
-            submit.textContent = 'Registrar retorno da revisão';
-            help.textContent = 'Ao registrar o retorno, a KM informada passa a ser a nova referência. A próxima revisão será calculada automaticamente em +10.000 km.';
-        } else if (currentStatus === 'SEM_HISTORICO') {
-            action.value = 'initialize';
-            completionBlock.style.display = 'block';
-            statusBlock.style.display = 'none';
-            submit.textContent = 'Atualizar histórico';
-            help.textContent = 'Informe a KM da última revisão concluída. O sistema criará o histórico e calculará automaticamente a próxima revisão em +10.000 km.';
+        sentDate.value = button.dataset.sentDate || '';
+        returnDate.value = button.dataset.returnDate || '';
+        completionInput.value = button.dataset.completionKm || '';
+        workshop.value = button.dataset.workshop || '';
+        workshopName.value = button.dataset.workshopName || '';
+        service.value = button.dataset.service || '';
+
+        if (action.value === 'open') {
+            sentDate.value = sentDate.value || new Date().toISOString().slice(0, 10);
+            document.getElementById('revision-submit').textContent = 'Enviar para revisão';
+            help.textContent = 'Informe a data em que o veículo foi enviado. A data de retorno pode ficar vazia; nesse caso o veículo ficará EM REVISÃO.';
+        } else if (action.value === 'initialize') {
+            document.getElementById('revision-submit').textContent = 'Atualizar histórico';
+            help.textContent = 'Use para veículos que já passaram por revisão, mas ainda não tiveram o histórico informado no sistema. Se não houver retorno, o veículo ficará EM REVISÃO.';
         } else {
-            action.value = 'open';
-            completionBlock.style.display = 'none';
-            statusBlock.style.display = 'none';
-            submit.textContent = 'Enviar para revisão';
-            help.textContent = 'A viatura será marcada como Em manutenção e ficará vinculada a uma revisão em andamento até o retorno.';
+            document.getElementById('revision-submit').textContent = returnDate.value ? 'Salvar revisão' : 'Salvar como EM REVISÃO';
+            help.textContent = 'Edite as datas, oficina e quilometragem. Com data de retorno, a KM informada será a nova referência e a próxima revisão será +10.000 km. Sem retorno, o card permanece EM REVISÃO.';
         }
 
         modal.style.display = 'flex';
-        if (action.value !== 'open') completionInput.focus();
+        sentDate.focus();
     }
 
     function closeModal() {
@@ -228,6 +259,10 @@
         button.addEventListener('click', function () {
             openModal(button);
         });
+    });
+
+    returnDate.addEventListener('change', function () {
+        document.getElementById('revision-submit').textContent = returnDate.value ? 'Salvar revisão' : 'Salvar como EM REVISÃO';
     });
 
     document.getElementById('revision-modal-close').addEventListener('click', closeModal);
