@@ -1,6 +1,6 @@
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import LoginView
-from django.db.models import Count, Q
+from django.db.models import Count, Q, Prefetch
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.utils import timezone
@@ -27,7 +27,6 @@ def dashboard(request):
 @login_required
 def vehicle_list(request):
     from apps.fleet.models import Vehicle
-    from django.db.models import Prefetch
     from apps.fleet.models import Vehicle, VehicleDriverAssignment, VehicleCustody
 
     active_assignments = (
@@ -65,7 +64,7 @@ def vehicle_list(request):
 @login_required
 def vehicle_dossier(request, pk):
     import re
-    from apps.fleet.models import Vehicle, VehiclePlate, VehicleMileage
+    from apps.fleet.models import Vehicle, VehiclePlate, VehicleMileage, VehicleCustody
     from django.shortcuts import get_object_or_404
 
     vehicle = get_object_or_404(
