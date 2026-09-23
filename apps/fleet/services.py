@@ -208,12 +208,23 @@ def open_maintenance(*, maintenance: Maintenance, user):
     return maintenance
 
 @transaction.atomic
-def complete_maintenance(*, maintenance: Maintenance, user, resulting_status: str = None, reason: str = "", completion_mileage: int = None):
+def complete_maintenance(
+    *,
+    maintenance: Maintenance,
+    user,
+    resulting_status: str = None,
+    reason: str = "",
+    completion_mileage: int = None,
+    exited_at=None,
+    allow_already_completed: bool = False,
+):
     if not resulting_status:
         raise ValueError("O status resultante do veículo deve ser explicitamente informado ao concluir a manutenção.")
         
     current_status = maintenance.status.name.casefold()
-    if current_status in ["concluída", "cancelada"]:
+    if current_status == "cancelada":
+        raise ValueError(f"Não é possível concluir uma manutenção que já está {current_status}.")
+    if current_status == "concluída" and not allow_already_completed:
         raise ValueError(f"Não é possível concluir uma manutenção que já está {current_status}.")
         
     try:
@@ -224,6 +235,10 @@ def complete_maintenance(*, maintenance: Maintenance, user, resulting_status: st
         
     from django.utils import timezone
     now = timezone.now()
+    exit_timestamp = exited_at or now
+    
+    if maintenance.entered_at and exit_timestamp < maintenance.entered_at:
+        raise ValueError("A data de retorno não pode ser anterior à data de envio para revisão.")
     
     old_status_name = maintenance.status.name
 
@@ -236,7 +251,7 @@ def complete_maintenance(*, maintenance: Maintenance, user, resulting_status: st
         maintenance.completion_mileage = completion_mileage
 
     maintenance.status = concluida_status
-    maintenance.exited_at = now
+    maintenance.exited_at = exit_timestamp
     maintenance.resolved_by = user
     update_fields = ["status", "exited_at", "resolved_by", "updated_at"]
     if completion_mileage is not None:
