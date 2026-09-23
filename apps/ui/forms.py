@@ -157,19 +157,19 @@ class FineForm(forms.ModelForm):
         self.fields['vehicle'].queryset = Vehicle.objects.select_related('brand','model').prefetch_related('plate_history').order_by('brand__name','model__name')
         self.fields['vehicle'].label_from_instance = self.label_from_instance
 
+    @staticmethod
+    def label_from_instance(vehicle):
+        plate = next((p.plate for p in vehicle.plate_history.all() if p.kind == 'CURRENT' and not p.ends_on), 'Sem placa')
+        description = ' '.join(part for part in [vehicle.brand.name if vehicle.brand else '', vehicle.model.name if vehicle.model else ''] if part)
+        return f'{plate} — {description or "Veículo sem modelo"}'
+
+
 class FineStatusForm(forms.ModelForm):
     class Meta:
         model = VehicleFine
         fields = ['status']
         labels = {'status': 'Situação'}
         widgets = {'status': forms.Select(attrs=SELECT)}
-
-
-    @staticmethod
-    def label_from_instance(vehicle):
-        plate = next((p.plate for p in vehicle.plate_history.all() if p.kind == 'CURRENT' and not p.ends_on), 'Sem placa')
-        description = ' '.join(part for part in [vehicle.brand.name if vehicle.brand else '', vehicle.model.name if vehicle.model else ''] if part)
-        return f'{plate} — {description or "Veículo sem modelo"}'
 
 from apps.fleet.models import Maintenance
 
