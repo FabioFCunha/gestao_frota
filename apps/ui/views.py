@@ -15,7 +15,11 @@ class FleetLoginView(LoginView):
 
 @login_required
 def dashboard(request):
-    from apps.fleet.services import get_dashboard_metrics, get_operational_alerts
+    from datetime import timedelta
+    from apps.fleet.models import Vehicle, VehiclePlate, Maintenance, VehicleFine
+
+    metrics = get_dashboard_metrics({}) if False else None
+    from apps.fleet.services import get_dashboard_metrics, get_operational_alerts, get_vehicle_revision_status
 
     metrics = get_dashboard_metrics({})
     alerts = get_operational_alerts({})
@@ -29,18 +33,111 @@ def dashboard(request):
         "sei": len(alerts.get("open_sei", [])),
     }
 
-    total_alerts = sum(alert_summary.values())
+    today = timezone.now().date()
+    fine_warning_date = today + timedelta(days=30)
 
-    # Mantém o dashboard inteligente sem criar novas consultas: os indicadores
-    # abaixo são derivados dos dados já consolidados pelos serviços do domínio.
+    active_maintenance_ids = set(
+        Maintenance.objects
+        .filter(status__name__in=["Aberta", "Em andamento"])
+        .values_list("vehicle_id", flat=True)
+    )
+    fine_due_ids = set(
+        VehicleFine.objects
+        .filter(
+            due_date__isnull=False,
+            due_date__gte=today,
+            due_date__lte=fine_warning_date,
+            status__name__in=["Pendente", "Em análise", "Em recurso"],
+        )
+        .values_list("vehicle_id", flat=True)
+    )
+    contract_attention_ids = set(
+        Vehicle.objects
+        .filter(
+            contract__isnull=False,
+            contract__ends_on__lte=fine_warning_date,
+            contract__ends_on__gte=today,
+        )
+        .values_list("id", flat=True)
+    )
+
+    vehicles = (
+        Vehicle.objects
+        .select_related("status", "contract", "brand", "model")
+        .prefetch_related("plate_history")
+        .order_by("brand__name", "model__name")
+    )
+
+    revision_by_vehicle = {
+        item["vehicle_id"]: item
+        for item in alerts.get("revisoes_vencidas", [])
+    }
+
+    plate_rows = []
+    for vehicle in vehicles:
+        current_plate = next(
+            (
+                plate.plate
+                for plate in vehicle.plate_history.all()
+                if plate.ends_on is None and plate.kind == VehiclePlate.CURRENT
+            ),
+            None,
+        )
+        if not current_plate:
+            continue
+
+        revision = revision_by_vehicle.get(vehicle.id)
+        attention = []
+
+        if vehicle.id in active_maintenance_ids or (vehicle.status and "manutenção" in vehicle.status.name.lower()):
+            attention.append("manutencao")
+        if revision:
+            attention.append("revisao_vencida" if revision["status"] == "DEVIDA" else "revisao_proxima")
+        if vehicle.id in fine_due_ids:
+            attention.append("multa")
+        if vehicle.id in contract_attention_ids:
+            attention.append("contrato")
+
+        if "revisao_vencida" in attention:
+            priority = "revisao-vencida"
+            priority_label = "Revisão vencida"
+        elif "manutencao" in attention:
+            priority = "manutencao"
+            priority_label = "Em manutenção"
+        elif "multa" in attention:
+            priority = "multa"
+            priority_label = "Multa a vencer"
+        elif "contrato" in attention:
+            priority = "contrato"
+            priority_label = "Contrato a vencer"
+        elif "revisao_proxima" in attention:
+            priority = "revisao-proxima"
+            priority_label = "Revisão próxima"
+        else:
+            priority = "normal"
+            priority_label = "Operacional"
+
+        plate_rows.append({
+            "id": vehicle.id,
+            "plate": current_plate,
+            "model": vehicle.model.name if vehicle.model else "",
+            "status": vehicle.status.name if vehicle.status else "",
+            "priority": priority,
+            "priority_label": priority_label,
+            "alerts": " ".join(attention),
+            "revision": revision,
+        })
+
+    total_alerts = sum(alert_summary.values())
     context = {
         "metrics": metrics,
         "alerts": alerts,
         "alert_summary": alert_summary,
         "total_alerts": total_alerts,
+        "plate_rows": plate_rows,
+        "fine_warning_date": fine_warning_date,
     }
     return render(request, "ui/dashboard.html", context)
-
 
 @login_required
 def vehicle_list(request):
