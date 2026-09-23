@@ -5,7 +5,11 @@
 <section class="welcome" style="margin-bottom:20px;">
     <div>
         <form method="get" action="" style="display:flex;gap:10px;">
-            <input type="text" name="q" value="{{ q }}" placeholder="Buscar por nome ou telefone..." style="padding:10px;width:400px;border-radius:4px;border:1px solid #ccc;" />
+            <input type="text" name="q" value="{{ q }}" placeholder="Buscar por nome ou telefone..." style="padding:10px;width:320px;border-radius:4px;border:1px solid #ccc;" />
+            <select name="status" style="padding:10px;border-radius:4px;border:1px solid #ccc;">
+                <option value="active" {% if status == "active" %}selected{% endif %}>Motoristas ativos</option>
+                <option value="inactive" {% if status == "inactive" %}selected{% endif %}>Motoristas inativos</option>
+            </select>
             <button type="submit" class="primary-action">Buscar</button>
         </form>
     </div>
@@ -19,7 +23,7 @@
             <tbody>
                 {% for d in drivers %}
                 <tr>
-                    <td><strong>{{ d.name }}</strong></td>
+                    <td><strong>{{ d.name }}</strong>{% if not d.active %} <span class="tag">Inativo</span>{% endif %}</td>
                     <td>{{ d.phone|default:"-" }}</td>
                     <td>{{ d.cnh_number|default:"-" }} {{ d.cnh_category }}</td>
                     <td>
