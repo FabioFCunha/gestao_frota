@@ -18,7 +18,7 @@
             <tbody>
                 {% for c in contracts %}
                 <tr>
-                    <td><strong>{{ c.number }}</strong></td>
+                    <td><a href="{% url 'contract_detail' c.pk %}"><strong>{{ c.number }}</strong></a></td>
                     <td>{{ c.renter.name|default:"-" }}</td>
                     <td>{{ c.starts_on|date:"d/m/Y" }}</td>
                     <td>{{ c.ends_on|date:"d/m/Y" }}</td>
