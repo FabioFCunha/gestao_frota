@@ -23,16 +23,16 @@
         <span class="filter-dot danger"></span> Revisão vencida <b>{{ alert_summary.revisoes }}</b>
     </button>
     <button class="fleet-filter" type="button" data-filter="revisao-proxima">
-        <span class="filter-dot warning"></span> Revisão próxima <b>0</b>
+        <span class="filter-dot warning"></span> Revisão próxima <b>{{ plate_alert_counts.revisao_proxima }}</b>
     </button>
     <button class="fleet-filter" type="button" data-filter="manutencao">
         <span class="filter-dot purple"></span> Em manutenção <b>{{ alert_summary.manutencoes }}</b>
     </button>
     <button class="fleet-filter" type="button" data-filter="multa">
-        <span class="filter-dot yellow"></span> Multa a vencer <b>0</b>
+        <span class="filter-dot yellow"></span> Multa a vencer <b>{{ plate_alert_counts.multa }}</b>
     </button>
     <button class="fleet-filter" type="button" data-filter="contrato">
-        <span class="filter-dot blue"></span> Contrato a vencer <b>{{ alert_summary.contratos }}</b>
+        <span class="filter-dot blue"></span> Contrato a vencer <b>{{ plate_alert_counts.contrato }}</b>
     </button>
 </section>
 
@@ -84,17 +84,17 @@
         <div class="summary-list">
             <a href="{% url 'maintenance_list' %}" class="summary-line">
                 <span class="summary-icon danger">!</span>
-                <span><strong>{{ alert_summary.revisoes }}</strong> revisões em atenção</span>
+                <span><strong>{{ plate_alert_counts.revisao_vencida|add:plate_alert_counts.revisao_proxima }}</strong> revisões em atenção</span>
                 <b>→</b>
             </a>
             <a href="{% url 'maintenance_list' %}" class="summary-line">
                 <span class="summary-icon purple">⚒</span>
-                <span><strong>{{ alert_summary.manutencoes }}</strong> manutenções abertas</span>
+                <span><strong>{{ plate_alert_counts.manutencao }}</strong> manutenções abertas</span>
                 <b>→</b>
             </a>
             <a href="{% url 'contract_list' %}" class="summary-line">
                 <span class="summary-icon blue">▤</span>
-                <span><strong>{{ alert_summary.contratos }}</strong> contratos exigem acompanhamento</span>
+                <span><strong>{{ plate_alert_counts.contrato }}</strong> contratos a vencer</span>
                 <b>→</b>
             </a>
         </div>
