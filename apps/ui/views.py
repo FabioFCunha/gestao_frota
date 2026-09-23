@@ -251,15 +251,21 @@ def driver_list(request):
         'vehicle__brand', 'vehicle__model'
     ).prefetch_related('vehicle__plate_history')
 
+    status = request.GET.get('status', 'active')
     qs = Driver.objects.prefetch_related(
         Prefetch('vehicle_assignments', queryset=active_assignments, to_attr='active_assignments')
     ).order_by('name')
+
+    if status == 'inactive':
+        qs = qs.filter(active=False)
+    else:
+        qs = qs.filter(active=True)
 
     q = request.GET.get('q', '')
     if q:
         qs = qs.filter(Q(name__icontains=q) | Q(phone__icontains=q))
     from django.utils.timezone import now
-    context = {"drivers": qs, "q": q, "today": now().date()}
+    context = {"drivers": qs, "q": q, "status": status, "today": now().date()}
     return render(request, "ui/driver_list.html", context)
 
 
