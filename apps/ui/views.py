@@ -174,6 +174,73 @@ def contract_list(request):
 
 
 @login_required
+def contract_detail(request, pk):
+    from apps.fleet.models import Contract, Vehicle, VehicleDriverAssignment, VehicleCustody, VehiclePlate
+
+    contract = get_object_or_404(
+        Contract.objects.select_related('renter'),
+        pk=pk,
+    )
+
+    active_assignments = (
+        VehicleDriverAssignment.objects
+        .filter(is_active=True)
+        .select_related('driver')
+        .prefetch_related(
+            Prefetch(
+                'custodies',
+                queryset=VehicleCustody.objects.order_by('-started_on'),
+                to_attr='ordered_custodies',
+            )
+        )
+    )
+
+    vehicles = (
+        Vehicle.objects
+        .filter(contract=contract)
+        .select_related('brand', 'model', 'status')
+        .prefetch_related(
+            'plate_history',
+            Prefetch(
+                'driver_assignments',
+                queryset=active_assignments,
+                to_attr='active_driver_assignments',
+            ),
+        )
+        .order_by('brand__name', 'model__name')
+    )
+
+    vehicle_rows = []
+    for vehicle in vehicles:
+        current_plate = next(
+            (plate.plate for plate in vehicle.plate_history.all()
+             if plate.ends_on is None and plate.kind == VehiclePlate.CURRENT),
+            None,
+        )
+        assignment = vehicle.active_driver_assignments[0] if vehicle.active_driver_assignments else None
+        active_custody = None
+        if assignment:
+            active_custody = next(
+                (custody for custody in assignment.ordered_custodies if custody.ended_on is None),
+                None,
+            )
+
+        vehicle_rows.append({
+            'vehicle': vehicle,
+            'plate': current_plate,
+            'driver': assignment.driver if assignment else None,
+            'custody': active_custody,
+        })
+
+    context = {
+        'contract': contract,
+        'vehicle_rows': vehicle_rows,
+        'vehicle_count': len(vehicle_rows),
+    }
+    return render(request, "ui/contract_detail.html", context)
+
+
+@login_required
 def driver_list(request):
     from apps.fleet.models import Driver
     from django.db.models import Prefetch
