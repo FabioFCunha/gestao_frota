@@ -135,12 +135,12 @@ class VehicleContractForm(forms.ModelForm):
 
 
 class FineForm(forms.ModelForm):
-    vehicle = forms.ModelChoiceField(queryset=Vehicle.objects.none(), label='Veículo', widget=forms.Select(attrs=SELECT))
+    vehicle = forms.ModelChoiceField(queryset=Vehicle.objects.none(), label='Placa do veículo', widget=forms.Select(attrs=SELECT))
 
     class Meta:
         model = VehicleFine
         fields = ['vehicle', 'auto_number', 'agency', 'status', 'date', 'amount', 'due_date', 'notes']
-        labels = {'vehicle':'Veículo','auto_number':'Nº do Auto de Infração','agency':'Órgão Autuador','status':'Situação','date':'Data da Infração','amount':'Valor (R$)','due_date':'Vencimento','notes':'Observações / Processo SEI'}
+        labels = {'vehicle':'Placa do veículo','auto_number':'Nº do Auto de Infração','agency':'Órgão Autuador','status':'Situação','date':'Data da Infração','amount':'Valor (R$)','due_date':'Vencimento','notes':'Observações / Processo SEI'}
         widgets = {
             'vehicle': forms.Select(attrs=SELECT),
             'auto_number': forms.TextInput(attrs={**INPUT, 'placeholder':'RA20629234'}),
@@ -154,7 +154,7 @@ class FineForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['vehicle'].queryset = Vehicle.objects.filter(active=True).select_related('brand','model').prefetch_related('plate_history').order_by('brand__name','model__name')
+        self.fields['vehicle'].queryset = Vehicle.objects.select_related('brand','model').prefetch_related('plate_history').order_by('brand__name','model__name')
         self.fields['vehicle'].label_from_instance = self.label_from_instance
 
     @staticmethod
