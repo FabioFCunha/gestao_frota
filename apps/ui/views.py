@@ -42,7 +42,7 @@ def vehicle_list(request):
 @login_required
 def vehicle_dossier(request, pk):
     import re
-    from apps.fleet.models import Vehicle, VehiclePlate, VehicleMileage
+    from apps.fleet.models import Vehicle, VehiclePlate, VehicleMileage, VehicleCustody
     from django.shortcuts import get_object_or_404
 
     vehicle = get_object_or_404(
@@ -60,6 +60,7 @@ def vehicle_dossier(request, pk):
     fines = vehicle.fines.select_related('status').order_by('-date')[:10]
     inspections = vehicle.inspections.select_related('type', 'status').order_by('-date')[:10]
     active_assignments = vehicle.driver_assignments.filter(is_active=True).select_related('driver')
+    custody_records = vehicle.custody_records.select_related('created_by').all()
     active_driver = active_assignments.first().driver if active_assignments.exists() else None
 
     # Parse structured notes
@@ -100,6 +101,26 @@ def vehicle_dossier(request, pk):
         else:
             revisao_status = 'OK'
 
+    if request.method == 'POST' and request.POST.get('action') == 'add_custody':
+        kind = request.POST.get('kind') or VehicleCustody.OUTRO
+        reference = (request.POST.get('reference') or '').strip()
+        starts_on = request.POST.get('starts_on') or None
+        notes_custody = (request.POST.get('custody_notes') or '').strip()
+        if not reference:
+            messages.error(request, 'Informe o SEI ou referência do acautelamento.')
+        else:
+            record = VehicleCustody(
+                vehicle=vehicle,
+                kind=kind,
+                reference=reference,
+                starts_on=starts_on or timezone.now(),
+                notes=notes_custody,
+                created_by=request.user,
+            )
+            record.save()
+            messages.success(request, 'Registro de SEI/acautelamento adicionado ao veículo.')
+            return redirect('vehicle_dossier', pk=vehicle.pk)
+
     context = {
         'vehicle': vehicle,
         'current_plates': current_plates,
@@ -111,6 +132,8 @@ def vehicle_dossier(request, pk):
         'fines': fines,
         'inspections': inspections,
         'active_driver': active_driver,
+        'custody_records': custody_records,
+        'custody_kinds': VehicleCustody.KIND_CHOICES,
         'motorista': motorista,
         'motorista_tel': motorista_tel,
         'oficina': oficina,
