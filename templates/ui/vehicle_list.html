@@ -29,7 +29,13 @@
             <tbody>
                 {% for vehicle in vehicles %}
                 <tr>
-                    <td>{{ vehicle.custody_info|default:"-" }}</td>
+                    <td>
+                        {% for custody in vehicle.custody_records.all %}
+                            <div><strong>{{ custody.reference }}</strong> <small>({{ custody.get_kind_display }})</small></div>
+                        {% empty %}
+                            -
+                        {% endfor %}
+                    </td>
                     <td><strong>
                         {% for p in vehicle.plate_history.all %}
                             {% if not p.ends_on and p.kind == 'CURRENT' %}{{ p.plate }}{% endif %}
