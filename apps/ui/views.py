@@ -670,7 +670,15 @@ def revision_action(request, pk):
 
         resulting_status = form.cleaned_data.get('resulting_status')
         if resulting_status is None:
-            messages.error(request, 'Informe a situação da viatura após o retorno.')
+            # Ao registrar retorno + KM, a revisão deve ser efetivamente encerrada.
+            # Se o usuário não escolher um novo status, restaura o status anterior
+            # à abertura da revisão, evitando que o registro permaneça "Aberto".
+            resulting_status = maintenance.vehicle_status_before_opening
+            if resulting_status is None:
+                resulting_status = vehicle.status
+
+        if resulting_status is None:
+            messages.error(request, 'Não foi possível determinar a situação da viatura após o retorno.')
             return redirect('maintenance_list')
 
         maintenance.save(update_fields=[
