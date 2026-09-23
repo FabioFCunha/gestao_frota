@@ -1026,13 +1026,7 @@ def fine_create(request):
     if request.method == 'POST':
         form = FineForm(request.POST)
         if form.is_valid():
-            plate_str = form.cleaned_data['plate']
-            plate_record = VehiclePlate.objects.filter(plate__iexact=plate_str).select_related('vehicle').first()
-            if not plate_record:
-                messages.error(request, f'Placa {plate_str} não encontrada no sistema.')
-                return render(request, 'ui/form.html', {'form': form, 'title': 'Cadastrar Multa', 'back_url': 'fine_list'})
             fine = form.save(commit=False)
-            fine.vehicle = plate_record.vehicle
             fine.created_by = request.user
             fine.save()
             messages.success(request, 'Multa cadastrada com sucesso!')
@@ -1040,6 +1034,22 @@ def fine_create(request):
     else:
         form = FineForm()
     return render(request, 'ui/form.html', {'form': form, 'title': 'Cadastrar Multa', 'back_url': 'fine_list'})
+
+
+@login_required
+@module_permission("fleet.change_vehiclefine")
+def fine_edit(request, pk):
+    from apps.fleet.models import VehicleFine
+    fine = get_object_or_404(VehicleFine, pk=pk)
+    if request.method == 'POST':
+        form = FineForm(request.POST, instance=fine)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Multa atualizada com sucesso!')
+            return redirect('fine_list')
+    else:
+        form = FineForm(instance=fine)
+    return render(request, 'ui/form.html', {'form': form, 'title': f'Editar Multa: {fine.auto_number}', 'back_url': 'fine_list'})
 
 @login_required
 @module_permission("fleet.add_maintenance")
