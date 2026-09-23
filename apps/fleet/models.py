@@ -327,6 +327,7 @@ class Maintenance(BaseModel):
     type = models.ForeignKey(MaintenanceType, on_delete=models.PROTECT)
     status = models.ForeignKey(MaintenanceStatus, on_delete=models.PROTECT)
     mileage = models.PositiveIntegerField(null=True, blank=True)
+    completion_mileage = models.PositiveIntegerField(null=True, blank=True)
     service = models.CharField(max_length=200, blank=True)
     description = models.TextField(blank=True)
     value = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
