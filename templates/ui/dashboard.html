@@ -6,16 +6,40 @@
 <section class="fd-hero">
     <div class="fd-hero-left">
         <span class="fd-eyebrow">CENTRAL DA FROTA</span>
-        <h2 class="fd-title">Painel de Controle</h2>
-        <p class="fd-subtitle">Visualização em tempo real da situação de cada veículo.</p>
+        <h2 class="fd-title">Visão geral</h2>
+        <p class="fd-subtitle">Acompanhe rapidamente a situação operacional dos veículos.</p>
     </div>
     <div class="fd-hero-count">
         <strong>{{ metrics.fleet.total }}</strong>
-        <span>veículos</span>
+        <span>veículos cadastrados</span>
     </div>
 </section>
 
+<section class="fd-kpis">
+    <article class="fd-kpi fd-kpi--total">
+        <span class="fd-kpi-label">Frota</span>
+        <strong>{{ metrics.fleet.total }}</strong>
+        <small>veículos cadastrados</small>
+    </article>
+    <button class="fd-kpi fd-kpi--danger" type="button" data-filter="revisao_vencida">
+        <span class="fd-kpi-label">Revisão vencida</span>
+        <strong>{{ plate_alert_counts.revisao_vencida }}</strong>
+        <small>exigem atenção</small>
+    </button>
+    <button class="fd-kpi fd-kpi--warning" type="button" data-filter="revisao_proxima">
+        <span class="fd-kpi-label">Revisão próxima</span>
+        <strong>{{ plate_alert_counts.revisao_proxima }}</strong>
+        <small>nos próximos ciclos</small>
+    </button>
+    <button class="fd-kpi fd-kpi--blue" type="button" data-filter="contrato">
+        <span class="fd-kpi-label">Contrato</span>
+        <strong>{{ plate_alert_counts.contrato }}</strong>
+        <small>em atenção</small>
+    </button>
+</section>
+
 <section class="fd-strip">
+    <div class="fd-filter-label">FILTROS</div>
     <button class="fd-chip active" type="button" data-filter="todos">
         <i class="fd-dot fd-dot--all"></i>
         <span>Todos</span>
@@ -38,7 +62,7 @@
     {% if plate_alert_counts.manutencao %}
     <button class="fd-chip" type="button" data-filter="manutencao">
         <i class="fd-dot fd-dot--purple"></i>
-        <span>Em manutenção</span>
+        <span>Manutenção</span>
         <b>{{ plate_alert_counts.manutencao }}</b>
     </button>
     {% endif %}
@@ -58,13 +82,18 @@
     {% endif %}
 
     <div class="fd-search-wrap">
-        <input class="fd-search" type="text" id="plateSearch" placeholder="Buscar placa…" autocomplete="off">
+        <span class="fd-search-icon">⌕</span>
+        <input class="fd-search" type="text" id="plateSearch" placeholder="Buscar por placa..." autocomplete="off">
     </div>
 </section>
 
 <section class="fd-board">
     <div class="fd-board-head">
-        <span class="fd-board-counter"><b id="visibleCount">{{ plate_rows|length }}</b> veículos exibidos</span>
+        <div>
+            <span class="fd-board-title">Frota</span>
+            <span class="fd-board-subtitle">Situação individual dos veículos</span>
+        </div>
+        <span class="fd-board-counter"><b id="visibleCount">{{ plate_rows|length }}</b> exibidos</span>
     </div>
 
     <div class="fd-grid" id="fdGrid">
@@ -73,13 +102,22 @@
            data-alerts="{{ v.alerts }}"
            data-plate="{{ v.plate }}"
            href="{% url 'vehicle_dossier' v.id %}">
+            <div class="vc-topline">
+                <span class="vc-status">{{ v.priority_label }}</span>
+                <span class="vc-arrow">→</span>
+            </div>
+
             <div class="vc-plate-wrap">
                 <div class="vc-plate">
                     <span class="vc-plate-bar"></span>
                     <span class="vc-plate-text">{{ v.plate }}</span>
                 </div>
             </div>
-            <div class="vc-model">{{ v.model|default:"—" }}</div>
+
+            <div class="vc-model">
+                {% if v.model %}{{ v.model }}{% else %}Modelo não informado{% endif %}
+            </div>
+
             <div class="vc-footer">
                 <span class="vc-indicators">
                     {% if "revisao_vencida" in v.alerts %}<i class="vc-ind vc-ind--red" title="Revisão vencida"></i>{% endif %}
@@ -89,7 +127,11 @@
                     {% if "contrato" in v.alerts %}<i class="vc-ind vc-ind--blue" title="Contrato a vencer"></i>{% endif %}
                     {% if not v.alerts %}<i class="vc-ind vc-ind--green" title="Operacional"></i>{% endif %}
                 </span>
-                <span class="vc-arrow">›</span>
+                {% if v.alerts %}
+                <span class="vc-attention">Atenção</span>
+                {% else %}
+                <span class="vc-attention vc-attention--ok">Operacional</span>
+                {% endif %}
             </div>
         </a>
         {% empty %}
@@ -100,7 +142,7 @@
 
 <script>
 (function () {
-    var chips = document.querySelectorAll(".fd-chip");
+    var chips = document.querySelectorAll(".fd-chip, .fd-kpi[data-filter]");
     var cards = document.querySelectorAll(".vc");
     var counter = document.getElementById("visibleCount");
     var search = document.getElementById("plateSearch");
@@ -109,21 +151,29 @@
     function applyFilters() {
         var query = (search.value || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
         var visible = 0;
-        cards.forEach(function (c) {
-            var matchFilter = activeFilter === "todos" || c.dataset.alerts.indexOf(activeFilter) !== -1;
-            var matchSearch = !query || c.dataset.plate.toUpperCase().replace(/[^A-Z0-9]/g, "").indexOf(query) !== -1;
+
+        cards.forEach(function (card) {
+            var matchFilter = activeFilter === "todos" ||
+                card.dataset.alerts.split(" ").indexOf(activeFilter) !== -1;
+            var matchSearch = !query ||
+                card.dataset.plate.toUpperCase().replace(/[^A-Z0-9]/g, "").indexOf(query) !== -1;
             var show = matchFilter && matchSearch;
-            c.hidden = !show;
+
+            card.hidden = !show;
             if (show) visible++;
         });
+
         counter.textContent = visible;
     }
 
-    chips.forEach(function (btn) {
-        btn.addEventListener("click", function () {
-            chips.forEach(function (b) { b.classList.remove("active"); });
-            btn.classList.add("active");
-            activeFilter = btn.dataset.filter;
+    chips.forEach(function (button) {
+        button.addEventListener("click", function () {
+            activeFilter = button.dataset.filter;
+
+            document.querySelectorAll(".fd-chip").forEach(function (chip) {
+                chip.classList.toggle("active", chip.dataset.filter === activeFilter);
+            });
+
             applyFilters();
         });
     });
