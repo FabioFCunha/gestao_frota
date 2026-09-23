@@ -1,5 +1,6 @@
 from rest_framework import serializers
-from .models import Maintenance, Vehicle, VehicleHistory
+from .models import Maintenance, Vehicle,
+    VehicleCustody, VehicleHistory
 from .services import open_maintenance
 
 
@@ -118,3 +119,10 @@ class MaintenanceSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         maintenance = super().create(validated_data)
         return open_maintenance(maintenance=maintenance, user=self.context["request"].user)
+
+
+class VehicleCustodySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = VehicleCustody
+        fields = "__all__"
+        read_only_fields = ["id", "created_at", "updated_at", "created_by"]
