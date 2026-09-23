@@ -4,7 +4,7 @@ from django.db.models import Count, Q, Prefetch
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.utils import timezone
-from .forms import DriverForm, DriverVehicleAssignmentForm, VehicleForm, FineForm
+from .forms import DriverForm, DriverVehicleAssignmentForm, VehicleForm, VehicleContractForm, FineForm
 from apps.fleet.models import VehiclePlate
 
 class FleetLoginView(LoginView):
@@ -428,6 +428,31 @@ def vehicle_create(request):
     else:
         form = VehicleForm()
     return render(request, 'ui/form.html', {'form': form, 'title': 'Cadastrar Veículo', 'back_url': 'vehicle_list'})
+
+@login_required
+def vehicle_contract_edit(request, pk):
+    from apps.fleet.models import Vehicle
+
+    vehicle = get_object_or_404(Vehicle, pk=pk)
+    if request.method == 'POST':
+        form = VehicleContractForm(request.POST, instance=vehicle)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Contrato do veículo atualizado com sucesso!')
+            return redirect('vehicle_list')
+    else:
+        form = VehicleContractForm(instance=vehicle)
+
+    return render(
+        request,
+        'ui/form.html',
+        {
+            'form': form,
+            'title': f'Contrato do veículo: {vehicle}',
+            'back_url': 'vehicle_list',
+        },
+    )
+
 
 @login_required
 def fine_create(request):
