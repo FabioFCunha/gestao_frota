@@ -1,5 +1,77 @@
 {% extends 'ui/base.html' %}
-{% block title %}{{ title }} | Gestão de Frotas{% endblock %}
+{% block title %}{{ title }} | Gestão de Frotas{% if quick_create %}
+<div id="quick-create-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:1000; align-items:center; justify-content:center;">
+    <div class="panel" style="width:min(520px,92vw);">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px;">
+            <h3 id="quick-create-title" style="margin:0;">Novo cadastro</h3>
+            <button type="button" id="quick-create-close" class="secondary-action">Fechar</button>
+        </div>
+        <div id="quick-create-fields"></div>
+        <div id="quick-create-error" style="display:none; color:#b91c1c; margin-top:12px;"></div>
+        <div style="margin-top:20px; text-align:right;">
+            <button type="button" id="quick-create-save" class="primary-action">Adicionar</button>
+        </div>
+    </div>
+</div>
+<script>
+(function () {
+    const modal = document.getElementById('quick-create-modal');
+    const title = document.getElementById('quick-create-title');
+    const fields = document.getElementById('quick-create-fields');
+    const error = document.getElementById('quick-create-error');
+    const save = document.getElementById('quick-create-save');
+    let entity = null;
+    const labels = {brand:'Nova marca', model:'Novo modelo', unit:'Nova Unidade Administrativa', base:'Nova base'};
+
+    function openModal(type) {
+        entity = type;
+        title.textContent = labels[type];
+        error.style.display = 'none';
+        let html = '<label style="font-weight:bold;display:block;margin-bottom:6px;">Nome</label><input id="quick-name" class="form-input" type="text">';
+        if (type === 'unit') html += '<label style="font-weight:bold;display:block;margin:14px 0 6px;">Sigla</label><input id="quick-acronym" class="form-input" type="text" placeholder="Ex: SEGOV">';
+        if (type === 'model') html += '<label style="font-weight:bold;display:block;margin:14px 0 6px;">Marca</label><select id="quick-brand" class="form-input">' + document.getElementById('id_brand').innerHTML + '</select>';
+        if (type === 'base') html += '<label style="font-weight:bold;display:block;margin:14px 0 6px;">Unidade Administrativa</label><select id="quick-unit" class="form-input">' + document.getElementById('id_unit').innerHTML + '</select>';
+        fields.innerHTML = html;
+        if (type === 'model') document.getElementById('quick-brand').value = document.getElementById('id_brand').value;
+        if (type === 'base') document.getElementById('quick-unit').value = document.getElementById('id_unit').value;
+        modal.style.display = 'flex';
+        setTimeout(() => document.getElementById('quick-name').focus(), 50);
+    }
+
+    function closeModal() { modal.style.display = 'none'; entity = null; }
+
+    async function saveQuick() {
+        const body = new URLSearchParams();
+        body.append('entity', entity);
+        body.append('name', document.getElementById('quick-name').value.trim());
+        if (entity === 'unit') body.append('acronym', document.getElementById('quick-acronym').value.trim());
+        if (entity === 'model') body.append('brand_id', document.getElementById('quick-brand').value);
+        if (entity === 'base') body.append('unit_id', document.getElementById('quick-unit').value);
+        body.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+        save.disabled = true;
+        error.style.display = 'none';
+        try {
+            const response = await fetch('{% url "vehicle_quick_create" %}', {method:'POST', headers:{'X-Requested-With':'XMLHttpRequest'}, body});
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || 'Não foi possível cadastrar.');
+            const select = document.getElementById('id_' + entity);
+            select.add(new Option(entity === 'unit' && data.acronym ? data.name + ' (' + data.acronym + ')' : data.name, data.id, true, true));
+            select.value = data.id;
+            closeModal();
+        } catch (err) {
+            error.textContent = err.message;
+            error.style.display = 'block';
+        } finally { save.disabled = false; }
+    }
+
+    document.querySelectorAll('.quick-add').forEach(btn => btn.addEventListener('click', () => openModal(btn.dataset.entity)));
+    document.getElementById('quick-create-close').addEventListener('click', closeModal);
+    save.addEventListener('click', saveQuick);
+    modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
+})();
+</script>
+{% endif %}
+{% endblock %}
 {% block heading %}{{ title }}{% endblock %}
 
 {% block content %}
@@ -26,7 +98,14 @@
             {% for field in form %}
                 <div style="display:flex; flex-direction:column; {% if field.name == 'notes' %}grid-column: 1/-1;{% endif %}">
                     <label style="font-weight:bold; margin-bottom:5px;">{{ field.label }} {% if field.field.required %}<span style="color:red">*</span>{% endif %}</label>
+                    {% if quick_create and field.name == 'brand' or quick_create and field.name == 'model' or quick_create and field.name == 'unit' or quick_create and field.name == 'base' %}
+                    <div style="display:flex; gap:8px; align-items:center;">
+                        {{ field }}
+                        <button type="button" class="secondary-action quick-add" data-entity="{{ field.name }}" style="white-space:nowrap;">+ Novo</button>
+                    </div>
+                    {% else %}
                     {{ field }}
+                    {% endif %}
                     {% if field.help_text %}<small style="color:#666;">{{ field.help_text }}</small>{% endif %}
                     {% if field.errors %}<small style="color:red;">{{ field.errors.0 }}</small>{% endif %}
                 </div>
