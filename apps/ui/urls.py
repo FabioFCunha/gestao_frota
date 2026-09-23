@@ -21,6 +21,7 @@ urlpatterns = [
     path("manutencoes/importar-km/", views.km_import, name="km_import"),
     path("multas/", fine_list, name="fine_list"),
     path("multas/nova/", views.fine_create, name="fine_create"),
+    path("veiculos/<uuid:pk>/contrato/", views.vehicle_contract_edit, name="vehicle_contract_edit"),
     path("veiculos/novo/", views.vehicle_create, name="vehicle_create"),
     path("entrar/", FleetLoginView.as_view(), name="login"),
     path("sair/", LogoutView.as_view(next_page="login"), name="logout"),
