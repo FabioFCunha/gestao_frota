@@ -1,17 +1,17 @@
-﻿{% extends 'ui/base.html' %}
-{% block title %}Dashboard | GestÃ£o de Frotas{% endblock %}
-{% block heading %}GestÃ£o da Frota{% endblock %}
+{% extends 'ui/base.html' %}
+{% block title %}Dashboard | Gestão de Frotas{% endblock %}
+{% block heading %}Gestão da Frota{% endblock %}
 {% block content %}
 
 <section class="fd-hero">
     <div class="fd-hero-left">
         <span class="fd-eyebrow">CENTRAL DA FROTA</span>
-        <h2 class="fd-title">VisÃ£o geral</h2>
-        <p class="fd-subtitle">Acompanhe rapidamente a situaÃ§Ã£o operacional dos veÃ­culos.</p>
+        <h2 class="fd-title">Visão geral</h2>
+        <p class="fd-subtitle">Acompanhe rapidamente a situação operacional dos veículos.</p>
     </div>
     <div class="fd-hero-count">
         <strong>{{ metrics.fleet.total }}</strong>
-        <span>veÃ­culos na frota</span>
+        <span>veículos na frota</span>
     </div>
 </section>
 
@@ -25,21 +25,21 @@
     {% if plate_alert_counts.revisao_vencida %}
     <button class="fd-chip" type="button" data-filter="revisao_vencida">
         <i class="fd-dot fd-dot--red"></i>
-        <span>RevisÃ£o vencida</span>
+        <span>Revisão vencida</span>
         <b>{{ plate_alert_counts.revisao_vencida }}</b>
     </button>
     {% endif %}
     {% if plate_alert_counts.revisao_proxima %}
     <button class="fd-chip" type="button" data-filter="revisao_proxima">
         <i class="fd-dot fd-dot--orange"></i>
-        <span>RevisÃ£o prÃ³xima</span>
+        <span>Revisão próxima</span>
         <b>{{ plate_alert_counts.revisao_proxima }}</b>
     </button>
     {% endif %}
     {% if plate_alert_counts.manutencao %}
     <button class="fd-chip" type="button" data-filter="manutencao">
         <i class="fd-dot fd-dot--purple"></i>
-        <span>ManutenÃ§Ã£o</span>
+        <span>Manutenção</span>
         <b>{{ plate_alert_counts.manutencao }}</b>
     </button>
     {% endif %}
@@ -59,7 +59,7 @@
     {% endif %}
 
     <div class="fd-search-wrap">
-        <span class="fd-search-icon">âŒ•</span>
+        <span class="fd-search-icon">⌕</span>
         <input class="fd-search" type="text" id="plateSearch" placeholder="Buscar por placa..." autocomplete="off">
     </div>
 </section>
@@ -67,7 +67,7 @@
 <section class="fd-board">
     <div class="fd-board-head">
         <div>
-            <span class="fd-board-title">Frota em OperaÃ§Ã£o</span>
+            <span class="fd-board-title">Frota em Operação</span>
         </div>
         <span class="fd-board-counter"><b id="visibleCount">{{ plate_rows|length }}</b> exibidos</span>
     </div>
@@ -89,28 +89,28 @@
             </div>
 
             <div class="vc-model">
-                {% if v.model %}{{ v.model }}{% else %}Modelo nÃ£o informado{% endif %}
+                {% if v.model %}{{ v.model }}{% else %}Modelo não informado{% endif %}
             </div>
 
             <div class="vc-details">
                 <div class="vc-detail-item" title="Quilometragem Atual">
-                    <span class="vc-detail-icon">â±</span>
+                    <span class="vc-detail-icon">⏱</span>
                     <span>{% if v.mileage %}{{ v.mileage }} km{% else %}Sem reg. km{% endif %}</span>
                 </div>
                 {% if v.revision_info %}
                     {% if v.revision_info.status == "SEM_HISTORICO" %}
-                    <div class="vc-detail-item" title="Nenhuma revisÃ£o concluÃ­da e sem meta no cadastro">
-                        <span class="vc-detail-icon">âš ï¸</span>
-                        <span style="color: #b45309;">Sem histÃ³rico de revisÃ£o</span>
+                    <div class="vc-detail-item" title="Nenhuma revisÃ£o concluída e sem meta no cadastro">
+                        <span class="vc-detail-icon">⚠️</span>
+                        <span style="color: #b45309;">Sem histórico de revisÃ£o</span>
                     </div>
                     {% else %}
-                    <div class="vc-detail-item" title="PrÃ³xima RevisÃ£o">
-                        <span class="vc-detail-icon">ðŸ”§</span>
+                    <div class="vc-detail-item" title="Próxima Revisão">
+                        <span class="vc-detail-icon">🔧</span>
                         <span>Rev. {{ v.revision_info.km_prox_revisao }} km</span>
                     </div>
                     <div class="vc-detail-item">
                         <span class="vc-detail-icon">
-                            {% if v.revision_info.status == "DEVIDA" %}ðŸš¨{% else %}â³{% endif %}
+                            {% if v.revision_info.status == "DEVIDA" %}🚨{% else %}⏳{% endif %}
                         </span>
                         <span>
                             {% if v.revision_info.status == "DEVIDA" %}
@@ -124,14 +124,14 @@
                 {% endif %}
                 {% if v.driver_name %}
                 <div class="vc-detail-item" title="Motorista: {{ v.driver_name }}">
-                    <span class="vc-detail-icon">ðŸ‘¤</span>
+                    <span class="vc-detail-icon">👤</span>
                     <span>CNH {% if v.cnh_expiration %}{{ v.cnh_expiration|date:"d/m/Y" }}{% else %}?{% endif %}</span>
                 </div>
                 {% endif %}
             </div>
 
             <div class="vc-footer" style="justify-content: flex-end;">
-                <span class="vc-arrow">â†’</span>
+                <span class="vc-arrow">→</span>
             </div>
         </a>
         {% empty %}
