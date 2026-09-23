@@ -265,6 +265,30 @@
         document.getElementById('revision-submit').textContent = returnDate.value ? 'Salvar revisão' : 'Salvar como EM REVISÃO';
     });
 
+    form.addEventListener('submit', function (event) {
+        // Garante que o POST leve sempre os identificadores e dados atuais
+        // do modal, mesmo após abrir/editar mais de uma revisão na mesma página.
+        const currentButton = document.querySelector('.revision-edit[data-active-id="' + maintenanceId.value + '"]');
+        if (!maintenanceId.value) {
+            event.preventDefault();
+            help.textContent = 'Não foi possível identificar a revisão deste veículo. Feche e abra o modal novamente.';
+            return;
+        }
+
+        if (returnDate.value && !completionInput.value) {
+            event.preventDefault();
+            help.textContent = 'Informe a quilometragem registrada no retorno da revisão.';
+            completionInput.focus();
+            return;
+        }
+
+        if (returnDate.value) {
+            action.value = 'edit';
+        }
+
+        form.action = '/manutencoes/' + (currentButton ? currentButton.dataset.id : form.action.split('/manutencoes/')[1].split('/')[0]) + '/revisao/';
+    });
+
     document.getElementById('revision-modal-close').addEventListener('click', closeModal);
     document.getElementById('revision-modal-cancel').addEventListener('click', closeModal);
     modal.addEventListener('click', function (event) {
