@@ -2,7 +2,7 @@ from django import forms
 from apps.fleet.models import (
     Driver, Vehicle, VehicleFine, VehicleFineStatus,
     VehicleStatus, Brand, VehicleModel, Contract, Renter,
-    AdministrativeUnit, Base
+    AdministrativeUnit, Base, Workshop, VehicleStatus
 )
 
 INPUT = {'class': 'form-input'}
@@ -199,4 +199,36 @@ class KMImportForm(forms.Form):
     csv_file = forms.FileField(
         label='Arquivo CSV (Exportado da Prime)',
         widget=forms.FileInput(attrs={'class': 'form-input'})
+    )
+
+
+class RevisionActionForm(forms.Form):
+    workshop = forms.ModelChoiceField(
+        queryset=Workshop.objects.filter(active=True).order_by('name'),
+        label='Oficina',
+        required=False,
+        widget=forms.Select(attrs=SELECT),
+    )
+    service = forms.CharField(
+        label='Serviço',
+        required=False,
+        max_length=200,
+        widget=forms.TextInput(attrs={**INPUT, 'placeholder': 'Revisão preventiva'}),
+    )
+    completion_mileage = forms.IntegerField(
+        label='KM no retorno',
+        required=False,
+        min_value=0,
+        widget=forms.NumberInput(attrs={**INPUT, 'min': 0, 'placeholder': 'KM registrada na saída da oficina'}),
+    )
+    resulting_status = forms.ModelChoiceField(
+        queryset=VehicleStatus.objects.filter(active=True).order_by('name'),
+        label='Situação após retorno',
+        required=False,
+        widget=forms.Select(attrs=SELECT),
+    )
+    notes = forms.CharField(
+        label='Observações',
+        required=False,
+        widget=forms.Textarea(attrs={**INPUT, 'rows': 3}),
     )
