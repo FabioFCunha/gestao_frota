@@ -1,77 +1,198 @@
-{% extends 'ui/base.html' %}{% block content %}
-<section class="welcome"><div><h2>Bom dia, {{ request.user.username }}.</h2><p>Acompanhe os principais indicadores da frota em um só lugar.</p></div></section>
-<section class="metrics">
-    <article><span class="metric-icon blue">▣</span><p>Total de veículos</p><strong>{{ metrics.fleet.total }}</strong></article>
-    <article><span class="metric-icon green">●</span><p>Em Manutenção</p><strong>{{ metrics.maintenance.total }}</strong></article>
-    <article><span class="metric-icon orange">⚒</span><p>Multas Registradas</p><strong>{{ metrics.fines.total }}</strong></article>
-    <article><span class="metric-icon red">!</span><p>Processos SEI / Acautelamentos</p><strong>{{ metrics.sei_processes.total }}</strong></article>
-    <article><span class="metric-icon purple">◆</span><p>Contratos</p><strong>{{ metrics.contracts.total }}</strong></article>
-    <article><span class="metric-icon teal">◈</span><p>Documentos</p><strong>{{ metrics.documents.total }}</strong></article>
-</section>
-<section class="grid">
-    <article class="panel">
-        <div class="panel-title">
-            <div><h3>Alertas: Manutenções e Revisões</h3><p>{{ alerts.open_maintenances|length }} manutenção(ões) em andamento e {{ alerts.revisoes_vencidas|length }} veículo(s) com revisão atrasada</p></div>
-        </div>
-        {% if alerts.open_maintenances %}
-        <h4>Manutenções em andamento</h4>
-        <table>
-            <thead><tr><th>VEÍCULO</th><th>SITUAÇÃO</th><th>ENTRADA</th></tr></thead>
-            <tbody>
-                {% for item in alerts.open_maintenances %}
-                <tr><td><a href="/api/vehicles/{{ item.id }}/dossier/">{{ item.vehicle__plate_history__plate|default:"Ver Dossiê" }}</a></td><td><span class="tag">{{ item.status__name }}</span></td><td>{{ item.entered_at|date:"d/m/Y H:i" }}</td></tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        {% else %}<div class="empty">Nenhuma manutenção pendente.</div>{% endif %}
+{% extends 'ui/base.html' %}
+{% block title %}Dashboard | Gestão de Frotas{% endblock %}
+{% block heading %}Dashboard{% endblock %}
+{% block content %}
 
+<section class="dashboard-hero">
+    <div>
+        <span class="hero-kicker">CENTRAL OPERACIONAL</span>
+        <h2>Visão geral da frota</h2>
+        <p>Indicadores, alertas e pontos de atenção reunidos em uma única visão.</p>
+    </div>
+    <div class="hero-status">
+        <span class="status-dot"></span>
+        <div>
+            <strong>Sistema operacional</strong>
+            <small>Dados consolidados em tempo real</small>
+        </div>
+    </div>
+</section>
+
+<section class="dashboard-kpis">
+    <article class="kpi-card kpi-primary">
+        <div class="kpi-top"><span class="kpi-icon">▣</span><span class="kpi-label">Frota</span></div>
+        <strong>{{ metrics.fleet.total }}</strong>
+        <span class="kpi-caption">veículos cadastrados</span>
+    </article>
+    <article class="kpi-card">
+        <div class="kpi-top"><span class="kpi-icon green">✓</span><span class="kpi-label">Manutenção</span></div>
+        <strong>{{ metrics.maintenance.total }}</strong>
+        <span class="kpi-caption">registros de manutenção</span>
+    </article>
+    <article class="kpi-card">
+        <div class="kpi-top"><span class="kpi-icon orange">⚑</span><span class="kpi-label">Multas</span></div>
+        <strong>{{ metrics.fines.total }}</strong>
+        <span class="kpi-caption">registros registrados</span>
+    </article>
+    <article class="kpi-card">
+        <div class="kpi-top"><span class="kpi-icon purple">◆</span><span class="kpi-label">Contratos</span></div>
+        <strong>{{ metrics.contracts.total }}</strong>
+        <span class="kpi-caption">contratos cadastrados</span>
+    </article>
+    <article class="kpi-card">
+        <div class="kpi-top"><span class="kpi-icon red">!</span><span class="kpi-label">SEI</span></div>
+        <strong>{{ metrics.sei_processes.total }}</strong>
+        <span class="kpi-caption">processos e acautelamentos</span>
+    </article>
+    <article class="kpi-card">
+        <div class="kpi-top"><span class="kpi-icon teal">◈</span><span class="kpi-label">Documentos</span></div>
+        <strong>{{ metrics.documents.total }}</strong>
+        <span class="kpi-caption">documentos cadastrados</span>
+    </article>
+</section>
+
+<section class="dashboard-grid dashboard-main-grid">
+    <article class="panel dashboard-panel">
+        <div class="panel-heading-modern">
+            <div>
+                <span class="section-eyebrow">PRIORIDADES</span>
+                <h3>Pontos de atenção</h3>
+                <p>{{ total_alerts }} ocorrência{{ total_alerts|pluralize:"s" }} que merece{{ total_alerts|pluralize:"m" }} acompanhamento.</p>
+            </div>
+            {% if total_alerts %}
+                <span class="attention-badge">{{ total_alerts }}</span>
+            {% else %}
+                <span class="ok-badge">Tudo em ordem</span>
+            {% endif %}
+        </div>
+
+        <div class="attention-grid">
+            <a class="attention-item {% if alert_summary.revisoes %}has-alert{% else %}is-ok{% endif %}" href="{% url 'maintenance_list' %}">
+                <span class="attention-icon">◷</span>
+                <span><strong>Revisões</strong><small>{% if alert_summary.revisoes %}{{ alert_summary.revisoes }} em atenção{% else %}Nenhuma pendência{% endif %}</small></span>
+                <b>{{ alert_summary.revisoes }}</b>
+            </a>
+            <a class="attention-item {% if alert_summary.manutencoes %}has-alert{% else %}is-ok{% endif %}" href="{% url 'maintenance_list' %}">
+                <span class="attention-icon">⚒</span>
+                <span><strong>Manutenções</strong><small>{% if alert_summary.manutencoes %}Em andamento{% else %}Nenhuma pendência{% endif %}</small></span>
+                <b>{{ alert_summary.manutencoes }}</b>
+            </a>
+            <a class="attention-item {% if alert_summary.contratos %}has-alert{% else %}is-ok{% endif %}" href="{% url 'contract_list' %}">
+                <span class="attention-icon">▤</span>
+                <span><strong>Contratos</strong><small>{% if alert_summary.contratos %}Vencendo ou vencidos{% else %}Sem alertas{% endif %}</small></span>
+                <b>{{ alert_summary.contratos }}</b>
+            </a>
+            <a class="attention-item {% if alert_summary.multas %}has-alert{% else %}is-ok{% endif %}" href="{% url 'fine_list' %}">
+                <span class="attention-icon">⚑</span>
+                <span><strong>Multas</strong><small>{% if alert_summary.multas %}Aguardando tratamento{% else %}Nenhuma pendência{% endif %}</small></span>
+                <b>{{ alert_summary.multas }}</b>
+            </a>
+            <div class="attention-item {% if alert_summary.inspecoes %}has-alert{% else %}is-ok{% endif %}">
+                <span class="attention-icon">✓</span>
+                <span><strong>Inspeções</strong><small>{% if alert_summary.inspecoes %}Com ressalva ou reprovação{% else %}Nenhuma pendência{% endif %}</small></span>
+                <b>{{ alert_summary.inspecoes }}</b>
+            </div>
+            <div class="attention-item {% if alert_summary.sei %}has-alert{% else %}is-ok{% endif %}">
+                <span class="attention-icon">◆</span>
+                <span><strong>Processos SEI</strong><small>{% if alert_summary.sei %}Abertos ou em andamento{% else %}Nenhuma pendência{% endif %}</small></span>
+                <b>{{ alert_summary.sei }}</b>
+            </div>
+        </div>
+    </article>
+
+    <article class="panel dashboard-panel">
+        <div class="panel-heading-modern">
+            <div>
+                <span class="section-eyebrow">STATUS DA FROTA</span>
+                <h3>Distribuição dos veículos</h3>
+                <p>Visão consolidada por situação cadastrada.</p>
+            </div>
+            <a class="panel-link" href="{% url 'vehicle_list' %}">Ver frota →</a>
+        </div>
+        <div class="status-list">
+            {% for status_name, count in metrics.fleet.by_status.items %}
+            <div class="status-row">
+                <div class="status-name"><span class="status-marker"></span><span>{{ status_name|default:"Sem situação" }}</span></div>
+                <strong>{{ count }}</strong>
+                <div class="status-bar"><span style="width:{% widthratio count metrics.fleet.total 100 %}%"></span></div>
+            </div>
+            {% empty %}
+            <div class="empty">Nenhuma situação de veículo cadastrada.</div>
+            {% endfor %}
+        </div>
+    </article>
+</section>
+
+<section class="dashboard-grid">
+    <article class="panel dashboard-panel">
+        <div class="panel-heading-modern">
+            <div>
+                <span class="section-eyebrow">REVISÕES</span>
+                <h3>Veículos que exigem atenção</h3>
+                <p>Prioridade definida pelo controle preventivo de quilometragem.</p>
+            </div>
+            <a class="panel-link" href="{% url 'maintenance_list' %}">Controle de revisões →</a>
+        </div>
         {% if alerts.revisoes_vencidas %}
-        <h4>Revisões vencidas</h4>
-        <ul class="stats-list" style="list-style:none; padding:0; margin:0;">
-        {% for r in alerts.revisoes_vencidas %}
-            <li style="display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid #eee;">
-                <span><a href="{% url 'vehicle_dossier' r.vehicle_id %}" style="font-weight:bold; color:#1a1a1a;">{{ r.plate }}</a></span>
-                <span style="color:#c0392b; font-weight:bold;">Ultrapassou {{ r.ultrapassado }} km</span>
-            </li>
-        {% endfor %}
-        </ul>
-        <div style="margin-top:15px;"><a href="{% url 'maintenance_list' %}" style="color:#2869e5; font-size:14px; font-weight:500;">&rarr; Ir para Controle de Revisões</a></div>
-        {% else %}<div class="empty">Nenhum veículo com revisão vencida.</div>{% endif %}
-    </article>
-    <article class="panel">
-        <div class="panel-title">
-            <div><h3>Alertas: Contratos a Vencer / Vencidos</h3><p>{{ alerts.expiring_contracts|length }} a vencer, {{ alerts.expired_contracts|length }} vencidos</p></div>
+        <div class="compact-list">
+            {% for item in alerts.revisoes_vencidas|slice:":6" %}
+            <a class="compact-row" href="{% url 'vehicle_dossier' item.vehicle_id %}">
+                <div><strong>{{ item.plate }}</strong><span>{{ item.status }}</span></div>
+                {% if item.status == "DEVIDA" %}
+                    <b class="danger-text">Ultrapassou {{ item.ultrapassado }} km</b>
+                {% else %}
+                    <b class="warning-text">{{ item.km_faltando }} km restantes</b>
+                {% endif %}
+            </a>
+            {% endfor %}
         </div>
-        {% if alerts.expiring_contracts or alerts.expired_contracts %}
-        <table>
-            <thead><tr><th>CONTRATO</th><th>TÉRMINO</th><th>SITUAÇÃO</th></tr></thead>
-            <tbody>
-                {% for c in alerts.expired_contracts %}
-                <tr><td>{{ c.number }}</td><td>{{ c.ends_on|date:"d/m/Y" }}</td><td><strong style="color:red">VENCIDO</strong></td></tr>
-                {% endfor %}
-                {% for c in alerts.expiring_contracts %}
-                <tr><td>{{ c.number }}</td><td>{{ c.ends_on|date:"d/m/Y" }}</td><td>A Vencer</td></tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        {% else %}<div class="empty">Nenhum alerta de contrato.</div>{% endif %}
+        {% else %}
+        <div class="empty">Nenhum veículo com revisão em atenção.</div>
+        {% endif %}
+    </article>
+
+    <article class="panel dashboard-panel">
+        <div class="panel-heading-modern">
+            <div>
+                <span class="section-eyebrow">CONTRATOS</span>
+                <h3>Vigência contratual</h3>
+                <p>Contratos que demandam acompanhamento.</p>
+            </div>
+            <a class="panel-link" href="{% url 'contract_list' %}">Ver contratos →</a>
+        </div>
+        {% if alerts.expired_contracts or alerts.expiring_contracts %}
+        <div class="compact-list">
+            {% for contract in alerts.expired_contracts %}
+            <a class="compact-row" href="{% url 'contract_detail' contract.id %}">
+                <div><strong>{{ contract.number }}</strong><span>Vencido</span></div>
+                <b class="danger-text">{{ contract.ends_on|date:"d/m/Y" }}</b>
+            </a>
+            {% endfor %}
+            {% for contract in alerts.expiring_contracts %}
+            <a class="compact-row" href="{% url 'contract_detail' contract.id %}">
+                <div><strong>{{ contract.number }}</strong><span>A vencer</span></div>
+                <b class="warning-text">{{ contract.ends_on|date:"d/m/Y" }}</b>
+            </a>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty">Nenhum contrato exige atenção no momento.</div>
+        {% endif %}
     </article>
 </section>
-<section class="grid">
-    <article class="panel">
-        <div class="panel-title">
-            <div><h3>Alertas: Multas Pendentes</h3><p>{{ alerts.pending_fines|length }} multa(s) em aberto</p></div>
-        </div>
-        {% if alerts.pending_fines %}
-        <table>
-            <thead><tr><th>VEÍCULO</th><th>SITUAÇÃO</th><th>DATA</th></tr></thead>
-            <tbody>
-                {% for item in alerts.pending_fines %}
-                <tr><td>{{ item.vehicle__plate_history__plate|default:"Consultar" }}</td><td><span class="tag">{{ item.status__name }}</span></td><td>{{ item.date|date:"d/m/Y" }}</td></tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        {% else %}<div class="empty">Nenhuma multa pendente.</div>{% endif %}
-    </article>
+
+<section class="dashboard-quick-actions">
+    <div>
+        <span class="section-eyebrow">ACESSO RÁPIDO</span>
+        <h3>Gestão operacional</h3>
+    </div>
+    <div class="quick-actions">
+        <a href="{% url 'vehicle_list' %}"><span>▣</span> Veículos</a>
+        <a href="{% url 'contract_list' %}"><span>▤</span> Contratos</a>
+        <a href="{% url 'driver_list' %}"><span>♙</span> Motoristas</a>
+        <a href="{% url 'maintenance_list' %}"><span>⚒</span> Manutenções</a>
+        <a href="{% url 'fine_list' %}"><span>⚑</span> Multas</a>
+    </div>
 </section>
-<section class="notice"><span>ℹ</span><div><strong>Sistema em configuração inicial</strong><p>Cadastre as situações, os cadastros de referência e os veículos para alimentar os indicadores.</p></div></section>{% endblock %}
+
+{% endblock %}
