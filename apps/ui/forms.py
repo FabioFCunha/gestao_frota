@@ -205,9 +205,25 @@ class KMImportForm(forms.Form):
 class RevisionActionForm(forms.Form):
     workshop = forms.ModelChoiceField(
         queryset=Workshop.objects.filter(active=True).order_by('name'),
-        label='Oficina',
+        label='Oficina cadastrada',
         required=False,
         widget=forms.Select(attrs=SELECT),
+    )
+    workshop_name = forms.CharField(
+        label='Oficina (digitar)',
+        required=False,
+        max_length=150,
+        widget=forms.TextInput(attrs={**INPUT, 'placeholder': 'Digite o nome da oficina, se não estiver na lista'}),
+    )
+    sent_date = forms.DateField(
+        label='Data enviada para revisão',
+        required=False,
+        widget=forms.DateInput(attrs={**INPUT, 'type': 'date'}),
+    )
+    return_date = forms.DateField(
+        label='Data de retorno da revisão',
+        required=False,
+        widget=forms.DateInput(attrs={**INPUT, 'type': 'date'}),
     )
     service = forms.CharField(
         label='Serviço',
