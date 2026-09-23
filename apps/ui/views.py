@@ -18,7 +18,6 @@ def dashboard(request):
     from datetime import timedelta
     from apps.fleet.models import Vehicle, VehiclePlate, Maintenance, VehicleFine
 
-    metrics = get_dashboard_metrics({}) if False else None
     from apps.fleet.services import get_dashboard_metrics, get_operational_alerts, get_vehicle_revision_status
 
     metrics = get_dashboard_metrics({})
@@ -128,6 +127,13 @@ def dashboard(request):
             "revision": revision,
         })
 
+    plate_alert_counts = {
+        "revisao_vencida": sum("revisao_vencida" in item["alerts"] for item in plate_rows),
+        "revisao_proxima": sum("revisao_proxima" in item["alerts"] for item in plate_rows),
+        "manutencao": sum("manutencao" in item["alerts"] for item in plate_rows),
+        "multa": sum("multa" in item["alerts"] for item in plate_rows),
+        "contrato": sum("contrato" in item["alerts"] for item in plate_rows),
+    }
     total_alerts = sum(alert_summary.values())
     context = {
         "metrics": metrics,
@@ -136,6 +142,7 @@ def dashboard(request):
         "total_alerts": total_alerts,
         "plate_rows": plate_rows,
         "fine_warning_date": fine_warning_date,
+        "plate_alert_counts": plate_alert_counts,
     }
     return render(request, "ui/dashboard.html", context)
 
