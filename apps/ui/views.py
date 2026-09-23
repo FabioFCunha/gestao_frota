@@ -102,11 +102,23 @@ def vehicle_dossier(request, pk):
             revisao_status = 'OK'
 
     if request.method == 'POST' and request.POST.get('action') == 'add_custody':
+        from datetime import datetime
         kind = request.POST.get('kind') or VehicleCustody.OUTRO
+        allowed_kinds = {value for value, _ in VehicleCustody.KIND_CHOICES}
         reference = (request.POST.get('reference') or '').strip()
-        starts_on = request.POST.get('starts_on') or None
+        starts_on_raw = request.POST.get('starts_on') or ''
+        starts_on = None
+        if starts_on_raw:
+            try:
+                starts_on = datetime.fromisoformat(starts_on_raw)
+                if timezone.is_naive(starts_on):
+                    starts_on = timezone.make_aware(starts_on)
+            except ValueError:
+                starts_on = None
         notes_custody = (request.POST.get('custody_notes') or '').strip()
-        if not reference:
+        if kind not in allowed_kinds:
+            messages.error(request, 'Tipo de registro inválido.')
+        elif not reference:
             messages.error(request, 'Informe o SEI ou referência do acautelamento.')
         else:
             record = VehicleCustody(
