@@ -1043,21 +1043,22 @@ def fine_create(request):
 @login_required
 @module_permission("fleet.change_vehiclefine")
 def fine_edit(request, pk):
-    # Consome mensagens pendentes de outras telas para não exibi-las na edição de multas.
+    # A ação da lista é específica para alterar apenas a situação da multa.
     from django.contrib.messages import get_messages
     list(get_messages(request))
 
     from apps.fleet.models import VehicleFine
+    from .forms import FineStatusForm
     fine = get_object_or_404(VehicleFine, pk=pk)
     if request.method == 'POST':
-        form = FineForm(request.POST, instance=fine)
+        form = FineStatusForm(request.POST, instance=fine)
         if form.is_valid():
             form.save()
-            messages.success(request, 'Multa atualizada com sucesso!')
+            messages.success(request, 'Situação da multa atualizada com sucesso!')
             return redirect('fine_list')
     else:
-        form = FineForm(instance=fine)
-    return render(request, 'ui/form.html', {'form': form, 'title': f'Editar Multa: {fine.auto_number}', 'back_url': 'fine_list'})
+        form = FineStatusForm(instance=fine)
+    return render(request, 'ui/form.html', {'form': form, 'title': f'Alterar Situação: {fine.auto_number}', 'back_url': 'fine_list'})
 
 @login_required
 @module_permission("fleet.add_maintenance")
