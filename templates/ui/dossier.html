@@ -61,7 +61,7 @@
                 <small>Próxima Revisão</small>
             </div>
             <div style="text-align:center;">
-                {% if revisao_status == 'VENCIDA' %}
+                {% if revisao_status == 'DEVIDA' or revisao_status == 'VENCIDA' %}
                     <p style="font-size:2em;font-weight:bold;margin:0;color:#c0392b;">{{ km_faltando }} km</p>
                     <small><strong style="color:#c0392b">⚠ REVISÃO VENCIDA</strong></small>
                 {% elif revisao_status == 'PROXIMA' %}
