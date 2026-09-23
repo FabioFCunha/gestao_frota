@@ -2,6 +2,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import LoginView
 from django.db.models import Count, Q, Prefetch
 from django.shortcuts import render, redirect, get_object_or_404
+from django.http import JsonResponse
 from django.contrib import messages
 from django.utils import timezone
 from .forms import DriverForm, DriverVehicleAssignmentForm, VehicleForm, VehicleContractForm, FineForm
@@ -410,6 +411,60 @@ def driver_assign_vehicle(request, pk):
 
 
 @login_required
+def vehicle_quick_create(request):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Método não permitido.'}, status=405)
+
+    from apps.fleet.models import Brand, VehicleModel, AdministrativeUnit, Base
+    entity = (request.POST.get('entity') or '').strip()
+    name = (request.POST.get('name') or '').strip()
+    if not name:
+        return JsonResponse({'error': 'Informe o nome.'}, status=400)
+
+    try:
+        if entity == 'brand':
+            obj = Brand.objects.filter(name__iexact=name).first()
+            if not obj:
+                obj = Brand.objects.create(name=name)
+            return JsonResponse({'id': str(obj.id), 'name': obj.name})
+
+        if entity == 'model':
+            brand_id = request.POST.get('brand_id')
+            if not brand_id:
+                return JsonResponse({'error': 'Selecione a marca do modelo.'}, status=400)
+            brand = get_object_or_404(Brand, pk=brand_id)
+            obj = VehicleModel.objects.filter(brand=brand, name__iexact=name).first()
+            if not obj:
+                obj = VehicleModel.objects.create(brand=brand, name=name)
+            return JsonResponse({'id': str(obj.id), 'name': obj.name, 'brand_id': str(brand.id)})
+
+        if entity == 'unit':
+            acronym = (request.POST.get('acronym') or '').strip()
+            if not acronym:
+                return JsonResponse({'error': 'Informe a sigla da Unidade Administrativa.'}, status=400)
+            obj = AdministrativeUnit.objects.filter(acronym__iexact=acronym).first()
+            if not obj:
+                obj = AdministrativeUnit.objects.filter(name__iexact=name).first()
+            if not obj:
+                obj = AdministrativeUnit.objects.create(name=name, acronym=acronym)
+            return JsonResponse({'id': str(obj.id), 'name': obj.name, 'acronym': obj.acronym})
+
+        if entity == 'base':
+            unit_id = request.POST.get('unit_id')
+            if not unit_id:
+                return JsonResponse({'error': 'Selecione a Unidade Administrativa da base.'}, status=400)
+            unit = get_object_or_404(AdministrativeUnit, pk=unit_id)
+            obj = Base.objects.filter(unit=unit, name__iexact=name).first()
+            if not obj:
+                obj = Base.objects.create(name=name, unit=unit)
+            return JsonResponse({'id': str(obj.id), 'name': obj.name, 'unit_id': str(unit.id)})
+
+        return JsonResponse({'error': 'Tipo de cadastro inválido.'}, status=400)
+    except Exception as exc:
+        return JsonResponse({'error': str(exc)}, status=400)
+
+
+@login_required
 def vehicle_create(request):
     if request.method == 'POST':
         form = VehicleForm(request.POST)
@@ -427,7 +482,7 @@ def vehicle_create(request):
             return redirect('vehicle_list')
     else:
         form = VehicleForm()
-    return render(request, 'ui/form.html', {'form': form, 'title': 'Cadastrar Veículo', 'back_url': 'vehicle_list'})
+    return render(request, 'ui/form.html', {'form': form, 'title': 'Cadastrar Veículo', 'back_url': 'vehicle_list', 'quick_create': True})
 
 @login_required
 def vehicle_contract_edit(request, pk):
