@@ -51,5 +51,6 @@ REST_FRAMEWORK = {
         "rest_framework.filters.OrderingFilter"
     ]
 }
+SYSTEM_CREATOR_EMAIL = os.getenv("SYSTEM_CREATOR_EMAIL", "fabiocunhaosp@gmail.com")
 LOGIN_URL = "/entrar/"
 LOGIN_REDIRECT_URL = "/"
