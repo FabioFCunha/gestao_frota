@@ -1,50 +1,85 @@
 {% extends 'ui/base.html' %}
 {% block title %}Controle de Revisões | Gestão de Frotas{% endblock %}
 {% block heading %}Controle de Revisões{% endblock %}
+
 {% block content %}
 <section class="welcome" style="margin-bottom:20px;">
     <div>
-        <form method="get" action="" style="display:flex;gap:10px;">
-            <input type="text" name="q" value="{{ q }}" placeholder="Buscar por placa ou modelo..." style="padding:10px;width:400px;border-radius:4px;border:1px solid #ccc;" />
+        <form method="get" action="" style="display:flex;gap:10px;flex-wrap:wrap;">
+            <input type="text" name="q" value="{{ q }}" placeholder="Buscar por placa ou modelo..." style="padding:10px;width:400px;max-width:100%;border-radius:4px;border:1px solid #ccc;" />
             <button type="submit" class="primary-action">Buscar</button>
         </form>
     </div>
-    <div style="display:flex; gap:10px;">
-        <a class="primary-action" href="{% url 'km_import' %}" style="background:#27ae60;">⬆ Importar KM (CSV)</a>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <a class="primary-action" href="{% url 'km_import' %}" style="background:#27ae60;">⬆ Importar CSV Prime</a>
     </div>
 </section>
+
 <section class="grid">
     <article class="panel" style="grid-column:1/-1;">
         {% if vehicles_data %}
         <table>
-            <thead><tr><th>VEÍCULO (PLACA)</th><th>MARCA/MODELO</th><th>KM ATUAL</th><th>PRÓX. REVISÃO</th><th>FALTAM</th><th>STATUS</th><th>AÇÕES</th></tr></thead>
+            <thead>
+                <tr>
+                    <th>VEÍCULO (PLACA)</th>
+                    <th>MARCA/MODELO</th>
+                    <th>KM ATUAL</th>
+                    <th>PRÓX. REVISÃO</th>
+                    <th>FALTAM</th>
+                    <th>STATUS</th>
+                    <th>AÇÕES</th>
+                </tr>
+            </thead>
             <tbody>
                 {% for v in vehicles_data %}
                 <tr>
                     <td><strong>{{ v.plate }}</strong></td>
                     <td>{{ v.brand_model }}</td>
                     <td>{{ v.km_atual }} km</td>
-                    <td>{{ v.km_prox_revisao }} km</td>
                     <td>
-                        {% if v.km_faltando <= 0 %}
-                            <span style="color:#c0392b; font-weight:bold;">{{ v.km_faltando }} km</span>
+                        {% if v.km_prox_revisao %}
+                            {{ v.km_prox_revisao }} km
                         {% else %}
-                            {{ v.km_faltando }} km
+                            —
                         {% endif %}
                     </td>
                     <td>
-                        {% if v.revisao_status == 'VENCIDA' %}
+                        {% if v.km_faltando is not None %}
+                            {% if v.km_faltando <= 0 %}
+                                <span style="color:#c0392b;font-weight:bold;">{{ v.km_faltando }} km</span>
+                            {% else %}
+                                {{ v.km_faltando }} km
+                            {% endif %}
+                        {% else %}
+                            —
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if v.active_revision %}
+                            <span class="tag" style="background:#eee;color:#7c3aed;">EM REVISÃO</span>
+                        {% elif v.revisao_status == 'DEVIDA' %}
                             <span class="tag" style="background:#ffe8e9;color:#df4b54;">VENCIDA</span>
                         {% elif v.revisao_status == 'PROXIMA' %}
                             <span class="tag" style="background:#fff1dc;color:#e98914;">PRÓXIMA</span>
+                        {% elif v.revisao_status == 'SEM_HISTORICO' %}
+                            <span class="tag" style="background:#f3f4f6;color:#6b7280;">SEM HISTÓRICO</span>
                         {% else %}
                             <span class="tag" style="background:#e8f8ef;color:#22965a;">EM DIA</span>
                         {% endif %}
                     </td>
                     <td>
-                        <div style="display:flex; gap:10px;">
-                            <a href="{% url 'vehicle_dossier' v.id %}">Ver Prontuário</a>
-                            <a href="{% url 'maintenance_create' %}?plate={{ v.plate }}" style="color:#2869e5; font-weight:bold;">+ Lançar</a>
+                        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                            <a href="{% url 'vehicle_dossier' v.id %}">Prontuário</a>
+                            <button type="button"
+                                    class="secondary-action revision-edit"
+                                    data-id="{{ v.id }}"
+                                    data-plate="{{ v.plate }}"
+                                    data-km="{{ v.km_atual }}"
+                                    data-next="{{ v.km_prox_revisao|default:'' }}"
+                                    data-status="{{ v.revisao_status }}"
+                                    data-active-id="{% if v.active_revision %}{{ v.active_revision.id }}{% endif %}">
+                                Editar
+                            </button>
                         </div>
                     </td>
                 </tr>
@@ -52,8 +87,154 @@
             </tbody>
         </table>
         {% else %}
-        <div class="empty">Nenhum veículo com meta de revisão encontrada.</div>
+        <div class="empty">Nenhum veículo encontrado.</div>
         {% endif %}
     </article>
 </section>
+
+<div id="revision-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.48);z-index:2000;align-items:center;justify-content:center;padding:20px;">
+    <div class="panel" style="width:min(680px,96vw);max-height:90vh;overflow:auto;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:15px;margin-bottom:18px;">
+            <div>
+                <div style="font-size:.78rem;font-weight:700;color:#64748b;letter-spacing:.08em;">GESTÃO DE REVISÃO</div>
+                <h3 id="revision-modal-title" style="margin:5px 0 0;">Veículo</h3>
+            </div>
+            <button type="button" id="revision-modal-close" class="secondary-action">Fechar</button>
+        </div>
+
+        <div style="background:#f8fafc;border-radius:10px;padding:14px;margin-bottom:18px;">
+            <div style="display:flex;gap:24px;flex-wrap:wrap;">
+                <div><small>KM atual</small><strong id="revision-current-km" style="display:block;font-size:1.2rem;">—</strong></div>
+                <div><small>Próxima revisão</small><strong id="revision-next-km" style="display:block;font-size:1.2rem;">—</strong></div>
+                <div><small>Situação</small><strong id="revision-status" style="display:block;">—</strong></div>
+            </div>
+        </div>
+
+        <form method="post" id="revision-form">
+            {% csrf_token %}
+            <input type="hidden" name="action" id="revision-action">
+            <input type="hidden" name="maintenance_id" id="revision-maintenance-id">
+
+            <div id="revision-fields">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:15px;">
+                    <div>
+                        <label style="font-weight:bold;display:block;margin-bottom:5px;">{{ revision_action_form.workshop.label }}</label>
+                        {{ revision_action_form.workshop }}
+                    </div>
+                    <div>
+                        <label style="font-weight:bold;display:block;margin-bottom:5px;">{{ revision_action_form.service.label }}</label>
+                        {{ revision_action_form.service }}
+                    </div>
+                </div>
+
+                <div id="completion-block" style="margin-top:15px;">
+                    <label style="font-weight:bold;display:block;margin-bottom:5px;">{{ revision_action_form.completion_mileage.label }}</label>
+                    {{ revision_action_form.completion_mileage }}
+                    <small style="color:#64748b;">Informe a KM registrada quando a viatura retornar da oficina.</small>
+                </div>
+
+                <div id="status-block" style="margin-top:15px;">
+                    <label style="font-weight:bold;display:block;margin-bottom:5px;">{{ revision_action_form.resulting_status.label }}</label>
+                    {{ revision_action_form.resulting_status }}
+                </div>
+
+                <div style="margin-top:15px;">
+                    <label style="font-weight:bold;display:block;margin-bottom:5px;">{{ revision_action_form.notes.label }}</label>
+                    {{ revision_action_form.notes }}
+                </div>
+            </div>
+
+            <div id="revision-help" style="margin-top:14px;color:#64748b;font-size:.9rem;"></div>
+
+            <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:22px;flex-wrap:wrap;">
+                <button type="button" id="revision-modal-cancel" class="secondary-action">Cancelar</button>
+                <button type="submit" id="revision-submit" class="primary-action">Salvar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+(function () {
+    const modal = document.getElementById('revision-modal');
+    const form = document.getElementById('revision-form');
+    const title = document.getElementById('revision-modal-title');
+    const currentKm = document.getElementById('revision-current-km');
+    const nextKm = document.getElementById('revision-next-km');
+    const status = document.getElementById('revision-status');
+    const action = document.getElementById('revision-action');
+    const maintenanceId = document.getElementById('revision-maintenance-id');
+    const completionBlock = document.getElementById('completion-block');
+    const statusBlock = document.getElementById('status-block');
+    const completionInput = document.getElementById('id_completion_mileage');
+    const resultStatus = document.getElementById('id_resulting_status');
+    const help = document.getElementById('revision-help');
+    const submit = document.getElementById('revision-submit');
+
+    function resetFields() {
+        document.getElementById('id_workshop').value = '';
+        document.getElementById('id_service').value = '';
+        completionInput.value = '';
+        resultStatus.value = '';
+        document.getElementById('id_notes').value = '';
+    }
+
+    function openModal(button) {
+        resetFields();
+
+        const id = button.dataset.id;
+        const plate = button.dataset.plate;
+        const km = button.dataset.km || '0';
+        const next = button.dataset.next || '';
+        const currentStatus = button.dataset.status || '';
+        const activeId = button.dataset.activeId || '';
+
+        title.textContent = 'Revisão — ' + plate;
+        currentKm.textContent = km + ' km';
+        nextKm.textContent = next ? next + ' km' : 'Sem referência';
+        status.textContent = activeId ? 'EM REVISÃO' : currentStatus;
+        form.action = '/manutencoes/' + id + '/revisao/';
+        maintenanceId.value = activeId;
+
+        if (activeId) {
+            action.value = 'complete';
+            completionBlock.style.display = 'block';
+            statusBlock.style.display = 'block';
+            submit.textContent = 'Registrar retorno da revisão';
+            help.textContent = 'Ao registrar o retorno, a KM informada passa a ser a nova referência. A próxima revisão será calculada automaticamente em +10.000 km.';
+        } else if (currentStatus === 'SEM_HISTORICO') {
+            action.value = 'initialize';
+            completionBlock.style.display = 'block';
+            statusBlock.style.display = 'none';
+            submit.textContent = 'Atualizar histórico';
+            help.textContent = 'Informe a KM da última revisão concluída. O sistema criará o histórico e calculará automaticamente a próxima revisão em +10.000 km.';
+        } else {
+            action.value = 'open';
+            completionBlock.style.display = 'none';
+            statusBlock.style.display = 'none';
+            submit.textContent = 'Enviar para revisão';
+            help.textContent = 'A viatura será marcada como Em manutenção e ficará vinculada a uma revisão em andamento até o retorno.';
+        }
+
+        modal.style.display = 'flex';
+        if (action.value !== 'open') completionInput.focus();
+    }
+
+    function closeModal() {
+        modal.style.display = 'none';
+    }
+
+    document.querySelectorAll('.revision-edit').forEach(function (button) {
+        button.addEventListener('click', function () {
+            openModal(button);
+        });
+    });
+
+    document.getElementById('revision-modal-close').addEventListener('click', closeModal);
+    document.getElementById('revision-modal-cancel').addEventListener('click', closeModal);
+    modal.addEventListener('click', function (event) {
+        if (event.target === modal) closeModal();
+    });
+})();
+</script>
 {% endblock %}
