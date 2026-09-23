@@ -91,6 +91,8 @@
         <div class="panel-title"><div><h3>👤 Operacional</h3></div></div>
         <ul style="list-style:none;padding:0;line-height:2;">
             <li><strong>Motorista:</strong> {% if active_driver %}{{ active_driver.name }} {% if active_driver.phone %}({{ active_driver.phone }}){% endif %}{% else %}{{ motorista|default:"-" }}{% endif %}</li>
+            <li><strong>SEI / Acautelamento:</strong> {% if active_custody %}{{ active_custody.sei_number }}{% else %}{{ vehicle.custody_info|default:"-" }}{% endif %}</li>
+            {% if active_custody %}<li><strong>Início do acautelamento:</strong> {{ active_custody.started_on|date:"d/m/Y" }}{% if active_custody.ended_on %} — encerrado em {{ active_custody.ended_on|date:"d/m/Y" }}{% endif %}</li>{% endif %}
             <li><strong>Oficina:</strong> {{ oficina|default:"-" }}</li>
             <li><strong>Unidade:</strong> {{ vehicle.unit.name|default:"-" }}</li>
             <li><strong>Base:</strong> {{ vehicle.base.name|default:"-" }}</li>
