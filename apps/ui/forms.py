@@ -12,7 +12,7 @@ SELECT = {'class': 'form-input'}
 class DriverForm(forms.ModelForm):
     class Meta:
         model = Driver
-        fields = ['name', 'registration', 'unit', 'phone', 'email', 'cnh_number', 'cnh_category', 'cnh_expiration']
+        fields = ['name', 'registration', 'unit', 'phone', 'email', 'cnh_number', 'cnh_category', 'cnh_expiration', 'sei_acautelamento']
         labels = {
             'name': 'Nome',
             'registration': 'Matrícula',
@@ -22,6 +22,7 @@ class DriverForm(forms.ModelForm):
             'cnh_number': 'Nº CNH',
             'cnh_category': 'Categoria CNH',
             'cnh_expiration': 'Validade CNH',
+            'sei_acautelamento': 'SEI do acautelamento',
         }
         widgets = {
             'name': forms.TextInput(attrs={**INPUT, 'placeholder': 'Nome completo'}),
@@ -32,6 +33,7 @@ class DriverForm(forms.ModelForm):
             'cnh_number': forms.TextInput(attrs={**INPUT, 'placeholder': 'Número da CNH'}),
             'cnh_category': forms.TextInput(attrs={**INPUT, 'placeholder': 'Ex: AB, D, E'}),
             'cnh_expiration': forms.DateInput(attrs={**INPUT, 'type': 'date'}),
+            'sei_acautelamento': forms.TextInput(attrs={**INPUT, 'placeholder': 'Ex: SEI-000000/000000/2026'}),
         }
 
 

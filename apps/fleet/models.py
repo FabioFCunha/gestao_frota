@@ -82,6 +82,11 @@ class Driver(NamedModel):
     cnh_number = models.CharField("Nº CNH", max_length=20, blank=True)
     cnh_category = models.CharField("Categoria", max_length=5, blank=True)
     cnh_expiration = models.DateField("Validade CNH", null=True, blank=True)
+    sei_acautelamento = models.CharField(
+        "SEI do acautelamento",
+        max_length=100,
+        blank=True,
+    )
 
 
 class Contract(BaseModel):
