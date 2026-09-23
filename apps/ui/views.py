@@ -1023,6 +1023,10 @@ def vehicle_contract_edit(request, pk):
 @login_required
 @module_permission("fleet.add_vehiclefine")
 def fine_create(request):
+    # Consome mensagens pendentes de outras telas para não exibi-las no cadastro de multas.
+    from django.contrib.messages import get_messages
+    list(get_messages(request))
+
     if request.method == 'POST':
         form = FineForm(request.POST)
         if form.is_valid():
@@ -1039,6 +1043,10 @@ def fine_create(request):
 @login_required
 @module_permission("fleet.change_vehiclefine")
 def fine_edit(request, pk):
+    # Consome mensagens pendentes de outras telas para não exibi-las na edição de multas.
+    from django.contrib.messages import get_messages
+    list(get_messages(request))
+
     from apps.fleet.models import VehicleFine
     fine = get_object_or_404(VehicleFine, pk=pk)
     if request.method == 'POST':
