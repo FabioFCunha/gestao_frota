@@ -7,6 +7,7 @@ from django.contrib import messages
 from django.utils import timezone
 from .forms import DriverForm, DriverVehicleAssignmentForm, VehicleForm, VehicleContractForm, FineForm
 from apps.accounts.forms import FleetAuthenticationForm
+from apps.accounts.decorators import module_permission
 from apps.fleet.models import VehiclePlate
 
 class FleetLoginView(LoginView):
@@ -149,6 +150,7 @@ def dashboard(request):
     return render(request, "ui/dashboard.html", context)
 
 @login_required
+@module_permission("fleet.view_vehicle")
 def vehicle_list(request):
     from apps.fleet.models import Vehicle
     from apps.fleet.models import Vehicle, VehicleDriverAssignment, VehicleCustody
@@ -186,6 +188,7 @@ def vehicle_list(request):
 
 
 @login_required
+@module_permission("fleet.view_vehicle")
 def vehicle_dossier(request, pk):
     import re
     from apps.fleet.models import Vehicle, VehiclePlate, VehicleMileage, VehicleCustody
@@ -287,6 +290,7 @@ def vehicle_dossier(request, pk):
 
 
 @login_required
+@module_permission("fleet.view_contract")
 def contract_list(request):
     from apps.fleet.models import Contract
     qs = Contract.objects.select_related('renter').all().order_by('ends_on')
@@ -298,6 +302,7 @@ def contract_list(request):
 
 
 @login_required
+@module_permission("fleet.view_contract")
 def contract_detail(request, pk):
     from apps.fleet.models import Contract, Vehicle, VehicleDriverAssignment, VehicleCustody, VehiclePlate
 
@@ -365,6 +370,7 @@ def contract_detail(request, pk):
 
 
 @login_required
+@module_permission("fleet.view_driver")
 def driver_list(request):
     from apps.fleet.models import Driver
     from django.db.models import Prefetch
@@ -393,6 +399,7 @@ def driver_list(request):
 
 
 @login_required
+@module_permission("fleet.view_maintenance")
 def maintenance_list(request):
     from apps.fleet.models import Vehicle
     from apps.fleet.services import get_vehicle_revision_status
@@ -452,6 +459,7 @@ def maintenance_list(request):
 
 
 @login_required
+@module_permission("fleet.view_vehiclefine")
 def fine_list(request):
     from apps.fleet.models import VehicleFine
     qs = VehicleFine.objects.select_related('vehicle', 'status').prefetch_related('vehicle__plate_history').order_by('-date')
@@ -468,6 +476,7 @@ def fine_list(request):
 
 
 @login_required
+@module_permission("fleet.add_driver")
 def driver_create(request):
     if request.method == 'POST':
         form = DriverForm(request.POST)
@@ -481,6 +490,7 @@ def driver_create(request):
 
 
 @login_required
+@module_permission("fleet.change_driver")
 def driver_edit(request, pk):
     from apps.fleet.models import Driver
 
@@ -497,6 +507,7 @@ def driver_edit(request, pk):
 
 
 @login_required
+@module_permission("fleet.change_driver")
 def driver_assign_vehicle(request, pk):
     from apps.fleet.models import Driver
     from apps.fleet.services import assign_driver_to_vehicle
@@ -540,6 +551,7 @@ def driver_assign_vehicle(request, pk):
 
 
 @login_required
+@module_permission("fleet.add_vehicle")
 def vehicle_quick_create(request):
     if request.method != 'POST':
         return JsonResponse({'error': 'Método não permitido.'}, status=405)
@@ -594,6 +606,7 @@ def vehicle_quick_create(request):
 
 
 @login_required
+@module_permission("fleet.add_vehicle")
 def vehicle_create(request):
     if request.method == 'POST':
         form = VehicleForm(request.POST)
@@ -614,6 +627,7 @@ def vehicle_create(request):
     return render(request, 'ui/form.html', {'form': form, 'title': 'Cadastrar Veículo', 'back_url': 'vehicle_list', 'quick_create': True})
 
 @login_required
+@module_permission("fleet.change_vehicle")
 def vehicle_contract_edit(request, pk):
     from apps.fleet.models import Vehicle
 
@@ -639,6 +653,7 @@ def vehicle_contract_edit(request, pk):
 
 
 @login_required
+@module_permission("fleet.add_vehiclefine")
 def fine_create(request):
     if request.method == 'POST':
         form = FineForm(request.POST)
@@ -659,6 +674,7 @@ def fine_create(request):
     return render(request, 'ui/form.html', {'form': form, 'title': 'Cadastrar Multa', 'back_url': 'fine_list'})
 
 @login_required
+@module_permission("fleet.add_maintenance")
 def maintenance_create(request):
     from .forms import MaintenanceForm
     from apps.fleet.models import VehiclePlate
@@ -687,6 +703,7 @@ def maintenance_create(request):
     return render(request, 'ui/form.html', {'form': form, 'title': 'Registrar Manutenção', 'back_url': 'maintenance_list'})
 
 @login_required
+@module_permission("fleet.add_vehiclemileage")
 def km_import(request):
     from .forms import KMImportForm
     from apps.fleet.models import VehicleMileage
