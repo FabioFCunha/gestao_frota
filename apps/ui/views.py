@@ -619,20 +619,88 @@ def revision_action(request, pk):
 
     if action in ('complete', 'edit'):
         maintenance_id = request.POST.get('maintenance_id')
+
+        # A conclusão da revisão depende apenas dos dados operacionais
+        # (data de retorno + KM). Campos auxiliares do formulário não podem
+        # impedir o fechamento de uma revisão já aberta.
         maintenance = get_object_or_404(
-            Maintenance.objects.select_related('vehicle', 'status', 'type'),
+            Maintenance.objects.select_related('vehicle', 'status', 'type', 'vehicle_status_before_opening'),
             pk=maintenance_id,
             vehicle=vehicle,
             type__name__iexact='Revisão',
         )
 
-        if not form.is_valid():
-            messages.error(request, 'Verifique os dados da revisão.')
+        form_is_valid = form.is_valid()
+        cleaned = form.cleaned_data if form_is_valid else {}
+
+        from datetime import date as date_class
+
+        sent_date_raw = (request.POST.get('sent_date') or '').strip()
+        return_date_raw = (request.POST.get('return_date') or '').strip()
+        completion_mileage_raw = (request.POST.get('completion_mileage') or '').strip()
+
+        try:
+            sent_date = cleaned.get('sent_date') if form_is_valid else (
+                date_class.fromisoformat(sent_date_raw) if sent_date_raw else None
+            )
+        except ValueError:
+            messages.error(request, 'A data de envio da revisão é inválida.')
             return redirect('maintenance_list')
 
-        maintenance = apply_common_fields(maintenance)
-        return_date = form.cleaned_data.get('return_date')
-        completion_mileage = form.cleaned_data.get('completion_mileage')
+        try:
+            return_date = cleaned.get('return_date') if form_is_valid else (
+                date_class.fromisoformat(return_date_raw) if return_date_raw else None
+            )
+        except ValueError:
+            messages.error(request, 'A data de retorno da revisão é inválida.')
+            return redirect('maintenance_list')
+
+        if sent_date and return_date and return_date < sent_date:
+            messages.error(request, 'A data de retorno não pode ser anterior à data de envio para revisão.')
+            return redirect('maintenance_list')
+
+        if completion_mileage_raw:
+            try:
+                completion_mileage = int(completion_mileage_raw)
+            except ValueError:
+                messages.error(request, 'A quilometragem de retorno é inválida.')
+                return redirect('maintenance_list')
+        else:
+            completion_mileage = cleaned.get('completion_mileage') if form_is_valid else None
+
+        if return_date and completion_mileage is None:
+            messages.error(request, 'Informe a quilometragem registrada no retorno da revisão.')
+            return redirect('maintenance_list')
+
+        if completion_mileage is not None and completion_mileage < 0:
+            messages.error(request, 'A quilometragem de retorno não pode ser negativa.')
+            return redirect('maintenance_list')
+
+        if (
+            completion_mileage is not None
+            and maintenance.mileage is not None
+            and completion_mileage < maintenance.mileage
+        ):
+            messages.error(request, 'A quilometragem de retorno não pode ser menor que a quilometragem de entrada.')
+            return redirect('maintenance_list')
+
+        if form_is_valid:
+            workshop = cleaned.get('workshop')
+            workshop_name = (cleaned.get('workshop_name') or '').strip()
+            service = (cleaned.get('service') or '').strip()
+            notes = (cleaned.get('notes') or '').strip()
+        else:
+            workshop = maintenance.workshop
+            workshop_name = (request.POST.get('workshop_name') or '').strip()
+            service = (request.POST.get('service') or '').strip()
+            notes = (request.POST.get('notes') or '').strip()
+
+        maintenance.workshop = workshop
+        maintenance.workshop_name = workshop_name
+        maintenance.service = service or maintenance.service
+        maintenance.notes = notes or maintenance.notes
+        if sent_date:
+            maintenance.entered_at = date_to_datetime(sent_date)
 
         if not return_date:
             open_status = MaintenanceStatus.objects.filter(name__iexact='Aberta', active=True).first()
@@ -664,18 +732,12 @@ def revision_action(request, pk):
                 messages.success(request, 'Revisão salva sem data de retorno. O veículo permanece EM REVISÃO.')
             return redirect('maintenance_list')
 
-        if completion_mileage is None:
-            messages.error(request, 'Informe a quilometragem registrada no retorno da revisão.')
-            return redirect('maintenance_list')
-
-        resulting_status = form.cleaned_data.get('resulting_status')
+        # Se o usuário informou retorno + KM, a revisão deve ser encerrada.
+        # A situação após o retorno pode ser escolhida no formulário; se ficar
+        # vazia, recuperamos a situação anterior à abertura da revisão.
+        resulting_status = cleaned.get('resulting_status') if form_is_valid else None
         if resulting_status is None:
-            # Ao registrar retorno + KM, a revisão deve ser efetivamente encerrada.
-            # Se o usuário não escolher um novo status, restaura o status anterior
-            # à abertura da revisão, evitando que o registro permaneça "Aberto".
-            resulting_status = maintenance.vehicle_status_before_opening
-            if resulting_status is None:
-                resulting_status = vehicle.status
+            resulting_status = maintenance.vehicle_status_before_opening or vehicle.status
 
         if resulting_status is None:
             messages.error(request, 'Não foi possível determinar a situação da viatura após o retorno.')
