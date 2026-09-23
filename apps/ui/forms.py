@@ -124,6 +124,14 @@ class VehicleForm(forms.ModelForm):
         }
 
 
+class VehicleContractForm(forms.ModelForm):
+    class Meta:
+        model = Vehicle
+        fields = ['contract']
+        labels = {'contract': 'Contrato'}
+        widgets = {'contract': forms.Select(attrs=SELECT)}
+
+
 class FineForm(forms.ModelForm):
     plate = forms.CharField(
         max_length=8, label='Placa do veículo',
