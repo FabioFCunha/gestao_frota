@@ -98,6 +98,8 @@ def user_edit(request, pk):
 
 @system_creator_required
 def user_whatsapp(request, pk):
+    if request.method != "POST":
+        raise PermissionDenied
     user = get_object_or_404(User, pk=pk)
     if user.is_system_creator:
         messages.error(request, "O criador do sistema não utiliza convite de ativação.")
