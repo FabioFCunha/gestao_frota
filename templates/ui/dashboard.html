@@ -1,41 +1,18 @@
-{% extends 'ui/base.html' %}
-{% block title %}Dashboard | Gestão de Frotas{% endblock %}
-{% block heading %}Gestão da Frota{% endblock %}
+﻿{% extends 'ui/base.html' %}
+{% block title %}Dashboard | GestÃ£o de Frotas{% endblock %}
+{% block heading %}GestÃ£o da Frota{% endblock %}
 {% block content %}
 
 <section class="fd-hero">
     <div class="fd-hero-left">
         <span class="fd-eyebrow">CENTRAL DA FROTA</span>
-        <h2 class="fd-title">Visão geral</h2>
-        <p class="fd-subtitle">Acompanhe rapidamente a situação operacional dos veículos.</p>
+        <h2 class="fd-title">VisÃ£o geral</h2>
+        <p class="fd-subtitle">Acompanhe rapidamente a situaÃ§Ã£o operacional dos veÃ­culos.</p>
     </div>
     <div class="fd-hero-count">
         <strong>{{ metrics.fleet.total }}</strong>
-        <span>veículos cadastrados</span>
+        <span>veÃ­culos na frota</span>
     </div>
-</section>
-
-<section class="fd-kpis">
-    <article class="fd-kpi fd-kpi--total">
-        <span class="fd-kpi-label">Frota</span>
-        <strong>{{ metrics.fleet.total }}</strong>
-        <small>veículos cadastrados</small>
-    </article>
-    <button class="fd-kpi fd-kpi--danger" type="button" data-filter="revisao_vencida">
-        <span class="fd-kpi-label">Revisão vencida</span>
-        <strong>{{ plate_alert_counts.revisao_vencida }}</strong>
-        <small>exigem atenção</small>
-    </button>
-    <button class="fd-kpi fd-kpi--warning" type="button" data-filter="revisao_proxima">
-        <span class="fd-kpi-label">Revisão próxima</span>
-        <strong>{{ plate_alert_counts.revisao_proxima }}</strong>
-        <small>nos próximos ciclos</small>
-    </button>
-    <button class="fd-kpi fd-kpi--blue" type="button" data-filter="contrato">
-        <span class="fd-kpi-label">Contrato</span>
-        <strong>{{ plate_alert_counts.contrato }}</strong>
-        <small>em atenção</small>
-    </button>
 </section>
 
 <section class="fd-strip">
@@ -48,21 +25,21 @@
     {% if plate_alert_counts.revisao_vencida %}
     <button class="fd-chip" type="button" data-filter="revisao_vencida">
         <i class="fd-dot fd-dot--red"></i>
-        <span>Revisão vencida</span>
+        <span>RevisÃ£o vencida</span>
         <b>{{ plate_alert_counts.revisao_vencida }}</b>
     </button>
     {% endif %}
     {% if plate_alert_counts.revisao_proxima %}
     <button class="fd-chip" type="button" data-filter="revisao_proxima">
         <i class="fd-dot fd-dot--orange"></i>
-        <span>Revisão próxima</span>
+        <span>RevisÃ£o prÃ³xima</span>
         <b>{{ plate_alert_counts.revisao_proxima }}</b>
     </button>
     {% endif %}
     {% if plate_alert_counts.manutencao %}
     <button class="fd-chip" type="button" data-filter="manutencao">
         <i class="fd-dot fd-dot--purple"></i>
-        <span>Manutenção</span>
+        <span>ManutenÃ§Ã£o</span>
         <b>{{ plate_alert_counts.manutencao }}</b>
     </button>
     {% endif %}
@@ -82,7 +59,7 @@
     {% endif %}
 
     <div class="fd-search-wrap">
-        <span class="fd-search-icon">⌕</span>
+        <span class="fd-search-icon">âŒ•</span>
         <input class="fd-search" type="text" id="plateSearch" placeholder="Buscar por placa..." autocomplete="off">
     </div>
 </section>
@@ -90,8 +67,7 @@
 <section class="fd-board">
     <div class="fd-board-head">
         <div>
-            <span class="fd-board-title">Frota</span>
-            <span class="fd-board-subtitle">Situação individual dos veículos</span>
+            <span class="fd-board-title">Frota em OperaÃ§Ã£o</span>
         </div>
         <span class="fd-board-counter"><b id="visibleCount">{{ plate_rows|length }}</b> exibidos</span>
     </div>
@@ -102,10 +78,8 @@
            data-alerts="{{ v.alerts }}"
            data-plate="{{ v.plate }}"
            href="{% url 'vehicle_dossier' v.id %}">
-            <div class="vc-topline">
-                <span class="vc-status">{{ v.priority_label }}</span>
-                <span class="vc-arrow">→</span>
-            </div>
+
+            <span class="vc-status">{{ v.priority_label }}</span>
 
             <div class="vc-plate-wrap">
                 <div class="vc-plate">
@@ -115,34 +89,60 @@
             </div>
 
             <div class="vc-model">
-                {% if v.model %}{{ v.model }}{% else %}Modelo não informado{% endif %}
+                {% if v.model %}{{ v.model }}{% else %}Modelo nÃ£o informado{% endif %}
             </div>
 
-            <div class="vc-footer">
-                <span class="vc-indicators">
-                    {% if "revisao_vencida" in v.alerts %}<i class="vc-ind vc-ind--red" title="Revisão vencida"></i>{% endif %}
-                    {% if "revisao_proxima" in v.alerts %}<i class="vc-ind vc-ind--orange" title="Revisão próxima"></i>{% endif %}
-                    {% if "manutencao" in v.alerts %}<i class="vc-ind vc-ind--purple" title="Em manutenção"></i>{% endif %}
-                    {% if "multa" in v.alerts %}<i class="vc-ind vc-ind--yellow" title="Multa a vencer"></i>{% endif %}
-                    {% if "contrato" in v.alerts %}<i class="vc-ind vc-ind--blue" title="Contrato a vencer"></i>{% endif %}
-                    {% if not v.alerts %}<i class="vc-ind vc-ind--green" title="Operacional"></i>{% endif %}
-                </span>
-                {% if v.alerts %}
-                <span class="vc-attention">Atenção</span>
-                {% else %}
-                <span class="vc-attention vc-attention--ok">Operacional</span>
+            <div class="vc-details">
+                <div class="vc-detail-item" title="Quilometragem Atual">
+                    <span class="vc-detail-icon">â±</span>
+                    <span>{% if v.mileage %}{{ v.mileage }} km{% else %}Sem reg. km{% endif %}</span>
+                </div>
+                {% if v.revision_info %}
+                    {% if v.revision_info.status == "SEM_HISTORICO" %}
+                    <div class="vc-detail-item" title="Nenhuma revisÃ£o concluÃ­da e sem meta no cadastro">
+                        <span class="vc-detail-icon">âš ï¸</span>
+                        <span style="color: #b45309;">Sem histÃ³rico de revisÃ£o</span>
+                    </div>
+                    {% else %}
+                    <div class="vc-detail-item" title="PrÃ³xima RevisÃ£o">
+                        <span class="vc-detail-icon">ðŸ”§</span>
+                        <span>Rev. {{ v.revision_info.km_prox_revisao }} km</span>
+                    </div>
+                    <div class="vc-detail-item">
+                        <span class="vc-detail-icon">
+                            {% if v.revision_info.status == "DEVIDA" %}ðŸš¨{% else %}â³{% endif %}
+                        </span>
+                        <span>
+                            {% if v.revision_info.status == "DEVIDA" %}
+                                <strong style="color: #dc2626;">Vencida {{ v.revision_info.ultrapassado }} km</strong>
+                            {% else %}
+                                Faltam {{ v.revision_info.km_faltando }} km
+                            {% endif %}
+                        </span>
+                    </div>
+                    {% endif %}
                 {% endif %}
+                {% if v.driver_name %}
+                <div class="vc-detail-item" title="Motorista: {{ v.driver_name }}">
+                    <span class="vc-detail-icon">ðŸ‘¤</span>
+                    <span>CNH {% if v.cnh_expiration %}{{ v.cnh_expiration|date:"d/m/Y" }}{% else %}?{% endif %}</span>
+                </div>
+                {% endif %}
+            </div>
+
+            <div class="vc-footer" style="justify-content: flex-end;">
+                <span class="vc-arrow">â†’</span>
             </div>
         </a>
         {% empty %}
-        <div class="fd-empty">Nenhum veículo com placa atual cadastrada.</div>
+        <div class="fd-empty">Nenhum veÃ­culo com placa atual cadastrada.</div>
         {% endfor %}
     </div>
 </section>
 
 <script>
 (function () {
-    var chips = document.querySelectorAll(".fd-chip, .fd-kpi[data-filter]");
+    var chips = document.querySelectorAll(".fd-chip");
     var cards = document.querySelectorAll(".vc");
     var counter = document.getElementById("visibleCount");
     var search = document.getElementById("plateSearch");

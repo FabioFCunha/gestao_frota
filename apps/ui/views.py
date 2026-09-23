@@ -69,10 +69,17 @@ def dashboard(request):
             revision_proxima_ids.add(item["vehicle_id"])
 
     # --- Load all vehicles ---
+    from django.db.models import Prefetch
+    from apps.fleet.models import VehicleDriverAssignment, VehicleMileage
+
     vehicles = (
         Vehicle.objects
         .select_related("status", "contract", "brand", "model")
-        .prefetch_related("plate_history")
+        .prefetch_related(
+            "plate_history",
+            Prefetch("driver_assignments", queryset=VehicleDriverAssignment.objects.filter(is_active=True).select_related("driver"), to_attr="active_drivers"),
+            Prefetch("mileage_history", queryset=VehicleMileage.objects.order_by("-date", "-created_at"), to_attr="recent_mileage")
+        )
         .order_by("brand__name", "model__name")
     )
 
@@ -134,6 +141,22 @@ def dashboard(request):
             priority = "normal"
             priority_label = "Operacional"
 
+        # Extract mileage and driver
+        current_mileage = vehicle.recent_mileage[0].mileage if vehicle.recent_mileage else None
+        active_driver = vehicle.active_drivers[0].driver if vehicle.active_drivers else None
+
+        from apps.fleet.services import get_vehicle_revision_status
+        revision = get_vehicle_revision_status(vehicle=vehicle)
+        if revision:
+            rev_dict = {
+                "status": revision["status"],
+                "km_prox_revisao": revision["next_revision_km"],
+                "km_faltando": revision["km_remaining"],
+                "ultrapassado": max(0, -revision["km_remaining"]) if revision["km_remaining"] is not None else 0
+            }
+        else:
+            rev_dict = None
+
         plate_rows.append({
             "id": vehicle.id,
             "plate": current_plate,
@@ -141,6 +164,10 @@ def dashboard(request):
             "priority": priority,
             "priority_label": priority_label,
             "alerts": " ".join(attention),
+            "mileage": current_mileage,
+            "driver_name": active_driver.name if active_driver else None,
+            "cnh_expiration": active_driver.cnh_expiration if active_driver else None,
+            "revision_info": rev_dict,
         })
 
     # Sort: problems first (by priority weight), then alphabetically by plate
