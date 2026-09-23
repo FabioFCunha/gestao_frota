@@ -27,7 +27,7 @@ def dashboard(request):
 @login_required
 def vehicle_list(request):
     from apps.fleet.models import Vehicle
-    qs = Vehicle.objects.select_related('status', 'brand', 'model').prefetch_related('plate_history').all()
+    qs = Vehicle.objects.select_related('status', 'brand', 'model').prefetch_related('plate_history', 'custody_records').all()
     q = request.GET.get('q', '')
     if q:
         qs = qs.filter(
