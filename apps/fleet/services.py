@@ -288,17 +288,17 @@ def assign_driver_to_vehicle(
 
     if sei_number and not custody_started_on:
         raise ValueError(
-            "A data de início do acautelamento é obrigatória quando o SEI é informado."
+            "A data de início da vigência do SEI é obrigatória quando o SEI é informado."
         )
 
     if custody_ended_on and not custody_started_on:
         raise ValueError(
-            "A data de início do acautelamento é obrigatória quando a data final é informada."
+            "A data de início da vigência do SEI é obrigatória quando a data final é informada."
         )
 
     if custody_started_on and custody_ended_on and custody_ended_on < custody_started_on:
         raise ValueError(
-            "A data final do acautelamento não pode ser anterior à data inicial."
+            "A data final da vigência do SEI não pode ser anterior à data inicial."
         )
 
     current_assignment = vehicle.driver_assignments.filter(is_active=True).first()
