@@ -1,0 +1,18 @@
+{% extends "ui/base.html" %}
+{% block title %}{{ title }} · Gestão de Frotas{% endblock %}
+{% block heading %}{{ title }}{% endblock %}
+{% block content %}
+<section class="accounts-form-page">
+  <div class="form-card wide">
+    <p class="section-eyebrow">CONTROLE DE ACESSO</p>
+    <h2>{{ title }}</h2>
+    <p class="muted">Selecione exatamente o que este perfil poderá visualizar, criar, alterar ou excluir.</p>
+    <form method="post" class="accounts-form">{% csrf_token %}
+      <label>{{ form.name.label }}{{ form.name }}{% for error in form.name.errors %}<span class="error">{{ error }}</span>{% endfor %}</label>
+      <div class="permissions-box">{{ form.permissions }}</div>
+      {% for error in form.permissions.errors %}<span class="error">{{ error }}</span>{% endfor %}
+      <div class="form-actions"><a class="secondary-action" href="{% url 'group_list' %}">Cancelar</a><button type="submit">Salvar perfil</button></div>
+    </form>
+  </div>
+</section>
+{% endblock %}
