@@ -1,5 +1,7 @@
+import re
+
 from django.db import transaction
-from .models import AuditLog, Driver, Maintenance, VehicleHistory, VehicleStatus, VehicleDriverAssignment, Vehicle
+from .models import AuditLog, Driver, Maintenance, VehicleHistory, VehicleStatus, VehicleDriverAssignment, VehicleCustody, Vehicle
 
 
 # === WW TRANS: REGRA DE REVISÃO PREVENTIVA ===
@@ -22,7 +24,8 @@ def get_vehicle_revision_status(*, vehicle):
 
     podem estabelecer uma nova referência.
 
-    Sem histórico de revisão, o sistema não inventa uma referência.
+    Para veículos legados sem manutenção de revisão registrada, utiliza a
+    referência ``[KM_PROX_REVISAO]`` armazenada nas observações do veículo.
     """
     from .models import MaintenanceType, MaintenanceStatus, VehicleMileage
 
@@ -59,18 +62,28 @@ def get_vehicle_revision_status(*, vehicle):
             .first()
         )
 
-    if not last_revision:
-        return {
-            "last_revision_km": None,
-            "next_revision_km": None,
-            "current_km": current_mileage,
-            "km_remaining": None,
-            "status": "SEM_HISTORICO",
-            "has_history": False,
-        }
+    if last_revision:
+        last_revision_km = last_revision.mileage
+        next_revision_km = last_revision_km + REVISION_INTERVAL_KM
+        has_history = True
+    else:
+        legacy_reference = re.search(
+            r"\[KM_PROX_REVISAO\]\s*(\d+)",
+            vehicle.notes or "",
+        )
+        if not legacy_reference:
+            return {
+                "last_revision_km": None,
+                "next_revision_km": None,
+                "current_km": current_mileage,
+                "km_remaining": None,
+                "status": "SEM_HISTORICO",
+                "has_history": False,
+            }
+        last_revision_km = None
+        next_revision_km = int(legacy_reference.group(1))
+        has_history = False
 
-    last_revision_km = last_revision.mileage
-    next_revision_km = last_revision_km + REVISION_INTERVAL_KM
     km_remaining = next_revision_km - current_mileage
 
     if km_remaining <= 0:
@@ -86,7 +99,7 @@ def get_vehicle_revision_status(*, vehicle):
         "current_km": current_mileage,
         "km_remaining": km_remaining,
         "status": status,
-        "has_history": True,
+        "has_history": has_history,
     }
 
 
@@ -139,8 +152,8 @@ def open_maintenance(*, maintenance: Maintenance, user):
         
     vehicle = maintenance.vehicle
     
-    # Previne m?ltiplas manuten??es operacionais simult?neas.
-    # "Aberta" e "Em andamento" ocupam a manuten??o operacional do ve?culo.
+    # Previne múltiplas manutenções operacionais simultâneas.
+    # "Aberta" e "Em andamento" ocupam a manuten??o operacional do veículo.
     existing_active = Maintenance.objects.filter(
         vehicle=vehicle,
         status__name__in=["Aberta", "Em andamento"]
@@ -148,7 +161,7 @@ def open_maintenance(*, maintenance: Maintenance, user):
 
     if existing_active:
         raise ValueError(
-            "O ve?culo j? possui uma manuten??o aberta ou em andamento. "
+            "O veículo já possui uma manuten??o aberta ou em andamento. "
             "Conclua ou cancele a atual antes de abrir outra."
         )
         
@@ -259,53 +272,102 @@ def cancel_maintenance(*, maintenance: Maintenance, user, resulting_status: str 
 
 
 @transaction.atomic
-def assign_driver_to_vehicle(*, vehicle: Vehicle, driver: Driver, user, notes: str = ""):
+def assign_driver_to_vehicle(
+    *,
+    vehicle: Vehicle,
+    driver: Driver,
+    user,
+    notes: str = "",
+    sei_number: str = "",
+    custody_started_on=None,
+    custody_ended_on=None,
+):
     from django.utils import timezone
+
+    sei_number = (sei_number or "").strip()
+
+    if sei_number and not custody_started_on:
+        raise ValueError(
+            "A data de início do acautelamento é obrigatória quando o SEI é informado."
+        )
+
+    if custody_ended_on and not custody_started_on:
+        raise ValueError(
+            "A data de início do acautelamento é obrigatória quando a data final é informada."
+        )
+
+    if custody_started_on and custody_ended_on and custody_ended_on < custody_started_on:
+        raise ValueError(
+            "A data final do acautelamento não pode ser anterior à data inicial."
+        )
+
     current_assignment = vehicle.driver_assignments.filter(is_active=True).first()
-    
+
     if current_assignment and current_assignment.driver_id == driver.id:
         return current_assignment
-        
+
     old_value = None
     now = timezone.now()
-    
+
     if current_assignment:
-        old_value = {"id": str(current_assignment.driver_id), "name": current_assignment.driver.name}
+        old_value = {
+            "id": str(current_assignment.driver_id),
+            "name": current_assignment.driver.name,
+        }
         current_assignment.is_active = False
         current_assignment.ends_on = now
-        current_assignment.save(update_fields=["is_active", "ends_on", "updated_at"])
-        
+        current_assignment.save(
+            update_fields=["is_active", "ends_on", "updated_at"]
+        )
+
+        VehicleCustody.objects.filter(
+            assignment=current_assignment,
+            ended_on__isnull=True,
+        ).update(
+            ended_on=now.date(),
+            updated_at=now,
+        )
+
     new_assignment = VehicleDriverAssignment.objects.create(
         vehicle=vehicle,
         driver=driver,
         starts_on=now,
         is_active=True,
         notes=notes,
-        assigned_by=user
+        assigned_by=user,
     )
-    
+
+    if sei_number:
+        VehicleCustody.objects.create(
+            assignment=new_assignment,
+            sei_number=sei_number,
+            started_on=custody_started_on,
+            ended_on=custody_ended_on,
+            notes=notes,
+        )
+
     new_value = {"id": str(driver.id), "name": driver.name}
-    
+
     VehicleHistory.objects.create(
-        vehicle=vehicle, 
-        field="driver", 
-        old_value=old_value, 
-        new_value=new_value, 
-        reason=notes or "Troca de motorista", 
-        changed_by=user
+        vehicle=vehicle,
+        field="driver",
+        old_value=old_value,
+        new_value=new_value,
+        reason=notes or "Troca de motorista",
+        changed_by=user,
     )
-    
+
     AuditLog.objects.create(
-        user=user, 
-        module="veículos", 
-        action="VÍNCULO MOTORISTA", 
-        entity_type="vehicle", 
-        entity_id=vehicle.id, 
-        old_values={"driver": old_value["name"] if old_value else None}, 
-        new_values={"driver": new_value["name"]}, 
-        reason=notes or "Troca de motorista"
+        user=user,
+        module="veículos",
+        action="VÍNCULO MOTORISTA",
+        entity_type="vehicle",
+        entity_id=vehicle.id,
+        old_values={"driver": old_value["name"] if old_value else None},
+        new_values={"driver": new_value["name"]},
+        reason=notes or "Troca de motorista",
     )
-    
+
     return new_assignment
 
 
@@ -915,16 +977,18 @@ def get_dashboard_metrics(filters: dict) -> dict:
         "by_status": {item['status__name']: item['count'] for item in f_counts}
     }
     
-    # 6. SEI Processes
-    # SEI processes are related via generic relation, or maybe we just show global SEI?
-    # The prompt says: "N?o assumir que multas, documentos ou processos devem necessariamente ser filtrados da mesma maneira se a rela??o com ve?culo n?o existir."
-    # Let's just return global SEI and Documents if filters aren't applicable.
-    # Actually, if we filter by vehicle, SEI processes related to that vehicle could be found, but it's expensive.
-    # Let's just return global for SEI and Documents.
+    # 6. Processos SEI e acautelamentos legados.
+    # Os veículos importados guardam seu SEI/acautelamento em ``custody_info``.
+    # Enquanto esses registros não forem convertidos em SEIProcess, eles também
+    # precisam integrar o indicador operacional.
     sei_counts = SEIProcess.objects.values('status__name').annotate(count=Count('id'))
+    legacy_custody_count = v_qs.exclude(custody_info__isnull=True).exclude(custody_info__exact='').count()
     sei_metrics = {
-        "total": SEIProcess.objects.count(),
-        "by_status": {item['status__name']: item['count'] for item in sei_counts}
+        "total": SEIProcess.objects.count() + legacy_custody_count,
+        "by_status": {
+            **{item['status__name']: item['count'] for item in sei_counts},
+            "Acautelamentos legados": legacy_custody_count,
+        }
     }
 
     doc_counts = Document.objects.values('status__name').annotate(count=Count('id'))

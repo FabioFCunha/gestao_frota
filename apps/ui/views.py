@@ -263,20 +263,42 @@ def driver_assign_vehicle(request, pk):
     from apps.fleet.services import assign_driver_to_vehicle
 
     driver = get_object_or_404(Driver, pk=pk)
+
     if request.method == 'POST':
         form = DriverVehicleAssignmentForm(request.POST)
+
         if form.is_valid():
-            assign_driver_to_vehicle(
-                vehicle=form.cleaned_data['vehicle'],
-                driver=driver,
-                user=request.user,
-                notes=form.cleaned_data['notes'],
-            )
-            messages.success(request, 'Veículo vinculado ao motorista com sucesso!')
-            return redirect('driver_list')
+            try:
+                assign_driver_to_vehicle(
+                    vehicle=form.cleaned_data['vehicle'],
+                    driver=driver,
+                    user=request.user,
+                    notes=form.cleaned_data['notes'],
+                    sei_number=form.cleaned_data['sei_number'],
+                    custody_started_on=form.cleaned_data['custody_started_on'],
+                    custody_ended_on=form.cleaned_data['custody_ended_on'],
+                )
+            except ValueError as exc:
+                form.add_error(None, str(exc))
+            else:
+                messages.success(
+                    request,
+                    'Veículo vinculado ao motorista com sucesso!'
+                )
+                return redirect('driver_list')
     else:
         form = DriverVehicleAssignmentForm()
-    return render(request, 'ui/form.html', {'form': form, 'title': f'Vincular veículo: {driver.name}', 'back_url': 'driver_list'})
+
+    return render(
+        request,
+        'ui/form.html',
+        {
+            'form': form,
+            'title': f'Vincular veículo: {driver.name}',
+            'back_url': 'driver_list',
+        },
+    )
+
 
 @login_required
 def vehicle_create(request):

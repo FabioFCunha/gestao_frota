@@ -82,11 +82,6 @@ class Driver(NamedModel):
     cnh_number = models.CharField("Nº CNH", max_length=20, blank=True)
     cnh_category = models.CharField("Categoria", max_length=5, blank=True)
     cnh_expiration = models.DateField("Validade CNH", null=True, blank=True)
-    sei_acautelamento = models.CharField(
-        "SEI do acautelamento",
-        max_length=100,
-        blank=True,
-    )
 
 
 class Contract(BaseModel):
@@ -144,6 +139,29 @@ class VehicleDriverAssignment(BaseModel):
             )
         ]
 
+
+class VehicleCustody(BaseModel):
+    assignment = models.ForeignKey(
+        VehicleDriverAssignment,
+        on_delete=models.PROTECT,
+        related_name="custodies",
+    )
+    sei_number = models.CharField(
+        "SEI do acautelamento",
+        max_length=100,
+    )
+    started_on = models.DateField(
+        "Início do acautelamento",
+    )
+    ended_on = models.DateField(
+        "Fim do acautelamento",
+        null=True,
+        blank=True,
+    )
+    notes = models.TextField(
+        "Observações",
+        blank=True,
+    )
 
 class VehiclePlate(BaseModel):
     CURRENT, RESERVED = "CURRENT", "RESERVED"
