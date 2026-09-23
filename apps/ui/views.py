@@ -27,7 +27,30 @@ def dashboard(request):
 @login_required
 def vehicle_list(request):
     from apps.fleet.models import Vehicle
-    qs = Vehicle.objects.select_related('status', 'brand', 'model').prefetch_related('plate_history').all()
+    from django.db.models import Prefetch
+    from apps.fleet.models import Vehicle, VehicleDriverAssignment, VehicleCustody
+
+    active_assignments = (
+        VehicleDriverAssignment.objects
+        .filter(is_active=True)
+        .select_related('driver')
+        .prefetch_related(
+            Prefetch(
+                'custodies',
+                queryset=VehicleCustody.objects.order_by('-started_on'),
+                to_attr='active_custodies',
+            )
+        )
+    )
+    qs = (
+        Vehicle.objects
+        .select_related('status', 'brand', 'model')
+        .prefetch_related(
+            'plate_history',
+            Prefetch('driver_assignments', queryset=active_assignments, to_attr='active_driver_assignments'),
+        )
+        .all()
+    )
     q = request.GET.get('q', '')
     if q:
         qs = qs.filter(
@@ -59,8 +82,26 @@ def vehicle_dossier(request, pk):
     maintenances = vehicle.maintenances.select_related('status', 'type', 'workshop').order_by('-entered_at')[:10]
     fines = vehicle.fines.select_related('status').order_by('-date')[:10]
     inspections = vehicle.inspections.select_related('type', 'status').order_by('-date')[:10]
-    active_assignments = vehicle.driver_assignments.filter(is_active=True).select_related('driver')
-    active_driver = active_assignments.first().driver if active_assignments.exists() else None
+    active_assignment = (
+        vehicle.driver_assignments
+        .filter(is_active=True)
+        .select_related('driver')
+        .prefetch_related(
+            Prefetch(
+                'custodies',
+                queryset=VehicleCustody.objects.order_by('-started_on'),
+                to_attr='ordered_custodies',
+            )
+        )
+        .first()
+    )
+    active_driver = active_assignment.driver if active_assignment else None
+    active_custody = None
+    if active_assignment:
+        active_custody = next(
+            (custody for custody in active_assignment.ordered_custodies if custody.ended_on is None),
+            None,
+        )
 
     # Parse structured notes
     notes = vehicle.notes or ''
@@ -108,6 +149,8 @@ def vehicle_dossier(request, pk):
         'fines': fines,
         'inspections': inspections,
         'active_driver': active_driver,
+        'active_assignment': active_assignment,
+        'active_custody': active_custody,
         'motorista': motorista,
         'motorista_tel': motorista_tel,
         'oficina': oficina,
