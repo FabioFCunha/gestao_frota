@@ -20,29 +20,22 @@ class FleetLoginView(LoginView):
 def dashboard(request):
     from datetime import timedelta
     from apps.fleet.models import Vehicle, VehiclePlate, Maintenance, VehicleFine
-
-    from apps.fleet.services import get_dashboard_metrics, get_operational_alerts, get_vehicle_revision_status
+    from apps.fleet.services import get_dashboard_metrics, get_operational_alerts
 
     metrics = get_dashboard_metrics({})
     alerts = get_operational_alerts({})
 
-    alert_summary = {
-        "revisoes": len(alerts.get("revisoes_vencidas", [])),
-        "manutencoes": len(alerts.get("open_maintenances", [])),
-        "contratos": len(alerts.get("expiring_contracts", [])) + len(alerts.get("expired_contracts", [])),
-        "multas": len(alerts.get("pending_fines", [])),
-        "inspecoes": len(alerts.get("pending_inspections", [])),
-        "sei": len(alerts.get("open_sei", [])),
-    }
-
     today = timezone.now().date()
     fine_warning_date = today + timedelta(days=30)
+
+    # --- Build lookup sets for each situation ---
 
     active_maintenance_ids = set(
         Maintenance.objects
         .filter(status__name__in=["Aberta", "Em andamento"])
         .values_list("vehicle_id", flat=True)
     )
+
     fine_due_ids = set(
         VehicleFine.objects
         .filter(
@@ -53,6 +46,7 @@ def dashboard(request):
         )
         .values_list("vehicle_id", flat=True)
     )
+
     contract_attention_ids = set(
         Vehicle.objects
         .filter(
@@ -63,6 +57,18 @@ def dashboard(request):
         .values_list("id", flat=True)
     )
 
+    # Separate overdue vs upcoming revisions
+    revision_vencida_ids = set()
+    revision_proxima_ids = set()
+    revision_by_vehicle = {}
+    for item in alerts.get("revisoes_vencidas", []):
+        revision_by_vehicle[item["vehicle_id"]] = item
+        if item["status"] == "DEVIDA":
+            revision_vencida_ids.add(item["vehicle_id"])
+        elif item["status"] == "PROXIMA":
+            revision_proxima_ids.add(item["vehicle_id"])
+
+    # --- Load all vehicles ---
     vehicles = (
         Vehicle.objects
         .select_related("status", "contract", "brand", "model")
@@ -70,36 +76,45 @@ def dashboard(request):
         .order_by("brand__name", "model__name")
     )
 
-    revision_by_vehicle = {
-        item["vehicle_id"]: item
-        for item in alerts.get("revisoes_vencidas", [])
+    # --- Priority ordering weights ---
+    PRIORITY_ORDER = {
+        "revisao-vencida": 0,
+        "manutencao": 1,
+        "multa": 2,
+        "contrato": 3,
+        "revisao-proxima": 4,
+        "normal": 5,
     }
 
     plate_rows = []
     for vehicle in vehicles:
         current_plate = next(
             (
-                plate.plate
-                for plate in vehicle.plate_history.all()
-                if plate.ends_on is None and plate.kind == VehiclePlate.CURRENT
+                p.plate
+                for p in vehicle.plate_history.all()
+                if p.ends_on is None and p.kind == VehiclePlate.CURRENT
             ),
             None,
         )
         if not current_plate:
             continue
 
-        revision = revision_by_vehicle.get(vehicle.id)
         attention = []
 
-        if vehicle.id in active_maintenance_ids or (vehicle.status and "manutenção" in vehicle.status.name.lower()):
+        if vehicle.id in revision_vencida_ids:
+            attention.append("revisao_vencida")
+        if vehicle.id in revision_proxima_ids:
+            attention.append("revisao_proxima")
+        if vehicle.id in active_maintenance_ids or (
+            vehicle.status and "manutenção" in vehicle.status.name.lower()
+        ):
             attention.append("manutencao")
-        if revision:
-            attention.append("revisao_vencida" if revision["status"] == "DEVIDA" else "revisao_proxima")
         if vehicle.id in fine_due_ids:
             attention.append("multa")
         if vehicle.id in contract_attention_ids:
             attention.append("contrato")
 
+        # Determine dominant priority for card styling
         if "revisao_vencida" in attention:
             priority = "revisao-vencida"
             priority_label = "Revisão vencida"
@@ -123,28 +138,26 @@ def dashboard(request):
             "id": vehicle.id,
             "plate": current_plate,
             "model": vehicle.model.name if vehicle.model else "",
-            "status": vehicle.status.name if vehicle.status else "",
             "priority": priority,
             "priority_label": priority_label,
             "alerts": " ".join(attention),
-            "revision": revision,
         })
 
+    # Sort: problems first (by priority weight), then alphabetically by plate
+    plate_rows.sort(key=lambda r: (PRIORITY_ORDER.get(r["priority"], 99), r["plate"]))
+
+    # --- Build counts for the indicator strip ---
     plate_alert_counts = {
-        "revisao_vencida": sum("revisao_vencida" in item["alerts"] for item in plate_rows),
-        "revisao_proxima": sum("revisao_proxima" in item["alerts"] for item in plate_rows),
-        "manutencao": sum("manutencao" in item["alerts"] for item in plate_rows),
-        "multa": sum("multa" in item["alerts"] for item in plate_rows),
-        "contrato": sum("contrato" in item["alerts"] for item in plate_rows),
+        "revisao_vencida": sum(1 for r in plate_rows if "revisao_vencida" in r["alerts"]),
+        "revisao_proxima": sum(1 for r in plate_rows if "revisao_proxima" in r["alerts"]),
+        "manutencao": sum(1 for r in plate_rows if "manutencao" in r["alerts"]),
+        "multa": sum(1 for r in plate_rows if "multa" in r["alerts"]),
+        "contrato": sum(1 for r in plate_rows if "contrato" in r["alerts"]),
     }
-    total_alerts = sum(alert_summary.values())
+
     context = {
         "metrics": metrics,
-        "alerts": alerts,
-        "alert_summary": alert_summary,
-        "total_alerts": total_alerts,
         "plate_rows": plate_rows,
-        "fine_warning_date": fine_warning_date,
         "plate_alert_counts": plate_alert_counts,
     }
     return render(request, "ui/dashboard.html", context)

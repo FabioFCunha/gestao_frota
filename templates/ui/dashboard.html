@@ -1,144 +1,134 @@
 {% extends 'ui/base.html' %}
 {% block title %}Dashboard | Gestão de Frotas{% endblock %}
-{% block heading %}Dashboard{% endblock %}
+{% block heading %}Gestão da Frota{% endblock %}
 {% block content %}
 
-<section class="fleet-dashboard-head">
-    <div>
-        <span class="section-eyebrow">CENTRAL OPERACIONAL</span>
-        <h2>Mapa da frota</h2>
-        <p>Visualize rapidamente quais veículos exigem atenção e por quê.</p>
+<section class="fd-hero">
+    <div class="fd-hero-left">
+        <span class="fd-eyebrow">CENTRAL DA FROTA</span>
+        <h2 class="fd-title">Painel de Controle</h2>
+        <p class="fd-subtitle">Visualização em tempo real da situação de cada veículo.</p>
     </div>
-    <div class="fleet-summary">
+    <div class="fd-hero-count">
         <strong>{{ metrics.fleet.total }}</strong>
-        <span>veículos cadastrados</span>
+        <span>veículos</span>
     </div>
 </section>
 
-<section class="fleet-alert-strip">
-    <button class="fleet-filter active" type="button" data-filter="todos">
-        <span class="filter-dot all"></span> Todos <b>{{ metrics.fleet.total }}</b>
+<section class="fd-strip">
+    <button class="fd-chip active" type="button" data-filter="todos">
+        <i class="fd-dot fd-dot--all"></i>
+        <span>Todos</span>
+        <b>{{ plate_rows|length }}</b>
     </button>
-    <button class="fleet-filter" type="button" data-filter="revisao-vencida">
-        <span class="filter-dot danger"></span> Revisão vencida <b>{{ alert_summary.revisoes }}</b>
+    {% if plate_alert_counts.revisao_vencida %}
+    <button class="fd-chip" type="button" data-filter="revisao_vencida">
+        <i class="fd-dot fd-dot--red"></i>
+        <span>Revisão vencida</span>
+        <b>{{ plate_alert_counts.revisao_vencida }}</b>
     </button>
-    <button class="fleet-filter" type="button" data-filter="revisao-proxima">
-        <span class="filter-dot warning"></span> Revisão próxima <b>{{ plate_alert_counts.revisao_proxima }}</b>
+    {% endif %}
+    {% if plate_alert_counts.revisao_proxima %}
+    <button class="fd-chip" type="button" data-filter="revisao_proxima">
+        <i class="fd-dot fd-dot--orange"></i>
+        <span>Revisão próxima</span>
+        <b>{{ plate_alert_counts.revisao_proxima }}</b>
     </button>
-    <button class="fleet-filter" type="button" data-filter="manutencao">
-        <span class="filter-dot purple"></span> Em manutenção <b>{{ alert_summary.manutencoes }}</b>
+    {% endif %}
+    {% if plate_alert_counts.manutencao %}
+    <button class="fd-chip" type="button" data-filter="manutencao">
+        <i class="fd-dot fd-dot--purple"></i>
+        <span>Em manutenção</span>
+        <b>{{ plate_alert_counts.manutencao }}</b>
     </button>
-    <button class="fleet-filter" type="button" data-filter="multa">
-        <span class="filter-dot yellow"></span> Multa a vencer <b>{{ plate_alert_counts.multa }}</b>
+    {% endif %}
+    {% if plate_alert_counts.multa %}
+    <button class="fd-chip" type="button" data-filter="multa">
+        <i class="fd-dot fd-dot--yellow"></i>
+        <span>Multas</span>
+        <b>{{ plate_alert_counts.multa }}</b>
     </button>
-    <button class="fleet-filter" type="button" data-filter="contrato">
-        <span class="filter-dot blue"></span> Contrato a vencer <b>{{ plate_alert_counts.contrato }}</b>
+    {% endif %}
+    {% if plate_alert_counts.contrato %}
+    <button class="fd-chip" type="button" data-filter="contrato">
+        <i class="fd-dot fd-dot--blue"></i>
+        <span>Contrato</span>
+        <b>{{ plate_alert_counts.contrato }}</b>
     </button>
+    {% endif %}
+
+    <div class="fd-search-wrap">
+        <input class="fd-search" type="text" id="plateSearch" placeholder="Buscar placa…" autocomplete="off">
+    </div>
 </section>
 
-<section class="plate-board">
-    <div class="plate-board-header">
-        <div>
-            <span class="section-eyebrow">VEÍCULOS</span>
-            <h3>Situação individual</h3>
-        </div>
-        <span class="plate-counter"><span id="visibleVehicleCount">{{ plate_rows|length }}</span> veículos exibidos</span>
+<section class="fd-board">
+    <div class="fd-board-head">
+        <span class="fd-board-counter"><b id="visibleCount">{{ plate_rows|length }}</b> veículos exibidos</span>
     </div>
 
-    <div class="plate-grid" id="plateGrid">
-        {% for item in plate_rows %}
-        <a class="plate-card priority-{{ item.priority }}"
-           data-alerts="{{ item.alerts }}"
-           href="{% url 'vehicle_dossier' item.id %}">
-            <div class="plate-main">
-                <span class="plate-value">{{ item.plate }}</span>
-                <span class="plate-arrow">→</span>
+    <div class="fd-grid" id="fdGrid">
+        {% for v in plate_rows %}
+        <a class="vc vc--{{ v.priority }}"
+           data-alerts="{{ v.alerts }}"
+           data-plate="{{ v.plate }}"
+           href="{% url 'vehicle_dossier' v.id %}">
+            <div class="vc-plate-wrap">
+                <div class="vc-plate">
+                    <span class="vc-plate-bar"></span>
+                    <span class="vc-plate-text">{{ v.plate }}</span>
+                </div>
             </div>
-            <div class="plate-model">{{ item.model|default:"Modelo não informado" }}</div>
-            <div class="plate-footer">
-                <span class="plate-state">{{ item.priority_label }}</span>
-                <span class="plate-indicators">
-                    {% if "revisao_vencida" in item.alerts %}<i class="indicator danger" title="Revisão vencida"></i>{% endif %}
-                    {% if "revisao_proxima" in item.alerts %}<i class="indicator warning" title="Revisão próxima"></i>{% endif %}
-                    {% if "manutencao" in item.alerts %}<i class="indicator purple" title="Em manutenção"></i>{% endif %}
-                    {% if "multa" in item.alerts %}<i class="indicator yellow" title="Multa a vencer"></i>{% endif %}
-                    {% if "contrato" in item.alerts %}<i class="indicator blue" title="Contrato a vencer"></i>{% endif %}
-                    {% if not item.alerts %}<i class="indicator normal" title="Operacional"></i>{% endif %}
+            <div class="vc-model">{{ v.model|default:"—" }}</div>
+            <div class="vc-footer">
+                <span class="vc-indicators">
+                    {% if "revisao_vencida" in v.alerts %}<i class="vc-ind vc-ind--red" title="Revisão vencida"></i>{% endif %}
+                    {% if "revisao_proxima" in v.alerts %}<i class="vc-ind vc-ind--orange" title="Revisão próxima"></i>{% endif %}
+                    {% if "manutencao" in v.alerts %}<i class="vc-ind vc-ind--purple" title="Em manutenção"></i>{% endif %}
+                    {% if "multa" in v.alerts %}<i class="vc-ind vc-ind--yellow" title="Multa a vencer"></i>{% endif %}
+                    {% if "contrato" in v.alerts %}<i class="vc-ind vc-ind--blue" title="Contrato a vencer"></i>{% endif %}
+                    {% if not v.alerts %}<i class="vc-ind vc-ind--green" title="Operacional"></i>{% endif %}
                 </span>
+                <span class="vc-arrow">›</span>
             </div>
         </a>
         {% empty %}
-        <div class="plate-empty">Nenhum veículo com placa atual cadastrada.</div>
+        <div class="fd-empty">Nenhum veículo com placa atual cadastrada.</div>
         {% endfor %}
     </div>
 </section>
 
-<section class="dashboard-lower">
-    <article class="dashboard-summary-panel">
-        <div class="panel-heading-modern">
-            <div>
-                <span class="section-eyebrow">RESUMO</span>
-                <h3>O que merece atenção</h3>
-            </div>
-        </div>
-        <div class="summary-list">
-            <a href="{% url 'maintenance_list' %}" class="summary-line">
-                <span class="summary-icon danger">!</span>
-                <span><strong>{{ plate_alert_counts.revisao_vencida|add:plate_alert_counts.revisao_proxima }}</strong> revisões em atenção</span>
-                <b>→</b>
-            </a>
-            <a href="{% url 'maintenance_list' %}" class="summary-line">
-                <span class="summary-icon purple">⚒</span>
-                <span><strong>{{ plate_alert_counts.manutencao }}</strong> manutenções abertas</span>
-                <b>→</b>
-            </a>
-            <a href="{% url 'contract_list' %}" class="summary-line">
-                <span class="summary-icon blue">▤</span>
-                <span><strong>{{ plate_alert_counts.contrato }}</strong> contratos a vencer</span>
-                <b>→</b>
-            </a>
-        </div>
-    </article>
-
-    <article class="dashboard-summary-panel">
-        <div class="panel-heading-modern">
-            <div>
-                <span class="section-eyebrow">CADASTRO</span>
-                <h3>Visão administrativa</h3>
-            </div>
-        </div>
-        <div class="admin-metrics">
-            <a href="{% url 'vehicle_list' %}"><strong>{{ metrics.fleet.total }}</strong><span>Veículos</span></a>
-            <a href="{% url 'driver_list' %}"><strong>{{ metrics.fleet.total }}</strong><span>Base operacional</span></a>
-            <a href="{% url 'contract_list' %}"><strong>{{ metrics.contracts.total }}</strong><span>Contratos</span></a>
-            <a href="{% url 'fine_list' %}"><strong>{{ metrics.fines.total }}</strong><span>Multas cadastradas</span></a>
-        </div>
-    </article>
-</section>
-
 <script>
 (function () {
-    const buttons = document.querySelectorAll(".fleet-filter");
-    const cards = document.querySelectorAll(".plate-card");
-    const counter = document.getElementById("visibleVehicleCount");
+    var chips = document.querySelectorAll(".fd-chip");
+    var cards = document.querySelectorAll(".vc");
+    var counter = document.getElementById("visibleCount");
+    var search = document.getElementById("plateSearch");
+    var activeFilter = "todos";
 
-    buttons.forEach((button) => {
-        button.addEventListener("click", () => {
-            buttons.forEach((item) => item.classList.remove("active"));
-            button.classList.add("active");
+    function applyFilters() {
+        var query = (search.value || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+        var visible = 0;
+        cards.forEach(function (c) {
+            var matchFilter = activeFilter === "todos" || c.dataset.alerts.indexOf(activeFilter) !== -1;
+            var matchSearch = !query || c.dataset.plate.toUpperCase().replace(/[^A-Z0-9]/g, "").indexOf(query) !== -1;
+            var show = matchFilter && matchSearch;
+            c.hidden = !show;
+            if (show) visible++;
+        });
+        counter.textContent = visible;
+    }
 
-            const filter = button.dataset.filter;
-            let visible = 0;
-
-            cards.forEach((card) => {
-                const show = filter === "todos" || card.classList.contains("priority-" + filter) || card.dataset.alerts.split(" ").includes(filter);
-                card.hidden = !show;
-                if (show) visible += 1;
-            });
-
-            counter.textContent = visible;
+    chips.forEach(function (btn) {
+        btn.addEventListener("click", function () {
+            chips.forEach(function (b) { b.classList.remove("active"); });
+            btn.classList.add("active");
+            activeFilter = btn.dataset.filter;
+            applyFilters();
         });
     });
+
+    search.addEventListener("input", applyFilters);
 })();
 </script>
 

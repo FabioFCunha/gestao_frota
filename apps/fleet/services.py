@@ -1106,5 +1106,5 @@ def get_operational_alerts(filters: dict) -> dict:
         "pending_fines": list(pending_fines),
         "open_sei": list(open_sei),
         "pending_inspections": list(pending_inspections),
-        "revisoes_vencidas": revisoes_vencidas[:15] # Top 15 worst
+        "revisoes_vencidas": revisoes_vencidas
     }
