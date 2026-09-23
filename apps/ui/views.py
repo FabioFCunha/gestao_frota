@@ -16,11 +16,28 @@ class FleetLoginView(LoginView):
 @login_required
 def dashboard(request):
     from apps.fleet.services import get_dashboard_metrics, get_operational_alerts
+
     metrics = get_dashboard_metrics({})
     alerts = get_operational_alerts({})
+
+    alert_summary = {
+        "revisoes": len(alerts.get("revisoes_vencidas", [])),
+        "manutencoes": len(alerts.get("open_maintenances", [])),
+        "contratos": len(alerts.get("expiring_contracts", [])) + len(alerts.get("expired_contracts", [])),
+        "multas": len(alerts.get("pending_fines", [])),
+        "inspecoes": len(alerts.get("pending_inspections", [])),
+        "sei": len(alerts.get("open_sei", [])),
+    }
+
+    total_alerts = sum(alert_summary.values())
+
+    # Mantém o dashboard inteligente sem criar novas consultas: os indicadores
+    # abaixo são derivados dos dados já consolidados pelos serviços do domínio.
     context = {
         "metrics": metrics,
         "alerts": alerts,
+        "alert_summary": alert_summary,
+        "total_alerts": total_alerts,
     }
     return render(request, "ui/dashboard.html", context)
 
