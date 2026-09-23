@@ -441,13 +441,19 @@ def driver_list(request):
 @login_required
 @module_permission("fleet.view_maintenance")
 def maintenance_list(request):
-    from apps.fleet.models import Vehicle, VehicleDriverAssignment, VehicleMileage, Maintenance
+    from apps.fleet.models import Vehicle, VehicleMileage, Maintenance
     from apps.fleet.services import get_vehicle_revision_status
 
     qs = (
         Vehicle.objects
         .select_related('brand', 'model', 'status')
-        .prefetch_related('plate_history', 'mileage_history', 'maintenances__type', 'maintenances__status')
+        .prefetch_related(
+            'plate_history',
+            'mileage_history',
+            'maintenances__type',
+            'maintenances__status',
+            'maintenances__workshop',
+        )
     )
 
     q = request.GET.get('q', '')
@@ -468,13 +474,21 @@ def maintenance_list(request):
                 break
 
         revision = get_vehicle_revision_status(vehicle=v)
+
         active_revision = (
             v.maintenances
-            .filter(type__name__iexact='Revisão', status__name__in=['Aberta', 'Em andamento'])
+            .filter(type__name__iexact='Revisão', exited_at__isnull=True)
             .select_related('workshop', 'type', 'status')
             .order_by('-entered_at')
             .first()
         )
+
+        last_revision = None
+        if revision.get('last_revision_id'):
+            last_revision = next(
+                (m for m in v.maintenances.all() if str(m.id) == str(revision['last_revision_id'])),
+                None,
+            )
 
         vehicles_data.append({
             'id': v.id,
@@ -487,18 +501,28 @@ def maintenance_list(request):
             'last_revision_km': revision['last_revision_km'],
             'has_history': revision['has_history'],
             'active_revision': active_revision,
+            'last_revision': last_revision,
+            'last_revision_id': revision.get('last_revision_id'),
+            'last_revision_entered_at': revision.get('last_revision_entered_at'),
+            'last_revision_exited_at': revision.get('last_revision_exited_at'),
+            'last_revision_workshop': revision.get('last_revision_workshop', ''),
+            'last_revision_workshop_name': revision.get('last_revision_workshop_name', ''),
+            'last_revision_service': revision.get('last_revision_service', ''),
+            'last_revision_completion_mileage': revision.get('last_revision_completion_mileage'),
             'vehicle_status': v.status.name if v.status else '-',
         })
 
     def sort_key(x):
+        if x['active_revision']:
+            return (0, 0)
         status_order = {
-            'DEVIDA': 0,
-            'PROXIMA': 1,
-            'SEM_HISTORICO': 2,
-            'OK': 3,
+            'DEVIDA': 1,
+            'PROXIMA': 2,
+            'SEM_HISTORICO': 3,
+            'OK': 4,
         }
         return (
-            status_order.get(x['revisao_status'], 4),
+            status_order.get(x['revisao_status'], 5),
             x['km_faltando'] if x['km_faltando'] is not None else 999999,
         )
 
@@ -515,11 +539,13 @@ def maintenance_list(request):
 @login_required
 @module_permission("fleet.change_maintenance")
 def revision_action(request, pk):
+    from datetime import datetime, time
     from apps.fleet.models import Vehicle, Maintenance, MaintenanceType, MaintenanceStatus
     from apps.fleet.services import (
         get_vehicle_revision_status,
         open_maintenance,
         complete_maintenance,
+        change_vehicle_status,
     )
 
     vehicle = get_object_or_404(Vehicle, pk=pk)
@@ -530,11 +556,30 @@ def revision_action(request, pk):
     action = (request.POST.get('action') or '').strip().lower()
     form = RevisionActionForm(request.POST)
 
+    def date_to_datetime(value):
+        if not value:
+            return None
+        return timezone.make_aware(datetime.combine(value, time.min))
+
+    def apply_common_fields(maintenance):
+        maintenance.workshop = form.cleaned_data.get('workshop')
+        maintenance.workshop_name = (form.cleaned_data.get('workshop_name') or '').strip()
+        maintenance.service = form.cleaned_data.get('service') or maintenance.service
+        maintenance.notes = form.cleaned_data.get('notes') or maintenance.notes
+        sent_date = form.cleaned_data.get('sent_date')
+        if sent_date:
+            maintenance.entered_at = date_to_datetime(sent_date)
+        return maintenance
+
     if action == 'open':
+        if not form.is_valid():
+            messages.error(request, 'Verifique os dados da revisão.')
+            return redirect('maintenance_list')
+
         if Maintenance.objects.filter(
             vehicle=vehicle,
             type__name__iexact='Revisão',
-            status__name__in=['Aberta', 'Em andamento'],
+            exited_at__isnull=True,
         ).exists():
             messages.error(request, 'Este veículo já está com uma revisão em andamento.')
             return redirect('maintenance_list')
@@ -548,16 +593,18 @@ def revision_action(request, pk):
 
         revision = get_vehicle_revision_status(vehicle=vehicle)
         current_km = revision['current_km'] or 0
+        sent_date = form.cleaned_data.get('sent_date') or timezone.localdate()
 
         maintenance = Maintenance.objects.create(
             vehicle=vehicle,
             type=revision_type,
             status=open_status,
-            workshop=form.cleaned_data.get('workshop') if form.is_valid() else None,
+            workshop=form.cleaned_data.get('workshop'),
+            workshop_name=(form.cleaned_data.get('workshop_name') or '').strip(),
             mileage=current_km,
-            service=(request.POST.get('service') or 'Revisão preventiva').strip(),
-            entered_at=timezone.now(),
-            notes=(request.POST.get('notes') or '').strip(),
+            service=(form.cleaned_data.get('service') or 'Revisão preventiva').strip(),
+            entered_at=date_to_datetime(sent_date),
+            notes=(form.cleaned_data.get('notes') or '').strip(),
             opened_by=request.user,
         )
 
@@ -570,62 +617,97 @@ def revision_action(request, pk):
             messages.success(request, f'Viatura {vehicle} enviada para revisão.')
         return redirect('maintenance_list')
 
-    if action == 'complete':
+    if action in ('complete', 'edit'):
         maintenance_id = request.POST.get('maintenance_id')
         maintenance = get_object_or_404(
-            Maintenance.objects.select_related('vehicle', 'status'),
+            Maintenance.objects.select_related('vehicle', 'status', 'type'),
             pk=maintenance_id,
             vehicle=vehicle,
+            type__name__iexact='Revisão',
         )
 
         if not form.is_valid():
-            messages.error(request, 'Verifique os dados do retorno da revisão.')
+            messages.error(request, 'Verifique os dados da revisão.')
             return redirect('maintenance_list')
 
+        maintenance = apply_common_fields(maintenance)
+        return_date = form.cleaned_data.get('return_date')
         completion_mileage = form.cleaned_data.get('completion_mileage')
-        resulting_status = form.cleaned_data.get('resulting_status')
-        if completion_mileage is None:
-            form.add_error('completion_mileage', 'Informe a quilometragem registrada no retorno.')
-        if resulting_status is None:
-            form.add_error('resulting_status', 'Informe a situação da viatura após o retorno.')
-        if form.errors:
-            messages.error(request, '; '.join(
-                error for field_errors in form.errors.values() for error in field_errors
-            ))
+
+        if not return_date:
+            open_status = MaintenanceStatus.objects.filter(name__iexact='Aberta', active=True).first()
+            if not open_status:
+                messages.error(request, 'Status de manutenção "Aberta" não encontrado.')
+                return redirect('maintenance_list')
+
+            maintenance.status = open_status
+            maintenance.exited_at = None
+            maintenance.completion_mileage = None
+            maintenance.opened_by = maintenance.opened_by or request.user
+            maintenance.resolved_by = None
+            maintenance.save(update_fields=[
+                'workshop', 'workshop_name', 'service', 'notes', 'entered_at',
+                'status', 'exited_at', 'completion_mileage', 'opened_by',
+                'resolved_by', 'updated_at'
+            ])
+
+            try:
+                change_vehicle_status(
+                    vehicle=vehicle,
+                    status_name='Em manutenção',
+                    user=request.user,
+                    reason='Revisão sem data de retorno',
+                )
+            except ValueError as exc:
+                messages.error(request, str(exc))
+            else:
+                messages.success(request, 'Revisão salva sem data de retorno. O veículo permanece EM REVISÃO.')
             return redirect('maintenance_list')
 
-        maintenance.workshop = form.cleaned_data.get('workshop')
-        maintenance.service = form.cleaned_data.get('service') or maintenance.service
-        maintenance.notes = form.cleaned_data.get('notes') or maintenance.notes
-        maintenance.save(update_fields=['workshop', 'service', 'notes', 'updated_at'])
+        if completion_mileage is None:
+            messages.error(request, 'Informe a quilometragem registrada no retorno da revisão.')
+            return redirect('maintenance_list')
+
+        resulting_status = form.cleaned_data.get('resulting_status')
+        if resulting_status is None:
+            messages.error(request, 'Informe a situação da viatura após o retorno.')
+            return redirect('maintenance_list')
+
+        maintenance.save(update_fields=[
+            'workshop', 'workshop_name', 'service', 'notes', 'entered_at', 'updated_at'
+        ])
 
         try:
             complete_maintenance(
                 maintenance=maintenance,
                 user=request.user,
                 resulting_status=resulting_status.name,
-                reason='Retorno da revisão',
+                reason='Retorno/edição da revisão',
                 completion_mileage=completion_mileage,
+                exited_at=date_to_datetime(return_date),
+                allow_already_completed=(action == 'edit'),
             )
         except ValueError as exc:
             messages.error(request, str(exc))
         else:
             messages.success(
                 request,
-                f'Revisão concluída. Próxima revisão calculada em {completion_mileage + 10000:,} km.'.replace(',', '.')
+                f'Revisão registrada. Próxima revisão calculada em {completion_mileage + 10000:,} km.'.replace(',', '.')
             )
         return redirect('maintenance_list')
 
     if action == 'initialize':
+        if not form.is_valid():
+            messages.error(request, 'Informe os dados do histórico.')
+            return redirect('maintenance_list')
+
         if get_vehicle_revision_status(vehicle=vehicle)['has_history']:
             messages.info(request, 'Este veículo já possui histórico de revisão.')
             return redirect('maintenance_list')
 
-        if not form.is_valid():
-            messages.error(request, 'Informe a quilometragem da última revisão concluída.')
-            return redirect('maintenance_list')
-
         last_revision_km = form.cleaned_data.get('completion_mileage')
+        sent_date = form.cleaned_data.get('sent_date')
+        return_date = form.cleaned_data.get('return_date')
         if last_revision_km is None:
             messages.error(request, 'Informe a quilometragem da última revisão concluída.')
             return redirect('maintenance_list')
@@ -636,22 +718,39 @@ def revision_action(request, pk):
             messages.error(request, 'Os cadastros de tipo "Revisão" e status "Concluída" precisam existir.')
             return redirect('maintenance_list')
 
-        Maintenance.objects.create(
+        maintenance = Maintenance.objects.create(
             vehicle=vehicle,
             type=revision_type,
             status=completed_status,
+            workshop=form.cleaned_data.get('workshop'),
+            workshop_name=(form.cleaned_data.get('workshop_name') or '').strip(),
             mileage=last_revision_km,
-            completion_mileage=last_revision_km,
-            service='Revisão preventiva — histórico inicial',
-            entered_at=timezone.now(),
-            exited_at=timezone.now(),
+            completion_mileage=last_revision_km if return_date else None,
+            service=form.cleaned_data.get('service') or 'Revisão preventiva — histórico inicial',
+            entered_at=date_to_datetime(sent_date) or timezone.now(),
+            exited_at=date_to_datetime(return_date) if return_date else None,
             notes=form.cleaned_data.get('notes') or 'Histórico inicializado pelo sistema.',
-            resolved_by=request.user,
+            resolved_by=request.user if return_date else None,
         )
-        messages.success(
-            request,
-            f'Histórico atualizado. Próxima revisão: {last_revision_km + 10000:,} km.'.replace(',', '.')
-        )
+        if not return_date:
+            open_status = MaintenanceStatus.objects.filter(name__iexact='Aberta', active=True).first()
+            if open_status:
+                maintenance.status = open_status
+                maintenance.save(update_fields=['status', 'updated_at'])
+                change_vehicle_status(
+                    vehicle=vehicle,
+                    status_name='Em manutenção',
+                    user=request.user,
+                    reason='Histórico de revisão sem retorno',
+                )
+
+        if return_date:
+            messages.success(
+                request,
+                f'Histórico atualizado. Próxima revisão: {last_revision_km + 10000:,} km.'.replace(',', '.')
+            )
+        else:
+            messages.success(request, 'Histórico salvo sem data de retorno. O veículo permanece EM REVISÃO.')
         return redirect('maintenance_list')
 
     messages.error(request, 'Ação de revisão inválida.')
