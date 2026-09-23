@@ -99,9 +99,9 @@
                 </div>
                 {% if v.revision_info %}
                     {% if v.revision_info.status == "SEM_HISTORICO" %}
-                    <div class="vc-detail-item" title="Nenhuma revisÃ£o concluída e sem meta no cadastro">
+                    <div class="vc-detail-item" title="Nenhuma revisão concluída e sem meta no cadastro">
                         <span class="vc-detail-icon">⚠️</span>
-                        <span style="color: #b45309;">Sem histórico de revisÃ£o</span>
+                        <span style="color: #b45309;">Sem histórico de revisão</span>
                     </div>
                     {% else %}
                     <div class="vc-detail-item" title="Próxima Revisão">
@@ -135,7 +135,7 @@
             </div>
         </a>
         {% empty %}
-        <div class="fd-empty">Nenhum veÃ­culo com placa atual cadastrada.</div>
+        <div class="fd-empty">Nenhum veículo com placa atual cadastrada.</div>
         {% endfor %}
     </div>
 </section>
