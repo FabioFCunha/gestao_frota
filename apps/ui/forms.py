@@ -135,32 +135,33 @@ class VehicleContractForm(forms.ModelForm):
 
 
 class FineForm(forms.ModelForm):
-    plate = forms.CharField(
-        max_length=8, label='Placa do veículo',
-        widget=forms.TextInput(attrs={**INPUT, 'placeholder': 'ABC1D23'}),
-    )
+    vehicle = forms.ModelChoiceField(queryset=Vehicle.objects.none(), label='Veículo', widget=forms.Select(attrs=SELECT))
 
     class Meta:
         model = VehicleFine
-        fields = ['auto_number', 'agency', 'status', 'date', 'amount', 'due_date', 'notes']
-        labels = {
-            'auto_number': 'Nº do Auto de Infração',
-            'agency': 'Órgão Autuador',
-            'status': 'Situação',
-            'date': 'Data da Infração',
-            'amount': 'Valor (R$)',
-            'due_date': 'Vencimento',
-            'notes': 'Observações / Processo SEI',
-        }
+        fields = ['vehicle', 'auto_number', 'agency', 'status', 'date', 'amount', 'due_date', 'notes']
+        labels = {'vehicle':'Veículo','auto_number':'Nº do Auto de Infração','agency':'Órgão Autuador','status':'Situação','date':'Data da Infração','amount':'Valor (R$)','due_date':'Vencimento','notes':'Observações / Processo SEI'}
         widgets = {
-            'auto_number': forms.TextInput(attrs={**INPUT, 'placeholder': 'RA20629234'}),
-            'agency': forms.TextInput(attrs={**INPUT, 'placeholder': 'SMTR, PRF, DETRO...'}),
+            'vehicle': forms.Select(attrs=SELECT),
+            'auto_number': forms.TextInput(attrs={**INPUT, 'placeholder':'RA20629234'}),
+            'agency': forms.TextInput(attrs={**INPUT, 'placeholder':'SMTR, PRF, DETRO...'}),
             'status': forms.Select(attrs=SELECT),
-            'date': forms.DateTimeInput(attrs={**INPUT, 'type': 'datetime-local'}),
-            'amount': forms.NumberInput(attrs={**INPUT, 'step': '0.01', 'placeholder': '0.00'}),
-            'due_date': forms.DateInput(attrs={**INPUT, 'type': 'date'}),
-            'notes': forms.Textarea(attrs={**INPUT, 'rows': 3, 'placeholder': 'Processo SEI, observações...'}),
+            'date': forms.DateTimeInput(attrs={**INPUT, 'type':'datetime-local'}),
+            'amount': forms.NumberInput(attrs={**INPUT, 'step':'0.01', 'placeholder':'0.00'}),
+            'due_date': forms.DateInput(attrs={**INPUT, 'type':'date'}),
+            'notes': forms.Textarea(attrs={**INPUT, 'rows':3, 'placeholder':'Processo SEI, observações...'}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['vehicle'].queryset = Vehicle.objects.filter(active=True).select_related('brand','model').prefetch_related('plate_history').order_by('brand__name','model__name')
+        self.fields['vehicle'].label_from_instance = self.label_from_instance
+
+    @staticmethod
+    def label_from_instance(vehicle):
+        plate = next((p.plate for p in vehicle.plate_history.all() if p.kind == 'CURRENT' and not p.ends_on), 'Sem placa')
+        description = ' '.join(part for part in [vehicle.brand.name if vehicle.brand else '', vehicle.model.name if vehicle.model else ''] if part)
+        return f'{plate} — {description or "Veículo sem modelo"}'
 
 from apps.fleet.models import Maintenance
 
