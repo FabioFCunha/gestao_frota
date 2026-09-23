@@ -6,10 +6,12 @@ from django.http import JsonResponse
 from django.contrib import messages
 from django.utils import timezone
 from .forms import DriverForm, DriverVehicleAssignmentForm, VehicleForm, VehicleContractForm, FineForm
+from apps.accounts.forms import FleetAuthenticationForm
 from apps.fleet.models import VehiclePlate
 
 class FleetLoginView(LoginView):
     template_name = "ui/login.html"
+    authentication_form = FleetAuthenticationForm
     redirect_authenticated_user = True
 
 
