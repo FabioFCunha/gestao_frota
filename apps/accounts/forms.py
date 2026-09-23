@@ -64,6 +64,8 @@ class UserForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["groups"].queryset = Group.objects.order_by("name")
+        self.fields["functional_id"].required = True
+        self.fields["whatsapp"].required = True
         self.fields["groups"].help_text = "O perfil define as permissões deste usuário."
 
     def clean_email(self):
