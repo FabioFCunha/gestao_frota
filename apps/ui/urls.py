@@ -18,6 +18,7 @@ urlpatterns = [
     path("motoristas/<uuid:pk>/vincular-veiculo/", views.driver_assign_vehicle, name="driver_assign_vehicle"),
     path("manutencoes/", maintenance_list, name="maintenance_list"),
     path("manutencoes/nova/", views.maintenance_create, name="maintenance_create"),
+    path("manutencoes/<uuid:pk>/revisao/", views.revision_action, name="revision_action"),
     path("manutencoes/importar-km/", views.km_import, name="km_import"),
     path("multas/", fine_list, name="fine_list"),
     path("multas/nova/", views.fine_create, name="fine_create"),
