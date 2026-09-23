@@ -1,0 +1,19 @@
+{% extends "ui/base.html" %}
+{% block title %}{{ title }} · Gestão de Frotas{% endblock %}
+{% block heading %}{{ title }}{% endblock %}
+{% block content %}
+<section class="accounts-form-page">
+  <div class="form-card">
+    <p class="section-eyebrow">ACESSO AO SISTEMA</p>
+    <h2>{{ title }}</h2>
+    <p class="muted">A senha não é cadastrada aqui. Para novos usuários, ela será criada pelo próprio usuário através do link enviado pelo WhatsApp.</p>
+    <form method="post" class="accounts-form">{% csrf_token %}
+      {{ form.non_field_errors }}
+      {% for field in form %}
+        <label>{{ field.label }}{{ field }}{% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}{% for error in field.errors %}<span class="error">{{ error }}</span>{% endfor %}</label>
+      {% endfor %}
+      <div class="form-actions"><a class="secondary-action" href="{% url 'user_list' %}">Cancelar</a><button type="submit">Salvar usuário</button></div>
+    </form>
+  </div>
+</section>
+{% endblock %}
