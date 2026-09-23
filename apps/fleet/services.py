@@ -48,6 +48,20 @@ def get_vehicle_revision_status(*, vehicle):
         .first()
     ) or 0
 
+    active_revision = None
+
+    if revision_type:
+        active_revision = (
+            Maintenance.objects
+            .filter(
+                vehicle=vehicle,
+                type=revision_type,
+                exited_at__isnull=True,
+            )
+            .order_by("-entered_at", "-created_at")
+            .first()
+        )
+
     last_revision = None
 
     if revision_type and completed_status:
@@ -106,7 +120,9 @@ def get_vehicle_revision_status(*, vehicle):
 
     km_remaining = next_revision_km - current_mileage
 
-    if km_remaining <= 0:
+    if active_revision:
+        status = "EM_REVISAO"
+    elif km_remaining <= 0:
         status = "DEVIDA"
     elif km_remaining <= REVISION_ALERT_KM:
         status = "PROXIMA"
@@ -122,6 +138,8 @@ def get_vehicle_revision_status(*, vehicle):
         "last_revision_workshop_name": last_revision.workshop_name if last_revision else "",
         "last_revision_service": last_revision.service if last_revision else "",
         "last_revision_completion_mileage": last_revision.completion_mileage if last_revision else None,
+        "active_revision_id": active_revision.id if active_revision else None,
+        "active_revision_entered_at": active_revision.entered_at if active_revision else None,
         "next_revision_km": next_revision_km,
         "current_km": current_mileage,
         "km_remaining": km_remaining,
