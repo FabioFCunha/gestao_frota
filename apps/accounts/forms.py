@@ -1,4 +1,5 @@
 from django import forms
+from django.contrib.auth.forms import AuthenticationForm
 from django.contrib.auth.models import Group, Permission
 
 from .models import User
@@ -6,6 +7,26 @@ from .models import User
 
 INPUT = {"class": "form-input"}
 SELECT = {"class": "form-input"}
+
+
+class FleetAuthenticationForm(AuthenticationForm):
+    username = forms.CharField(
+        label="E-mail (login)",
+        widget=forms.EmailInput(
+            attrs={
+                "autocomplete": "username",
+                "autofocus": True,
+                "placeholder": "seu@email.com",
+            }
+        ),
+    )
+
+    def clean(self):
+        email = self.cleaned_data.get("username", "").strip()
+        user = User.objects.filter(email__iexact=email).first()
+        if user:
+            self.cleaned_data["username"] = user.username
+        return super().clean()
 
 
 class UserForm(forms.ModelForm):
