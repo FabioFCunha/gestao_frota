@@ -1,6 +1,7 @@
 import re
 
 from django.db import transaction
+from django.db import models
 from .models import AuditLog, Driver, Maintenance, VehicleHistory, VehicleStatus, VehicleDriverAssignment, VehicleCustody, Vehicle
 
 
@@ -56,14 +57,26 @@ def get_vehicle_revision_status(*, vehicle):
                 vehicle=vehicle,
                 type=revision_type,
                 status=completed_status,
-                mileage__isnull=False,
             )
-            .order_by("-mileage", "-entered_at", "-created_at")
+            .filter(
+                models.Q(completion_mileage__isnull=False)
+                | models.Q(mileage__isnull=False)
+            )
+            .order_by(
+                models.F("completion_mileage").desc(nulls_last=True),
+                "-mileage",
+                "-entered_at",
+                "-created_at",
+            )
             .first()
         )
 
     if last_revision:
-        last_revision_km = last_revision.mileage
+        last_revision_km = (
+            last_revision.completion_mileage
+            if last_revision.completion_mileage is not None
+            else last_revision.mileage
+        )
         next_revision_km = last_revision_km + REVISION_INTERVAL_KM
         has_history = True
     else:
@@ -181,7 +194,7 @@ def open_maintenance(*, maintenance: Maintenance, user):
     return maintenance
 
 @transaction.atomic
-def complete_maintenance(*, maintenance: Maintenance, user, resulting_status: str = None, reason: str = ""):
+def complete_maintenance(*, maintenance: Maintenance, user, resulting_status: str = None, reason: str = "", completion_mileage: int = None):
     if not resulting_status:
         raise ValueError("O status resultante do veículo deve ser explicitamente informado ao concluir a manutenção.")
         
@@ -199,12 +212,32 @@ def complete_maintenance(*, maintenance: Maintenance, user, resulting_status: st
     now = timezone.now()
     
     old_status_name = maintenance.status.name
-    
+
+    if completion_mileage is not None:
+        completion_mileage = int(completion_mileage)
+        if completion_mileage < 0:
+            raise ValueError("A quilometragem de retorno não pode ser negativa.")
+        if maintenance.mileage is not None and completion_mileage < maintenance.mileage:
+            raise ValueError("A quilometragem de retorno não pode ser menor que a quilometragem de entrada.")
+        maintenance.completion_mileage = completion_mileage
+
     maintenance.status = concluida_status
     maintenance.exited_at = now
     maintenance.resolved_by = user
-    maintenance.save(update_fields=["status", "exited_at", "resolved_by", "updated_at"])
+    update_fields = ["status", "exited_at", "resolved_by", "updated_at"]
+    if completion_mileage is not None:
+        update_fields.append("completion_mileage")
+    maintenance.save(update_fields=update_fields)
     
+    if completion_mileage is not None:
+        record_vehicle_mileage(
+            vehicle=maintenance.vehicle,
+            mileage=completion_mileage,
+            user=user,
+            origin="MANUAL",
+            notes=f"Retorno da revisão #{maintenance.id}",
+        )
+
     AuditLog.objects.create(
         user=user,
         module="manutenções",
