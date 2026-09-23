@@ -86,7 +86,14 @@ def get_vehicle_revision_status(*, vehicle):
         )
         if not legacy_reference:
             return {
+                "last_revision_id": None,
                 "last_revision_km": None,
+                "last_revision_entered_at": None,
+                "last_revision_exited_at": None,
+                "last_revision_workshop": "",
+                "last_revision_workshop_name": "",
+                "last_revision_service": "",
+                "last_revision_completion_mileage": None,
                 "next_revision_km": None,
                 "current_km": current_mileage,
                 "km_remaining": None,
@@ -107,7 +114,14 @@ def get_vehicle_revision_status(*, vehicle):
         status = "OK"
 
     return {
+        "last_revision_id": last_revision.id if last_revision else None,
         "last_revision_km": last_revision_km,
+        "last_revision_entered_at": last_revision.entered_at if last_revision else None,
+        "last_revision_exited_at": last_revision.exited_at if last_revision else None,
+        "last_revision_workshop": last_revision.workshop.name if last_revision and last_revision.workshop else "",
+        "last_revision_workshop_name": last_revision.workshop_name if last_revision else "",
+        "last_revision_service": last_revision.service if last_revision else "",
+        "last_revision_completion_mileage": last_revision.completion_mileage if last_revision else None,
         "next_revision_km": next_revision_km,
         "current_km": current_mileage,
         "km_remaining": km_remaining,
