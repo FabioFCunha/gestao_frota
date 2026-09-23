@@ -2,7 +2,7 @@ from django.contrib.auth.views import LogoutView
 from django.urls import path
 from .views import (
     FleetLoginView, dashboard, vehicle_list, vehicle_dossier,
-    contract_list, driver_list, maintenance_list, fine_list
+    contract_list, contract_detail, driver_list, maintenance_list, fine_list
 )
 from apps.ui import views
 
@@ -11,6 +11,7 @@ urlpatterns = [
     path("veiculos/", vehicle_list, name="vehicle_list"),
     path("veiculos/<uuid:pk>/", vehicle_dossier, name="vehicle_dossier"),
     path("contratos/", contract_list, name="contract_list"),
+    path("contratos/<uuid:pk>/", contract_detail, name="contract_detail"),
     path("motoristas/", driver_list, name="driver_list"),
     path("motoristas/novo/", views.driver_create, name="driver_create"),
     path("motoristas/<uuid:pk>/editar/", views.driver_edit, name="driver_edit"),
