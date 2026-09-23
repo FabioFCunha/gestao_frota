@@ -559,7 +559,6 @@ def revision_action(request, pk):
             entered_at=timezone.now(),
             notes=(request.POST.get('notes') or '').strip(),
             opened_by=request.user,
-            created_by=request.user,
         )
 
         try:
@@ -648,7 +647,6 @@ def revision_action(request, pk):
             exited_at=timezone.now(),
             notes=form.cleaned_data.get('notes') or 'Histórico inicializado pelo sistema.',
             resolved_by=request.user,
-            created_by=request.user,
         )
         messages.success(
             request,
