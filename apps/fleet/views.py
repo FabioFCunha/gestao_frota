@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.db import models
 from django.utils import timezone
-from .models import Maintenance, Vehicle, VehicleDriverAssignment
+from .models import Maintenance, Vehicle, VehicleCustody, VehicleDriverAssignment
 from .serializers import MaintenanceSerializer, VehicleHistorySerializer, VehicleSerializer
 
 class DashboardAPIView(APIView):
@@ -401,3 +401,23 @@ class DocumentViewSet(viewsets.ModelViewSet):
         response = FileResponse(version.file.open('rb'), content_type=version.mime_type)
         response['Content-Disposition'] = f'attachment; filename="{version.original_filename}"'
         return response
+
+
+class VehicleCustodyViewSet(viewsets.ModelViewSet):
+    queryset = VehicleCustody.objects.select_related("vehicle", "created_by").all()
+    serializer_class = VehicleCustodySerializer
+    filterset_fields = {
+        "vehicle": ["exact"],
+        "kind": ["exact"],
+        "starts_on": ["exact", "gte", "lte"],
+        "ends_on": ["exact", "isnull"],
+    }
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
+
+    def perform_destroy(self, instance):
+        from rest_framework.exceptions import PermissionDenied
+        raise PermissionDenied(
+            "Registros de acautelamento não podem ser excluídos fisicamente."
+        )
