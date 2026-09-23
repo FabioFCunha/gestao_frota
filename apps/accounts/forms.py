@@ -1,5 +1,7 @@
 from django import forms
+from django.conf import settings
 from django.contrib.auth.forms import AuthenticationForm
+from django.core.exceptions import ValidationError
 from django.contrib.auth.models import Group, Permission
 
 from .models import User
@@ -10,6 +12,11 @@ SELECT = {"class": "form-input"}
 
 
 class FleetAuthenticationForm(AuthenticationForm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if settings.DEBUG:
+            self.fields["password"].required = False
+
     username = forms.CharField(
         label="E-mail (login)",
         widget=forms.EmailInput(
@@ -26,6 +33,14 @@ class FleetAuthenticationForm(AuthenticationForm):
         user = User.objects.filter(email__iexact=email).first()
         if user:
             self.cleaned_data["username"] = user.username
+
+        # Somente no ambiente local de desenvolvimento: permite teste sem senha.
+        if settings.DEBUG and user:
+            if not user.is_active:
+                raise ValidationError("Este usuário está inativo.")
+            self.user_cache = user
+            return self.cleaned_data
+
         return super().clean()
 
 
