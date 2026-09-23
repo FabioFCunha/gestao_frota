@@ -43,7 +43,7 @@ class DriverVehicleAssignmentForm(forms.Form):
         help_text='O veículo selecionado passará a ficar vinculado a este motorista.',
     )
     sei_number = forms.CharField(
-        label='SEI do acautelamento',
+        label='Nº do SEI',
         required=False,
         max_length=100,
         widget=forms.TextInput(
@@ -51,7 +51,7 @@ class DriverVehicleAssignmentForm(forms.Form):
         ),
     )
     custody_started_on = forms.DateField(
-        label='Início do acautelamento',
+        label='Início da vigência do SEI',
         required=False,
         widget=forms.DateInput(
             attrs={**INPUT, 'type': 'date'}
