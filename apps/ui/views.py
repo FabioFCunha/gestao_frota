@@ -9,7 +9,7 @@ from django.utils import timezone
 from .forms import DriverForm, DriverVehicleAssignmentForm, VehicleForm, VehicleContractForm, FineForm, RevisionActionForm
 from apps.accounts.forms import FleetAuthenticationForm
 from apps.accounts.decorators import module_permission
-from apps.fleet.models import VehiclePlate
+from apps.fleet.models import VehiclePlate, Renter
 
 class FleetLoginView(LoginView):
     template_name = "ui/login.html"
@@ -365,6 +365,7 @@ def contract_create(request):
         'form': form,
         'title': 'Incluir Contrato',
         'back_url_url': reverse('contract_list'),
+        'quick_renter': True,
     })
 
 
@@ -388,6 +389,7 @@ def contract_edit(request, pk):
         'form': form,
         'title': f'Editar Contrato: {contract.number}',
         'back_url_url': reverse('contract_detail', kwargs={'pk': contract.pk}),
+        'quick_renter': True,
     })
 
 
@@ -966,6 +968,23 @@ def driver_assign_vehicle(request, pk):
             'back_url': 'driver_list',
         },
     )
+
+
+@login_required
+@module_permission("fleet.add_contract")
+def renter_quick_create(request):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Método não permitido.'}, status=405)
+
+    name = (request.POST.get('name') or '').strip()
+    if not name:
+        return JsonResponse({'error': 'Informe o nome da locadora.'}, status=400)
+
+    renter = Renter.objects.filter(name__iexact=name).first()
+    if not renter:
+        renter = Renter.objects.create(name=name)
+
+    return JsonResponse({'id': str(renter.id), 'name': renter.name})
 
 
 @login_required
