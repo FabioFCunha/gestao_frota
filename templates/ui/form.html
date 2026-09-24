@@ -77,7 +77,7 @@
 {% block content %}
 <section class="welcome" style="margin-bottom:20px;">
     <div><h2>Preencha os dados abaixo</h2></div>
-    <a class="primary-action" href="{% url back_url %}">← Voltar</a>
+    <a class="primary-action" href="{% if back_url_url %}{{ back_url_url }}{% else %}{% url back_url %}{% endif %}">← Voltar</a>
 </section>
 
 {% if messages %}
