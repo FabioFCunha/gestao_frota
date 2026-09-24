@@ -348,6 +348,27 @@ def contract_list(request):
 
 
 @login_required
+@module_permission("fleet.add_contract")
+def contract_create(request):
+    from .forms import ContractForm
+
+    if request.method == 'POST':
+        form = ContractForm(request.POST)
+        form._user = request.user
+        if form.is_valid():
+            contract = form.save()
+            messages.success(request, 'Contrato incluído com sucesso!')
+            return redirect('contract_detail', pk=contract.pk)
+    else:
+        form = ContractForm()
+    return render(request, 'ui/form.html', {
+        'form': form,
+        'title': 'Incluir Contrato',
+        'back_url_url': reverse('contract_list'),
+    })
+
+
+@login_required
 @module_permission("fleet.change_contract")
 def contract_edit(request, pk):
     from apps.fleet.models import Contract
@@ -356,6 +377,7 @@ def contract_edit(request, pk):
     contract = get_object_or_404(Contract, pk=pk)
     if request.method == 'POST':
         form = ContractForm(request.POST, instance=contract)
+        form._user = request.user
         if form.is_valid():
             form.save()
             messages.success(request, 'Contrato atualizado com sucesso!')
