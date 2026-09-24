@@ -52,6 +52,25 @@
                             </div>
                         </div>
                     </div>
+                    {% elif quick_renter and field.name == 'renter' %}
+                    <div style="display:flex; gap:8px; align-items:center;">
+                        {{ field }}
+                        <button type="button" id="open-renter-create" class="secondary-action" style="white-space:nowrap;">+ Nova locadora</button>
+                    </div>
+                    <div id="renter-create-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:1200; align-items:center; justify-content:center;">
+                        <div class="panel" style="width:min(460px,92vw); padding:20px;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                                <h3 style="margin:0;">Nova locadora</h3>
+                                <button type="button" id="close-renter-create" class="secondary-action">Fechar</button>
+                            </div>
+                            <label for="new-renter-name" style="font-weight:bold; display:block; margin-bottom:6px;">Nome da locadora</label>
+                            <input type="text" id="new-renter-name" class="form-input" placeholder="Digite o nome da locadora" autocomplete="off">
+                            <div id="renter-create-error" style="display:none; color:#b91c1c; margin-top:10px;"></div>
+                            <div style="margin-top:18px; text-align:right;">
+                                <button type="button" id="save-renter-create" class="primary-action">Adicionar locadora</button>
+                            </div>
+                        </div>
+                    </div>
                     {% elif quick_create and field.name == 'brand' or quick_create and field.name == 'model' or quick_create and field.name == 'unit' or quick_create and field.name == 'base' %}
                     <div style="display:flex; gap:8px; align-items:center;">
                         {{ field }}
@@ -136,4 +155,72 @@
     updateSelection();
 })();
 </script>
+
+<script>
+(function () {
+    const openButton = document.getElementById('open-renter-create');
+    const closeButton = document.getElementById('close-renter-create');
+    const saveButton = document.getElementById('save-renter-create');
+    const modal = document.getElementById('renter-create-modal');
+    const nameInput = document.getElementById('new-renter-name');
+    const error = document.getElementById('renter-create-error');
+    const select = document.getElementById('id_renter');
+
+    if (!openButton || !modal || !select) return;
+
+    function closeModal() {
+        modal.style.display = 'none';
+        error.style.display = 'none';
+    }
+
+    openButton.addEventListener('click', function () {
+        modal.style.display = 'flex';
+        nameInput.value = '';
+        error.style.display = 'none';
+        setTimeout(() => nameInput.focus(), 50);
+    });
+
+    closeButton.addEventListener('click', closeModal);
+    modal.addEventListener('click', function (event) {
+        if (event.target === modal) closeModal();
+    });
+
+    saveButton.addEventListener('click', async function () {
+        const name = nameInput.value.trim();
+        if (!name) {
+            error.textContent = 'Informe o nome da locadora.';
+            error.style.display = 'block';
+            return;
+        }
+
+        const body = new URLSearchParams();
+        body.append('name', name);
+        body.append('csrfmiddlewaretoken', document.querySelector('[name="csrfmiddlewaretoken"]').value);
+
+        saveButton.disabled = true;
+        error.style.display = 'none';
+
+        try {
+            const response = await fetch('{% url "renter_quick_create" %}', {
+                method: 'POST',
+                headers: {'X-Requested-With': 'XMLHttpRequest'},
+                body: body
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || 'Não foi possível cadastrar a locadora.');
+
+            const option = new Option(data.name, data.id, true, true);
+            select.add(option);
+            select.value = data.id;
+            closeModal();
+        } catch (err) {
+            error.textContent = err.message;
+            error.style.display = 'block';
+        } finally {
+            saveButton.disabled = false;
+        }
+    });
+})();
+</script>
+
 {% endblock %}
