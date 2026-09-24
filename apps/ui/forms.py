@@ -2,7 +2,7 @@ from django import forms
 from apps.fleet.models import (
     Driver, Vehicle, VehicleFine, VehicleFineStatus,
     VehicleStatus, Brand, VehicleModel, Contract, Renter,
-    AdministrativeUnit, Base, Workshop, VehicleStatus
+    AdministrativeUnit, Base, Workshop, VehicleStatus, SEIProcess
 )
 
 INPUT = {'class': 'form-input'}
@@ -127,25 +127,86 @@ class VehicleForm(forms.ModelForm):
 
 
 class ContractForm(forms.ModelForm):
+    vehicles = forms.ModelMultipleChoiceField(
+        queryset=Vehicle.objects.none(),
+        label='Vincular veículos',
+        required=False,
+        widget=forms.SelectMultiple(attrs={**SELECT, 'size': 8}),
+    )
+    sei = forms.ModelChoiceField(
+        queryset=SEIProcess.objects.all().order_by('sei_number'),
+        label='SEI',
+        required=False,
+        empty_label='Selecione o SEI',
+        widget=forms.Select(attrs=SELECT),
+    )
+
     class Meta:
         model = Contract
-        fields = ['number', 'renter', 'starts_on', 'ends_on', 'administrative_status', 'notes']
+        fields = ['number', 'renter', 'starts_on', 'ends_on']
         labels = {
-            'number': 'Número do contrato',
-            'renter': 'Locadora',
-            'starts_on': 'Início da vigência',
-            'ends_on': 'Fim da vigência',
-            'administrative_status': 'Situação administrativa',
-            'notes': 'Observações',
+            'number': 'Nome do contrato',
+            'renter': 'Nome da locadora',
+            'starts_on': 'Data de início',
+            'ends_on': 'Data de encerramento',
         }
         widgets = {
-            'number': forms.TextInput(attrs=INPUT),
+            'number': forms.TextInput(attrs={**INPUT, 'placeholder': 'Nome ou número do contrato'}),
             'renter': forms.Select(attrs=SELECT),
             'starts_on': forms.DateInput(attrs={**INPUT, 'type': 'date'}),
             'ends_on': forms.DateInput(attrs={**INPUT, 'type': 'date'}),
-            'administrative_status': forms.TextInput(attrs=INPUT),
-            'notes': forms.Textarea(attrs={**INPUT, 'rows': 3}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['vehicles'].queryset = (
+            Vehicle.objects
+            .select_related('brand', 'model')
+            .prefetch_related('plate_history')
+            .order_by('brand__name', 'model__name')
+        )
+        self.fields['vehicles'].label_from_instance = self.label_vehicle
+
+        if self.instance and self.instance.pk:
+            self.fields['vehicles'].initial = self.instance.vehicles.values_list('pk', flat=True)
+            relation = self.instance.sei_processes.select_related('process').first()
+            if relation:
+                self.fields['sei'].initial = relation.process_id
+
+    @staticmethod
+    def label_vehicle(vehicle):
+        plate = next(
+            (item.plate for item in vehicle.plate_history.all()
+             if item.kind == 'CURRENT' and not item.ends_on),
+            'Sem placa',
+        )
+        description = ' '.join(
+            part for part in [vehicle.brand.name if vehicle.brand else '', vehicle.model.name if vehicle.model else '']
+            if part
+        )
+        return f'{plate} — {description or "Veículo sem modelo"}'
+
+    def save(self, commit=True):
+        contract = super().save(commit=commit)
+        if not commit:
+            return contract
+
+        from django.contrib.contenttypes.models import ContentType
+        from apps.fleet.models import SEIProcessRelation
+
+        selected_vehicle_ids = set(self.cleaned_data.get('vehicles', []).values_list('pk', flat=True))
+        Vehicle.objects.filter(contract=contract).exclude(pk__in=selected_vehicle_ids).update(contract=None)
+        Vehicle.objects.filter(pk__in=selected_vehicle_ids).update(contract=contract)
+
+        contract.sei_processes.all().delete()
+        sei = self.cleaned_data.get('sei')
+        if sei:
+            SEIProcessRelation.objects.create(
+                process=sei,
+                content_object=contract,
+                created_by=getattr(self, '_user', None),
+            )
+        return contract
 
 
 class VehicleContractForm(forms.ModelForm):
