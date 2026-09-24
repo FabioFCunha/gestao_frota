@@ -35,48 +35,7 @@
 <div id="fine-{{ f.id }}" data-type="fine" data-plate="{{ f.vehicle__plate_history__plate|default:'Sem placa'|escape }}" data-status="{{ f.status__name|escape }}" data-date="{{ f.date|date:'d/m/Y' }}" style="display:none;"></div>
 {% endfor %}
 
-<script>
-(function () {
-    var modal = document.getElementById("dashboard-informe-modal");
-    var content = document.getElementById("dashboard-informe-content");
-    var title = document.getElementById("dashboard-informe-title");
-    var view = document.getElementById("dashboard-informe-view");
-    var edit = document.getElementById("dashboard-informe-edit");
 
-    function openInforme(id, titleText) {
-        var source = document.getElementById(id);
-        if (!source) return;
-        var type = source.dataset.type;
-        title.textContent = titleText;
-        if (type === "contract") {
-            content.innerHTML = "<div><strong>Número do contrato</strong><br>" + source.dataset.number + "</div>" +
-                "<div style='margin-top:14px;'><strong>Situação</strong><br>" + source.dataset.status + "</div>" +
-                "<div style='margin-top:14px;'><strong>Fim da vigência</strong><br>" + source.dataset.date + "</div>";
-            view.href = "/contratos/" + id.replace("contract-", "") + "/";
-            edit.href = "/contratos/" + id.replace("contract-", "") + "/editar/";
-        } else {
-            content.innerHTML = "<div><strong>Placa</strong><br>" + source.dataset.plate + "</div>" +
-                "<div style='margin-top:14px;'><strong>Situação</strong><br>" + source.dataset.status + "</div>" +
-                "<div style='margin-top:14px;'><strong>Data da infração</strong><br>" + source.dataset.date + "</div>";
-            view.href = "/multas/";
-            edit.href = "/multas/" + id.replace("fine-", "") + "/editar-dados/";
-        }
-        modal.style.display = "flex";
-    }
-
-    document.querySelectorAll(".dashboard-informe-item").forEach(function (button) {
-        button.addEventListener("click", function () {
-            openInforme(button.dataset.informeId, button.dataset.informeTitle);
-        });
-    });
-    document.getElementById("dashboard-informe-close").addEventListener("click", function () {
-        modal.style.display = "none";
-    });
-    modal.addEventListener("click", function (event) {
-        if (event.target === modal) modal.style.display = "none";
-    });
-})();
-</script>
 
 
 <section class="fd-hero">
@@ -316,4 +275,46 @@
 })();
 </script>
 
+<script>
+(function () {
+    var modal = document.getElementById("dashboard-informe-modal");
+    var content = document.getElementById("dashboard-informe-content");
+    var title = document.getElementById("dashboard-informe-title");
+    var view = document.getElementById("dashboard-informe-view");
+    var edit = document.getElementById("dashboard-informe-edit");
+
+    function openInforme(id, titleText) {
+        var source = document.getElementById(id);
+        if (!source) return;
+        var type = source.dataset.type;
+        title.textContent = titleText;
+        if (type === "contract") {
+            content.innerHTML = "<div><strong>Número do contrato</strong><br>" + source.dataset.number + "</div>" +
+                "<div style='margin-top:14px;'><strong>Situação</strong><br>" + source.dataset.status + "</div>" +
+                "<div style='margin-top:14px;'><strong>Fim da vigência</strong><br>" + source.dataset.date + "</div>";
+            view.href = "/contratos/" + id.replace("contract-", "") + "/";
+            edit.href = "/contratos/" + id.replace("contract-", "") + "/editar/";
+        } else {
+            content.innerHTML = "<div><strong>Placa</strong><br>" + source.dataset.plate + "</div>" +
+                "<div style='margin-top:14px;'><strong>Situação</strong><br>" + source.dataset.status + "</div>" +
+                "<div style='margin-top:14px;'><strong>Data da infração</strong><br>" + source.dataset.date + "</div>";
+            view.href = "/multas/";
+            edit.href = "/multas/" + id.replace("fine-", "") + "/editar-dados/";
+        }
+        modal.style.display = "flex";
+    }
+
+    document.querySelectorAll(".dashboard-informe-item").forEach(function (button) {
+        button.addEventListener("click", function () {
+            openInforme(button.dataset.informeId, button.dataset.informeTitle);
+        });
+    });
+    document.getElementById("dashboard-informe-close").addEventListener("click", function () {
+        modal.style.display = "none";
+    });
+    modal.addEventListener("click", function (event) {
+        if (event.target === modal) modal.style.display = "none";
+    });
+})();
+</script>
 {% endblock %}
