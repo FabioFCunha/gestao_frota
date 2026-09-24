@@ -23,6 +23,7 @@ urlpatterns = [
     path("multas/", fine_list, name="fine_list"),
     path("multas/nova/", views.fine_create, name="fine_create"),
     path("multas/<uuid:pk>/editar/", views.fine_edit, name="fine_edit"),
+    path("multas/<uuid:pk>/editar-dados/", views.fine_full_edit, name="fine_full_edit"),
     path("veiculos/<uuid:pk>/contrato/", views.vehicle_contract_edit, name="vehicle_contract_edit"),
     path("veiculos/novo/", views.vehicle_create, name="vehicle_create"),
     path("veiculos/novo/cadastro-rapido/", views.vehicle_quick_create, name="vehicle_quick_create"),
