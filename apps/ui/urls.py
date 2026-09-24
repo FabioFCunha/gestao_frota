@@ -12,6 +12,7 @@ urlpatterns = [
     path("veiculos/<uuid:pk>/", vehicle_dossier, name="vehicle_dossier"),
     path("contratos/", contract_list, name="contract_list"),
     path("contratos/<uuid:pk>/", contract_detail, name="contract_detail"),
+    path("contratos/<uuid:pk>/editar/", views.contract_edit, name="contract_edit"),
     path("motoristas/", driver_list, name="driver_list"),
     path("motoristas/novo/", views.driver_create, name="driver_create"),
     path("motoristas/<uuid:pk>/editar/", views.driver_edit, name="driver_edit"),
