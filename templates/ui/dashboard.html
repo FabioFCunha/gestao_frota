@@ -1,5 +1,80 @@
 {% extends 'ui/base.html' %}
-{% block title %}Dashboard | Gestão de Frotas{% endblock %}
+{% block title %}Dashboard | Gestão de Frotas<style>
+.dashboard-informe-item { display:block; width:100%; text-align:left; padding:10px 0; border:0; border-bottom:1px solid #eee; background:transparent; cursor:pointer; color:inherit; }
+.dashboard-informe-item:hover { opacity:.75; }
+#dashboard-informe-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:1100; align-items:center; justify-content:center; padding:20px; }
+#dashboard-informe-modal .panel { width:min(680px,96vw); max-height:90vh; overflow:auto; }
+.dashboard-informe-actions { margin-top:22px; display:flex; gap:10px; justify-content:flex-end; flex-wrap:wrap; }
+</style>
+
+<div id="dashboard-informe-modal">
+    <div class="panel">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
+            <h3 id="dashboard-informe-title" style="margin:0;">Informação</h3>
+            <button type="button" class="secondary-action" id="dashboard-informe-close">Fechar</button>
+        </div>
+        <div id="dashboard-informe-content"></div>
+        <div class="dashboard-informe-actions">
+            <a class="secondary-action" id="dashboard-informe-view" href="#">Visualizar</a>
+            <a class="primary-action" id="dashboard-informe-edit" href="#">Editar</a>
+        </div>
+    </div>
+</div>
+
+{% for c in dashboard_alerts.contracts_expired %}
+<div id="contract-{{ c.id }}" data-type="contract" data-number="{{ c.number|escape }}" data-date="{{ c.ends_on|date:'d/m/Y' }}" data-status="Vencido" style="display:none;"></div>
+{% endfor %}
+{% for c in dashboard_alerts.contracts_expiring %}
+<div id="contract-{{ c.id }}" data-type="contract" data-number="{{ c.number|escape }}" data-date="{{ c.ends_on|date:'d/m/Y' }}" data-status="A vencer" style="display:none;"></div>
+{% endfor %}
+{% for f in dashboard_alerts.fines_pending %}
+<div id="fine-{{ f.id }}" data-type="fine" data-plate="{{ f.vehicle__plate_history__plate|default:'Sem placa'|escape }}" data-status="{{ f.status__name|escape }}" data-date="{{ f.date|date:'d/m/Y' }}" style="display:none;"></div>
+{% endfor %}
+
+<script>
+(function () {
+    var modal = document.getElementById("dashboard-informe-modal");
+    var content = document.getElementById("dashboard-informe-content");
+    var title = document.getElementById("dashboard-informe-title");
+    var view = document.getElementById("dashboard-informe-view");
+    var edit = document.getElementById("dashboard-informe-edit");
+
+    function openInforme(id, titleText) {
+        var source = document.getElementById(id);
+        if (!source) return;
+        var type = source.dataset.type;
+        title.textContent = titleText;
+        if (type === "contract") {
+            content.innerHTML = "<div><strong>Número do contrato</strong><br>" + source.dataset.number + "</div>" +
+                "<div style='margin-top:14px;'><strong>Situação</strong><br>" + source.dataset.status + "</div>" +
+                "<div style='margin-top:14px;'><strong>Fim da vigência</strong><br>" + source.dataset.date + "</div>";
+            view.href = "/contratos/" + id.replace("contract-", "") + "/";
+            edit.href = "/contratos/" + id.replace("contract-", "") + "/editar/";
+        } else {
+            content.innerHTML = "<div><strong>Placa</strong><br>" + source.dataset.plate + "</div>" +
+                "<div style='margin-top:14px;'><strong>Situação</strong><br>" + source.dataset.status + "</div>" +
+                "<div style='margin-top:14px;'><strong>Data da infração</strong><br>" + source.dataset.date + "</div>";
+            view.href = "/multas/";
+            edit.href = "/multas/" + id.replace("fine-", "") + "/editar-dados/";
+        }
+        modal.style.display = "flex";
+    }
+
+    document.querySelectorAll(".dashboard-informe-item").forEach(function (button) {
+        button.addEventListener("click", function () {
+            openInforme(button.dataset.informeId, button.dataset.informeTitle);
+        });
+    });
+    document.getElementById("dashboard-informe-close").addEventListener("click", function () {
+        modal.style.display = "none";
+    });
+    modal.addEventListener("click", function (event) {
+        if (event.target === modal) modal.style.display = "none";
+    });
+})();
+</script>
+
+{% endblock %}
 {% block heading %}Gestão da Frota{% endblock %}
 {% block content %}
 
@@ -85,12 +160,12 @@
             <div style="margin-top:14px;">
                 {% for c in dashboard_alerts.contracts_expired %}
                 <div style="padding:8px 0;border-bottom:1px solid #eee;">
-                    <strong>{{ c.number }}</strong> — vencido em {{ c.ends_on|date:"d/m/Y" }}
+                    <button type="button" class="dashboard-informe-item" data-informe-id="contract-{{ c.id }}" data-informe-title="Contrato {{ c.number }}"><strong>{{ c.number }}</strong> — vencido em {{ c.ends_on|date:"d/m/Y" }}</button>
                 </div>
                 {% endfor %}
                 {% for c in dashboard_alerts.contracts_expiring %}
                 <div style="padding:8px 0;border-bottom:1px solid #eee;">
-                    <strong>{{ c.number }}</strong> — vence em {{ c.ends_on|date:"d/m/Y" }}
+                    <button type="button" class="dashboard-informe-item" data-informe-id="contract-{{ c.id }}" data-informe-title="Contrato {{ c.number }}"><strong>{{ c.number }}</strong> — vence em {{ c.ends_on|date:"d/m/Y" }}</button>
                 </div>
                 {% endfor %}
             </div>
@@ -110,8 +185,8 @@
             <div style="margin-top:14px;">
                 {% for f in dashboard_alerts.fines_pending %}
                 <div style="padding:8px 0;border-bottom:1px solid #eee;">
-                    <strong>{{ f.vehicle__plate_history__plate|default:"Sem placa" }}</strong>
-                    — {{ f.status__name }} — {{ f.date|date:"d/m/Y" }}
+                    <button type="button" class="dashboard-informe-item" data-informe-id="fine-{{ f.id }}" data-informe-title="Multa {{ f.vehicle__plate_history__plate|default:"Sem placa" }}"><strong>{{ f.vehicle__plate_history__plate|default:"Sem placa" }}</strong>
+                    — {{ f.status__name }} — {{ f.date|date:"d/m/Y" }}</button>
                 </div>
                 {% endfor %}
             </div>
