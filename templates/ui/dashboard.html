@@ -32,7 +32,7 @@
 <div id="contract-{{ c.id }}" data-type="contract" data-number="{{ c.number|escape }}" data-date="{{ c.ends_on|date:'d/m/Y' }}" data-status="A vencer" style="display:none;"></div>
 {% endfor %}
 {% for f in dashboard_alerts.fines_pending %}
-<div id="fine-{{ f.id }}" data-type="fine" data-plate="{{ f.vehicle__plate_history__plate|default:'Sem placa'|escape }}" data-status="{{ f.status__name|escape }}" data-date="{{ f.date|date:'d/m/Y' }}" style="display:none;"></div>
+<div id="fine-{{ f.id }}" data-type="fine" data-plate="{{ f.vehicle__plate_history__plate|default:'Sem placa'|escape }}" data-driver="{{ f.driver__name|default:'Sem motorista vinculado'|escape }}" data-status="{{ f.status__name|escape }}" data-date="{{ f.date|date:'d/m/Y' }}" style="display:none;"></div>
 {% endfor %}
 
 
@@ -296,6 +296,7 @@
             edit.href = "/contratos/" + id.replace("contract-", "") + "/editar/";
         } else {
             content.innerHTML = "<div><strong>Placa</strong><br>" + source.dataset.plate + "</div>" +
+                "<div style='margin-top:14px;'><strong>Motorista vinculado</strong><br>" + source.dataset.driver + "</div>" +
                 "<div style='margin-top:14px;'><strong>Situação</strong><br>" + source.dataset.status + "</div>" +
                 "<div style='margin-top:14px;'><strong>Data da infração</strong><br>" + source.dataset.date + "</div>";
             view.href = "/multas/";
