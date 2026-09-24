@@ -882,7 +882,16 @@ def revision_action(request, pk):
 @module_permission("fleet.view_vehiclefine")
 def fine_list(request):
     from apps.fleet.models import VehicleFine
-    qs = VehicleFine.objects.select_related('vehicle', 'status').prefetch_related('vehicle__plate_history').order_by('-date')
+    from django.db.models import Prefetch
+    from apps.fleet.models import VehicleDriverAssignment
+    qs = VehicleFine.objects.select_related('vehicle', 'status').prefetch_related(
+        'vehicle__plate_history',
+        Prefetch(
+            'vehicle__driver_assignments',
+            queryset=VehicleDriverAssignment.objects.filter(is_active=True).select_related('driver'),
+            to_attr='active_driver_assignments',
+        ),
+    ).order_by('-date')
     q = request.GET.get('q', '')
     if q:
         qs = qs.filter(
