@@ -236,9 +236,9 @@ class FineForm(forms.ModelForm):
             'auto_number': forms.TextInput(attrs={**INPUT, 'placeholder':'RA20629234'}),
             'agency': forms.TextInput(attrs={**INPUT, 'placeholder':'SMTR, PRF, DETRO...'}),
             'status': forms.Select(attrs=SELECT),
-            'date': forms.DateTimeInput(attrs={**INPUT, 'type':'datetime-local'}),
+            'date': forms.DateTimeInput(format='%Y-%m-%dT%H:%M', attrs={**INPUT, 'type':'datetime-local'}),
             'amount': forms.NumberInput(attrs={**INPUT, 'step':'0.01', 'placeholder':'0.00'}),
-            'due_date': forms.DateInput(attrs={**INPUT, 'type':'date'}),
+            'due_date': forms.DateInput(format='%Y-%m-%d', attrs={**INPUT, 'type':'date'}),
             'notes': forms.Textarea(attrs={**INPUT, 'rows':3, 'placeholder':'Processo SEI, observações...'}),
         }
 
