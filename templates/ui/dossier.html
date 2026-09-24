@@ -1,5 +1,52 @@
 {% extends 'ui/base.html' %}
-{% block title %}Prontuário | Gestão de Frotas{% endblock %}
+{% block title %}Prontuário | Gestão de Frotas<div id="dossier-fine-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1100;align-items:center;justify-content:center;padding:20px;">
+    <div class="panel" style="width:min(720px,96vw);max-height:90vh;overflow:auto;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
+            <h3 id="dossier-fine-modal-title" style="margin:0;">Detalhes da multa</h3>
+            <button type="button" id="dossier-fine-modal-close" class="secondary-action">Fechar</button>
+        </div>
+        <div id="dossier-fine-modal-content"></div>
+    </div>
+</div>
+{% for f in fines %}
+<div id="dossier-fine-detail-{{ f.id }}" style="display:none;">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px 24px;">
+        <div><strong>Placa</strong><br>{% for p in f.vehicle.plate_history.all %}{% if not p.ends_on %}{{ p.plate }}{% endif %}{% empty %}Sem placa{% endfor %}</div>
+        <div><strong>Situação</strong><br><span class="tag">{{ f.status.name }}</span></div>
+        <div><strong>Nº do Auto de Infração</strong><br>{{ f.auto_number }}</div>
+        <div><strong>Órgão Autuador</strong><br>{{ f.agency|default:"-" }}</div>
+        <div><strong>Data da Infração</strong><br>{{ f.date|date:"d/m/Y H:i" }}</div>
+        <div><strong>Valor</strong><br>{% if f.amount %}R$ {{ f.amount }}{% else %}-{% endif %}</div>
+        <div><strong>Vencimento</strong><br>{{ f.due_date|date:"d/m/Y"|default:"-" }}</div>
+        <div style="grid-column:1/-1;"><strong>Observações / Processo SEI</strong><br>{{ f.notes|default:"-"|linebreaksbr }}</div>
+    </div>
+    <div style="margin-top:24px;display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;">
+        <a class="secondary-action" href="{% url 'fine_full_edit' f.id %}">Editar multa</a>
+        <a class="primary-action" href="{% url 'fine_edit' f.id %}">Mudar situação</a>
+    </div>
+</div>
+{% endfor %}
+<script>
+(function () {
+    const modal = document.getElementById('dossier-fine-modal');
+    const content = document.getElementById('dossier-fine-modal-content');
+    const title = document.getElementById('dossier-fine-modal-title');
+    function openFine(id, titleText) {
+        const source = document.getElementById('dossier-fine-detail-' + id);
+        if (!source) return;
+        title.textContent = titleText;
+        content.innerHTML = source.innerHTML;
+        modal.style.display = 'flex';
+    }
+    function closeFine() { modal.style.display = 'none'; }
+    document.querySelectorAll('[data-dossier-fine-id]').forEach(button => {
+        button.addEventListener('click', () => openFine(button.dataset.dossierFineId, button.dataset.dossierFineTitle));
+    });
+    document.getElementById('dossier-fine-modal-close').addEventListener('click', closeFine);
+    modal.addEventListener('click', event => { if (event.target === modal) closeFine(); });
+})();
+</script>
+{% endblock %}
 {% block heading %}Prontuário do Veículo{% endblock %}
 
 {% block content %}
@@ -151,7 +198,7 @@
             <thead><tr><th>AUTO</th><th>SITUAÇÃO</th><th>DATA</th></tr></thead>
             <tbody>
                 {% for f in fines %}
-                <tr><td>{{ f.auto_number }}</td><td><span class="tag">{{ f.status.name }}</span></td><td>{{ f.date|date:"d/m/Y" }}</td></tr>
+                <tr><td><button type="button" class="secondary-action" data-dossier-fine-id="{{ f.id }}" data-dossier-fine-title="Multa {{ f.auto_number }}">{{ f.auto_number }}</button></td><td><span class="tag">{{ f.status.name }}</span></td><td>{{ f.date|date:"d/m/Y" }}</td></tr>
                 {% endfor %}
             </tbody>
         </table>
