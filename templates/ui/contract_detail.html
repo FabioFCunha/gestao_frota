@@ -13,7 +13,10 @@
             <span class="tag">{{ contract.administrative_status }}</span>
         </p>
     </div>
-    <a class="primary-action" href="{% url 'contract_list' %}">← Voltar</a>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <a class="secondary-action" href="{% url 'contract_list' %}">← Voltar</a>
+        <a class="primary-action" href="{% url 'contract_edit' contract.pk %}">Editar contrato</a>
+    </div>
 </section>
 
 <section class="grid">
