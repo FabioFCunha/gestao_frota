@@ -1061,6 +1061,31 @@ def fine_edit(request, pk):
     return render(request, 'ui/form.html', {'form': form, 'title': f'Alterar Situação: {fine.auto_number}', 'back_url': 'fine_list'})
 
 @login_required
+@module_permission("fleet.change_vehiclefine")
+def fine_full_edit(request, pk):
+    from apps.fleet.models import VehicleFine
+
+    fine = get_object_or_404(VehicleFine, pk=pk)
+    if request.method == 'POST':
+        form = FineForm(request.POST, instance=fine)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Multa atualizada com sucesso!')
+            return redirect('fine_list')
+    else:
+        form = FineForm(instance=fine)
+    return render(
+        request,
+        'ui/form.html',
+        {
+            'form': form,
+            'title': f'Editar Multa: {fine.auto_number}',
+            'back_url': 'fine_list',
+        },
+    )
+
+
+@login_required
 @module_permission("fleet.add_maintenance")
 def maintenance_create(request):
     from .forms import MaintenanceForm
