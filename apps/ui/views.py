@@ -1148,6 +1148,14 @@ def fine_full_edit(request, pk):
         form = FineForm(request.POST, instance=fine)
         if form.is_valid():
             form.save()
+            driver = form.cleaned_data.get('driver')
+            if driver:
+                from apps.fleet.services import assign_driver_to_vehicle
+                assign_driver_to_vehicle(
+                    vehicle=fine.vehicle,
+                    driver=driver,
+                    user=request.user,
+                )
             messages.success(request, 'Multa atualizada com sucesso!')
             return redirect('fine_list')
     else:
