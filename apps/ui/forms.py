@@ -126,6 +126,28 @@ class VehicleForm(forms.ModelForm):
         }
 
 
+class ContractForm(forms.ModelForm):
+    class Meta:
+        model = Contract
+        fields = ['number', 'renter', 'starts_on', 'ends_on', 'administrative_status', 'notes']
+        labels = {
+            'number': 'Número do contrato',
+            'renter': 'Locadora',
+            'starts_on': 'Início da vigência',
+            'ends_on': 'Fim da vigência',
+            'administrative_status': 'Situação administrativa',
+            'notes': 'Observações',
+        }
+        widgets = {
+            'number': forms.TextInput(attrs=INPUT),
+            'renter': forms.Select(attrs=SELECT),
+            'starts_on': forms.DateInput(attrs={**INPUT, 'type': 'date'}),
+            'ends_on': forms.DateInput(attrs={**INPUT, 'type': 'date'}),
+            'administrative_status': forms.TextInput(attrs=INPUT),
+            'notes': forms.Textarea(attrs={**INPUT, 'rows': 3}),
+        }
+
+
 class VehicleContractForm(forms.ModelForm):
     class Meta:
         model = Vehicle
