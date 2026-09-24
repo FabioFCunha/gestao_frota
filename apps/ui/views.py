@@ -364,8 +364,7 @@ def contract_edit(request, pk):
     return render(request, 'ui/form.html', {
         'form': form,
         'title': f'Editar Contrato: {contract.number}',
-        'back_url': 'contract_detail',
-        'back_url_kwargs': {'pk': contract.pk},
+        'back_url_url': reverse('contract_detail', kwargs={'pk': contract.pk}),
     })
 
 
