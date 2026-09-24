@@ -64,6 +64,64 @@
     </div>
 </section>
 
+<section style="margin:24px 0;">
+    <div class="fd-board-head">
+        <div>
+            <span class="fd-board-title">Informes</span>
+            <div style="margin-top:4px;color:#6b7280;">Contratos e multas que exigem acompanhamento.</div>
+        </div>
+    </div>
+
+    <div class="grid" style="margin-top:12px;">
+        <article class="panel">
+            <div class="panel-title">
+                <div><h3>📄 Contratos</h3></div>
+            </div>
+            <div style="display:grid;gap:8px;">
+                <div><strong>{{ dashboard_alerts.contracts_expired|length }}</strong> contrato(s) vencido(s)</div>
+                <div><strong>{{ dashboard_alerts.contracts_expiring|length }}</strong> contrato(s) a vencer</div>
+            </div>
+            {% if dashboard_alerts.contracts_expired or dashboard_alerts.contracts_expiring %}
+            <div style="margin-top:14px;">
+                {% for c in dashboard_alerts.contracts_expired %}
+                <div style="padding:8px 0;border-bottom:1px solid #eee;">
+                    <strong>{{ c.number }}</strong> — vencido em {{ c.ends_on|date:"d/m/Y" }}
+                </div>
+                {% endfor %}
+                {% for c in dashboard_alerts.contracts_expiring %}
+                <div style="padding:8px 0;border-bottom:1px solid #eee;">
+                    <strong>{{ c.number }}</strong> — vence em {{ c.ends_on|date:"d/m/Y" }}
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="empty" style="margin-top:12px;">Nenhum contrato exige atenção no momento.</div>
+            {% endif %}
+        </article>
+
+        <article class="panel">
+            <div class="panel-title">
+                <div><h3>⚑ Multas</h3></div>
+            </div>
+            <div style="display:grid;gap:8px;">
+                <div><strong>{{ dashboard_alerts.fines_pending|length }}</strong> multa(s) pendente(s) ou em análise/recurso</div>
+            </div>
+            {% if dashboard_alerts.fines_pending %}
+            <div style="margin-top:14px;">
+                {% for f in dashboard_alerts.fines_pending %}
+                <div style="padding:8px 0;border-bottom:1px solid #eee;">
+                    <strong>{{ f.vehicle__plate_history__plate|default:"Sem placa" }}</strong>
+                    — {{ f.status__name }} — {{ f.date|date:"d/m/Y" }}
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="empty" style="margin-top:12px;">Nenhuma multa pendente no momento.</div>
+            {% endif %}
+        </article>
+    </div>
+</section>
+
 <section class="fd-board">
     <div class="fd-board-head">
         <div>
