@@ -347,6 +347,29 @@ def contract_list(request):
 
 
 @login_required
+@module_permission("fleet.change_contract")
+def contract_edit(request, pk):
+    from apps.fleet.models import Contract
+    from .forms import ContractForm
+
+    contract = get_object_or_404(Contract, pk=pk)
+    if request.method == 'POST':
+        form = ContractForm(request.POST, instance=contract)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Contrato atualizado com sucesso!')
+            return redirect('contract_detail', pk=contract.pk)
+    else:
+        form = ContractForm(instance=contract)
+    return render(request, 'ui/form.html', {
+        'form': form,
+        'title': f'Editar Contrato: {contract.number}',
+        'back_url': 'contract_detail',
+        'back_url_kwargs': {'pk': contract.pk},
+    })
+
+
+@login_required
 @module_permission("fleet.view_contract")
 def contract_detail(request, pk):
     from apps.fleet.models import Contract, Vehicle, VehicleDriverAssignment, VehicleCustody, VehiclePlate
