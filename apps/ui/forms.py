@@ -2,7 +2,8 @@ from django import forms
 from apps.fleet.models import (
     Driver, Vehicle, VehicleFine, VehicleFineStatus,
     VehicleStatus, Brand, VehicleModel, Contract, Renter,
-    AdministrativeUnit, Base, Workshop, VehicleStatus, SEIProcess
+    AdministrativeUnit, Base, Workshop, VehicleStatus, SEIProcess,
+    SEIProcessStatus
 )
 
 INPUT = {'class': 'form-input'}
@@ -133,12 +134,11 @@ class ContractForm(forms.ModelForm):
         required=False,
         widget=forms.SelectMultiple(attrs={**SELECT, 'size': 8}),
     )
-    sei = forms.ModelChoiceField(
-        queryset=SEIProcess.objects.all().order_by('sei_number'),
+    sei = forms.CharField(
         label='SEI',
         required=False,
-        empty_label='Selecione o SEI',
-        widget=forms.Select(attrs=SELECT),
+        max_length=80,
+        widget=forms.TextInput(attrs={**INPUT, 'placeholder': 'Digite o número do SEI'}),
     )
 
     class Meta:
@@ -171,7 +171,7 @@ class ContractForm(forms.ModelForm):
             self.fields['vehicles'].initial = self.instance.vehicles.values_list('pk', flat=True)
             relation = self.instance.sei_processes.select_related('process').first()
             if relation:
-                self.fields['sei'].initial = relation.process_id
+                self.fields['sei'].initial = relation.process.sei_number
 
     @staticmethod
     def label_vehicle(vehicle):
@@ -191,7 +191,6 @@ class ContractForm(forms.ModelForm):
         if not commit:
             return contract
 
-        from django.contrib.contenttypes.models import ContentType
         from apps.fleet.models import SEIProcessRelation
 
         selected_vehicle_ids = set(self.cleaned_data.get('vehicles', []).values_list('pk', flat=True))
@@ -199,10 +198,18 @@ class ContractForm(forms.ModelForm):
         Vehicle.objects.filter(pk__in=selected_vehicle_ids).update(contract=contract)
 
         contract.sei_processes.all().delete()
-        sei = self.cleaned_data.get('sei')
-        if sei:
+        sei_number = self.cleaned_data.get('sei', '').strip()
+        if sei_number:
+            process = SEIProcess.objects.filter(sei_number=sei_number).first()
+            if not process:
+                status, _ = SEIProcessStatus.objects.get_or_create(name='Aberto')
+                process = SEIProcess.objects.create(
+                    sei_number=sei_number,
+                    status=status,
+                    created_by=getattr(self, '_user', None),
+                )
             SEIProcessRelation.objects.create(
-                process=sei,
+                process=process,
                 content_object=contract,
                 created_by=getattr(self, '_user', None),
             )
