@@ -153,8 +153,8 @@ class ContractForm(forms.ModelForm):
         widgets = {
             'number': forms.TextInput(attrs={**INPUT, 'placeholder': 'Nome ou número do contrato'}),
             'renter': forms.Select(attrs=SELECT),
-            'starts_on': forms.DateInput(attrs={**INPUT, 'type': 'date'}),
-            'ends_on': forms.DateInput(attrs={**INPUT, 'type': 'date'}),
+            'starts_on': forms.DateInput(format='%Y-%m-%d', attrs={**INPUT, 'type': 'date'}),
+            'ends_on': forms.DateInput(format='%Y-%m-%d', attrs={**INPUT, 'type': 'date'}),
         }
 
     def __init__(self, *args, **kwargs):
