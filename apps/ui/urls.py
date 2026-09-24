@@ -11,6 +11,7 @@ urlpatterns = [
     path("veiculos/", vehicle_list, name="vehicle_list"),
     path("veiculos/<uuid:pk>/", vehicle_dossier, name="vehicle_dossier"),
     path("contratos/", contract_list, name="contract_list"),
+    path("contratos/novo/", views.contract_create, name="contract_create"),
     path("contratos/<uuid:pk>/", contract_detail, name="contract_detail"),
     path("contratos/<uuid:pk>/editar/", views.contract_edit, name="contract_edit"),
     path("motoristas/", driver_list, name="driver_list"),
