@@ -86,7 +86,6 @@
     <div style="padding:10px; border-radius:4px; {% if message.tags == 'error' %}background:#ffcccc; color:#cc0000;{% else %}background:#d4edda; color:#155724;{% endif %}">
         {{ message }}
     </div>
-    {% endfor %}
 </div>
 {% endif %}
 
@@ -99,16 +98,31 @@
                 <div style="display:flex; flex-direction:column; {% if field.name == 'notes' or field.name == 'vehicles' %}grid-column: 1/-1;{% endif %}">
                     <label style="font-weight:bold; margin-bottom:5px;">{{ field.label }} {% if field.field.required %}<span style="color:red">*</span>{% endif %}</label>
                     {% if field.name == 'vehicles' %}
-                    <input type="search" id="vehicle-search" class="form-input" placeholder="Pesquisar por placa, marca ou modelo..." autocomplete="off" style="margin-bottom:8px;">
-                    <div id="vehicle-checkboxes" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:8px; max-height:360px; overflow-y:auto; padding:10px; border:1px solid #ccc; border-radius:6px;">
-                        {% for option in field %}
-                        <label class="vehicle-option" data-search="{{ option.choice_label|lower }}" style="display:flex; align-items:center; gap:8px; padding:9px; border:1px solid #ddd; border-radius:5px; cursor:pointer;">
-                            {{ option.tag }}
-                            <span>{{ option.choice_label }}</span>
-                        </label>
-                        {% endfor %}
+                    <button type="button" id="open-vehicle-picker" class="secondary-action" style="width:100%; text-align:left; padding:12px;">
+                        <span id="vehicle-picker-label">Selecionar veículos</span>
+                    </button>
+                    <div id="selected-vehicles-summary" style="margin-top:8px; color:#555;"></div>
+                    <div id="vehicle-picker" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:1100; align-items:center; justify-content:center;">
+                        <div class="panel" style="width:min(620px,92vw); max-height:80vh; display:flex; flex-direction:column; padding:20px;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+                                <h3 style="margin:0;">Vincular veículos</h3>
+                                <button type="button" id="close-vehicle-picker" class="secondary-action">Fechar</button>
+                            </div>
+                            <input type="search" id="vehicle-search" class="form-input" placeholder="Pesquisar por placa, marca ou modelo..." autocomplete="off" style="margin-bottom:10px;">
+                            <div id="vehicle-options" style="overflow-y:auto; border:1px solid #ddd; border-radius:6px; padding:8px; min-height:180px;">
+                                {% for option in field %}
+                                <label class="vehicle-option" data-search="{{ option.choice_label|lower }}" style="display:flex; align-items:center; gap:10px; padding:9px; border-bottom:1px solid #eee; cursor:pointer;">
+                                    {{ option.tag }}
+                                    <span>{{ option.choice_label }}</span>
+                                </label>
+                                {% endfor %}
+                            </div>
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:14px; gap:10px;">
+                                <span id="vehicle-count" style="color:#555;">0 veículos selecionados</span>
+                                <button type="button" id="apply-vehicle-picker" class="primary-action">Concluir seleção</button>
+                            </div>
+                        </div>
                     </div>
-                    <small style="color:#666; margin-top:5px;">Marque quantos veículos quiser. A pesquisa apenas filtra a lista; as marcações permanecem selecionadas.</small>
                     {% elif quick_create and field.name == 'brand' or quick_create and field.name == 'model' or quick_create and field.name == 'unit' or quick_create and field.name == 'base' %}
                     <div style="display:flex; gap:8px; align-items:center;">
                         {{ field }}
@@ -131,9 +145,45 @@
 
 <script>
 (function () {
+    const openButton = document.getElementById('open-vehicle-picker');
+    const closeButton = document.getElementById('close-vehicle-picker');
+    const applyButton = document.getElementById('apply-vehicle-picker');
+    const picker = document.getElementById('vehicle-picker');
     const search = document.getElementById('vehicle-search');
     const options = document.querySelectorAll('.vehicle-option');
-    if (!search || !options.length) return;
+    const count = document.getElementById('vehicle-count');
+    const summary = document.getElementById('selected-vehicles-summary');
+    const label = document.getElementById('vehicle-picker-label');
+
+    if (!openButton || !picker) return;
+
+    function updateSelection() {
+        const checked = document.querySelectorAll('#vehicle-options input[type="checkbox"]:checked');
+        count.textContent = checked.length + (checked.length === 1 ? ' veículo selecionado' : ' veículos selecionados');
+        label.textContent = checked.length ? checked.length + (checked.length === 1 ? ' veículo selecionado' : ' veículos selecionados') : 'Selecionar veículos';
+        summary.textContent = checked.length
+            ? Array.from(checked).map(input => input.parentElement.querySelector('span').textContent.trim()).join(' • ')
+            : '';
+    }
+
+    openButton.addEventListener('click', function () {
+        picker.style.display = 'flex';
+        updateSelection();
+        setTimeout(() => search.focus(), 50);
+    });
+
+    closeButton.addEventListener('click', function () {
+        picker.style.display = 'none';
+    });
+
+    applyButton.addEventListener('click', function () {
+        picker.style.display = 'none';
+        updateSelection();
+    });
+
+    picker.addEventListener('click', function (event) {
+        if (event.target === picker) picker.style.display = 'none';
+    });
 
     search.addEventListener('input', function () {
         const term = this.value.trim().toLowerCase();
@@ -141,6 +191,18 @@
             option.style.display = !term || option.dataset.search.includes(term) ? 'flex' : 'none';
         });
     });
+
+    options.forEach(function (option) {
+        option.addEventListener('click', function (event) {
+            if (event.target.tagName.toLowerCase() !== 'input') {
+                const checkbox = option.querySelector('input[type="checkbox"]');
+                checkbox.checked = !checkbox.checked;
+            }
+            updateSelection();
+        });
+    });
+
+    updateSelection();
 })();
 </script>
 {% endblock %}
