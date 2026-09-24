@@ -132,7 +132,7 @@ class ContractForm(forms.ModelForm):
         queryset=Vehicle.objects.none(),
         label='Vincular veículos',
         required=False,
-        widget=forms.SelectMultiple(attrs={**SELECT, 'size': 8}),
+        widget=forms.CheckboxSelectMultiple(attrs={'class': 'vehicle-checkbox'}),
     )
     sei = forms.CharField(
         label='SEI',
