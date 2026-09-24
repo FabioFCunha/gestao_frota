@@ -99,16 +99,16 @@
                 <div style="display:flex; flex-direction:column; {% if field.name == 'notes' or field.name == 'vehicles' %}grid-column: 1/-1;{% endif %}">
                     <label style="font-weight:bold; margin-bottom:5px;">{{ field.label }} {% if field.field.required %}<span style="color:red">*</span>{% endif %}</label>
                     {% if field.name == 'vehicles' %}
-                    <input
-                        type="search"
-                        id="vehicle-search"
-                        class="form-input"
-                        placeholder="Pesquisar por placa, marca ou modelo..."
-                        autocomplete="off"
-                        style="margin-bottom:8px;"
-                    >
-                    {{ field }}
-                    <small style="color:#666; margin-top:5px;">Pesquise e marque um ou vários veículos. Use Ctrl/Cmd para marcar vários na lista.</small>
+                    <input type="search" id="vehicle-search" class="form-input" placeholder="Pesquisar por placa, marca ou modelo..." autocomplete="off" style="margin-bottom:8px;">
+                    <div id="vehicle-checkboxes" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:8px; max-height:360px; overflow-y:auto; padding:10px; border:1px solid #ccc; border-radius:6px;">
+                        {% for option in field %}
+                        <label class="vehicle-option" data-search="{{ option.choice_label|lower }}" style="display:flex; align-items:center; gap:8px; padding:9px; border:1px solid #ddd; border-radius:5px; cursor:pointer;">
+                            {{ option.tag }}
+                            <span>{{ option.choice_label }}</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                    <small style="color:#666; margin-top:5px;">Marque quantos veículos quiser. A pesquisa apenas filtra a lista; as marcações permanecem selecionadas.</small>
                     {% elif quick_create and field.name == 'brand' or quick_create and field.name == 'model' or quick_create and field.name == 'unit' or quick_create and field.name == 'base' %}
                     <div style="display:flex; gap:8px; align-items:center;">
                         {{ field }}
@@ -132,13 +132,13 @@
 <script>
 (function () {
     const search = document.getElementById('vehicle-search');
-    const select = document.getElementById('id_vehicles');
-    if (!search || !select) return;
+    const options = document.querySelectorAll('.vehicle-option');
+    if (!search || !options.length) return;
 
     search.addEventListener('input', function () {
         const term = this.value.trim().toLowerCase();
-        Array.from(select.options).forEach(function (option) {
-            option.hidden = !!term && !option.text.toLowerCase().includes(term);
+        options.forEach(function (option) {
+            option.style.display = !term || option.dataset.search.includes(term) ? 'flex' : 'none';
         });
     });
 })();
