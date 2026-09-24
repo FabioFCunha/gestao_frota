@@ -186,6 +186,11 @@ def dashboard(request):
         "metrics": metrics,
         "plate_rows": plate_rows,
         "plate_alert_counts": plate_alert_counts,
+        "dashboard_alerts": {
+            "contracts_expired": alerts.get("expired_contracts", []),
+            "contracts_expiring": alerts.get("expiring_contracts", []),
+            "fines_pending": alerts.get("pending_fines", []),
+        },
     }
     return render(request, "ui/dashboard.html", context)
 
