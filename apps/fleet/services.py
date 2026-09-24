@@ -1123,9 +1123,35 @@ def get_operational_alerts(filters: dict) -> dict:
     ).select_related('vehicle').values("id", "vehicle__plate_history__plate", "status__name", "entered_at")
     
     # 3. Pending Fines
-    pending_fines = VehicleFine.objects.filter(
+    from django.db.models import Prefetch
+    from .models import VehicleDriverAssignment
+
+    pending_fines_qs = VehicleFine.objects.filter(
         status__name__in=["Pendente", "Em análise", "Em recurso"]
-    ).select_related('vehicle').values("id", "vehicle__plate_history__plate", "status__name", "date")
+    ).select_related('vehicle', 'status').prefetch_related(
+        Prefetch(
+            'vehicle__driver_assignments',
+            queryset=VehicleDriverAssignment.objects.filter(is_active=True).select_related('driver'),
+            to_attr='active_driver_assignments',
+        ),
+        'vehicle__plate_history',
+    )
+    pending_fines = []
+    for fine in pending_fines_qs:
+        driver_assignments = getattr(fine.vehicle, 'active_driver_assignments', [])
+        driver_name = driver_assignments[0].driver.name if driver_assignments else None
+        plate = next(
+            (p.plate for p in fine.vehicle.plate_history.all()
+             if p.kind == 'CURRENT' and p.ends_on is None),
+            None,
+        )
+        pending_fines.append({
+            "id": fine.id,
+            "vehicle__plate_history__plate": plate,
+            "status__name": fine.status.name,
+            "date": fine.date,
+            "driver__name": driver_name,
+        })
     
     # 4. Open SEI Processes
     open_sei = SEIProcess.objects.filter(
