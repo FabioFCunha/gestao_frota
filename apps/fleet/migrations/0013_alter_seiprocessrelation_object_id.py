@@ -10,7 +10,11 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.AlterField(
+        migrations.RemoveField(
+            model_name='seiprocessrelation',
+            name='object_id',
+        ),
+        migrations.AddField(
             model_name='seiprocessrelation',
             name='object_id',
             field=models.UUIDField(db_index=True),
