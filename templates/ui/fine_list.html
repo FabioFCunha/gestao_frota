@@ -43,6 +43,7 @@
 <div id="fine-detail-{{ f.id }}" style="display:none;">
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px 24px;">
         <div><strong>Placa</strong><br>{% for p in f.vehicle.plate_history.all %}{% if not p.ends_on %}{{ p.plate }}{% endif %}{% empty %}Sem placa{% endfor %}</div>
+        <div><strong>Motorista vinculado</strong><br>{% if f.vehicle.active_driver_assignments %}{{ f.vehicle.active_driver_assignments.0.driver.name }}{% else %}Sem motorista vinculado{% endif %}</div>
         <div><strong>Situação</strong><br><span class="tag">{{ f.status.name }}</span></div>
         <div><strong>Nº do Auto de Infração</strong><br>{{ f.auto_number }}</div>
         <div><strong>Órgão Autuador</strong><br>{{ f.agency|default:"-" }}</div>
