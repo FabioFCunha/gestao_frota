@@ -96,9 +96,20 @@
             {% csrf_token %}
             <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
             {% for field in form %}
-                <div style="display:flex; flex-direction:column; {% if field.name == 'notes' %}grid-column: 1/-1;{% endif %}">
+                <div style="display:flex; flex-direction:column; {% if field.name == 'notes' or field.name == 'vehicles' %}grid-column: 1/-1;{% endif %}">
                     <label style="font-weight:bold; margin-bottom:5px;">{{ field.label }} {% if field.field.required %}<span style="color:red">*</span>{% endif %}</label>
-                    {% if quick_create and field.name == 'brand' or quick_create and field.name == 'model' or quick_create and field.name == 'unit' or quick_create and field.name == 'base' %}
+                    {% if field.name == 'vehicles' %}
+                    <input
+                        type="search"
+                        id="vehicle-search"
+                        class="form-input"
+                        placeholder="Pesquisar por placa, marca ou modelo..."
+                        autocomplete="off"
+                        style="margin-bottom:8px;"
+                    >
+                    {{ field }}
+                    <small style="color:#666; margin-top:5px;">Pesquise e marque um ou vários veículos. Use Ctrl/Cmd para marcar vários na lista.</small>
+                    {% elif quick_create and field.name == 'brand' or quick_create and field.name == 'model' or quick_create and field.name == 'unit' or quick_create and field.name == 'base' %}
                     <div style="display:flex; gap:8px; align-items:center;">
                         {{ field }}
                         <button type="button" class="secondary-action quick-add" data-entity="{{ field.name }}" style="white-space:nowrap;">+ Novo</button>
@@ -117,4 +128,19 @@
         </form>
     </article>
 </section>
+
+<script>
+(function () {
+    const search = document.getElementById('vehicle-search');
+    const select = document.getElementById('id_vehicles');
+    if (!search || !select) return;
+
+    search.addEventListener('input', function () {
+        const term = this.value.trim().toLowerCase();
+        Array.from(select.options).forEach(function (option) {
+            option.hidden = !!term && !option.text.toLowerCase().includes(term);
+        });
+    });
+})();
+</script>
 {% endblock %}
