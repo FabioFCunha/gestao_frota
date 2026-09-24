@@ -226,6 +226,7 @@ class VehicleContractForm(forms.ModelForm):
 
 class FineForm(forms.ModelForm):
     vehicle = forms.ModelChoiceField(queryset=Vehicle.objects.none(), label='Placa do veículo', widget=forms.Select(attrs=SELECT))
+    driver = forms.ModelChoiceField(queryset=Driver.objects.none(), label='Motorista vinculado', required=False, widget=forms.Select(attrs=SELECT))
 
     class Meta:
         model = VehicleFine
@@ -246,6 +247,11 @@ class FineForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields['vehicle'].queryset = Vehicle.objects.select_related('brand','model').prefetch_related('plate_history').order_by('brand__name','model__name')
         self.fields['vehicle'].label_from_instance = self.label_from_instance
+        self.fields['driver'].queryset = Driver.objects.order_by('name')
+        if self.instance and self.instance.pk:
+            assignment = self.instance.vehicle.driver_assignments.filter(is_active=True).select_related('driver').first()
+            if assignment:
+                self.fields['driver'].initial = assignment.driver_id
 
     @staticmethod
     def label_from_instance(vehicle):
