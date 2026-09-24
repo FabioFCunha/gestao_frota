@@ -89,9 +89,11 @@
     function updateSelection() {
         const checked = document.querySelectorAll('#vehicle-options input[type="checkbox"]:checked');
         count.textContent = checked.length + (checked.length === 1 ? ' veículo selecionado' : ' veículos selecionados');
-        label.textContent = checked.length ? checked.length + (checked.length === 1 ? ' veículo selecionado' : ' veículos selecionados') : 'Selecionar veículos';
+        label.textContent = checked.length
+            ? checked.length + (checked.length === 1 ? ' veículo selecionado' : ' veículos selecionados')
+            : 'Selecionar veículos';
         summary.textContent = checked.length
-            ? Array.from(checked).map(input => input.parentElement.querySelector('span').textContent.trim()).join(' • ')
+            ? Array.from(checked).map(input => input.closest('.vehicle-option').querySelector('span').textContent.trim()).join(' • ')
             : '';
     }
 
@@ -122,12 +124,12 @@
     });
 
     options.forEach(function (option) {
-        option.addEventListener('click', function (event) {
-            if (event.target.tagName.toLowerCase() !== 'input') {
-                const checkbox = option.querySelector('input[type="checkbox"]');
-                checkbox.checked = !checkbox.checked;
-            }
-            updateSelection();
+        const checkbox = option.querySelector('input[type="checkbox"]');
+
+        checkbox.addEventListener('change', updateSelection);
+
+        option.addEventListener('click', function () {
+            setTimeout(updateSelection, 0);
         });
     });
 
