@@ -1,5 +1,9 @@
 {% extends 'ui/base.html' %}
-{% block title %}Dashboard | Gestão de Frotas<style>
+{% block title %}Dashboard | Gestão de Frotas{% endblock %}
+
+{% block heading %}Gestão da Frota{% endblock %}
+{% block content %}
+<style>
 .dashboard-informe-item { display:block; width:100%; text-align:left; padding:10px 0; border:0; border-bottom:1px solid #eee; background:transparent; cursor:pointer; color:inherit; }
 .dashboard-informe-item:hover { opacity:.75; }
 #dashboard-informe-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:1100; align-items:center; justify-content:center; padding:20px; }
@@ -74,9 +78,6 @@
 })();
 </script>
 
-{% endblock %}
-{% block heading %}Gestão da Frota{% endblock %}
-{% block content %}
 
 <section class="fd-hero">
     <div class="fd-hero-left">
