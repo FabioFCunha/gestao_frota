@@ -1,96 +1,428 @@
 {% load static %}
-<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Entrar · WW Gestão de Frotas</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="{% static 'ui/app.css' %}?v=17">
-<style>
-/* PREMIUM LOGIN OVERRIDES */
-body.login-page {
-    background: radial-gradient(circle at 15% 50%, rgba(37, 99, 235, 0.4), transparent 50%),
-                radial-gradient(circle at 85% 30%, rgba(14, 165, 233, 0.3), transparent 50%),
-                radial-gradient(circle at 50% 100%, rgba(30, 58, 138, 0.5), transparent 50%),
-                #020617 !important;
-    background-size: 150% 150%;
-    animation: gradientShift 15s ease infinite;
-    position: relative;
-    overflow: hidden;
-    font-family: 'Inter', 'DM Sans', sans-serif !important;
-}
+<!DOCTYPE html>
+<html lang="pt-BR" class="h-full bg-slate-950">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WW — Sistema de Gestão de Frotas</title>
 
-@keyframes gradientShift {
-    0% { background-position: 0% 50%; }
-    50% { background-position: 100% 50%; }
-    100% { background-position: 0% 50%; }
-}
+  <!-- Google Fonts: Plus Jakarta Sans & Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 
-body.login-page::after {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0IiBoZWlnaHQ9IjQiPjxyZWN0IHdpZHRoPSI0IiBoZWlnaHQ9IjQiIGZpbGw9InRyYW5zcGFyZW50Ii8+PGNpcmNsZSBjeD0iMiIgY3k9IjIiIHI9IjAuNSIgZmlsbD0icmdiYSgyNTUsIDI1NSwgMjU1LCAwLjA1KSIvPjwvc3ZnPg==');
-    z-index: 0;
-}
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
 
-.login-card {
-    position: relative;
-    z-index: 1;
-    background: rgba(255, 255, 255, 0.97) !important;
-    backdrop-filter: blur(20px) !important;
-    border: 1px solid rgba(255, 255, 255, 0.5) !important;
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.1) inset !important;
-    border-radius: 24px !important;
-    padding: 48px 40px !important;
-    width: min(440px, calc(100% - 32px)) !important;
-}
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
 
-.login-logo img {
-    width: 220px !important;
-    max-width: 100% !important;
-    height: auto !important;
-    filter: none !important;
-    mix-blend-mode: multiply !important;
-    margin-bottom: 8px !important;
-}
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'Inter', 'sans-serif'],
+          },
+          colors: {
+            navy: {
+              950: '#070d18',
+              900: '#0b162c',
+              850: '#0e1d38',
+              800: '#13274a',
+              700: '#1c3666',
+            },
+            brand: {
+              blue: '#2563eb',
+              light: '#38bdf8',
+              orange: '#f97316',
+              amber: '#f59e0b',
+            }
+          }
+        }
+      }
+    }
+  </script>
 
-.login-card input {
-    height: 48px !important;
-    font-size: 15px !important;
-    background: #f8fafc !important;
-    border: 1px solid #cbd5e1 !important;
-    border-radius: 10px !important;
-    font-family: 'Inter', sans-serif !important;
-}
-.login-card input:focus {
-    background: #ffffff !important;
-    border-color: #3b82f6 !important;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15) !important;
-    outline: none !important;
-}
+  <style>
+    /* Suavização de scroll e background */
+    body {
+      background-color: #070d18;
+    }
+    
+    /* Brilho suave dos inputs e botões */
+    .input-glow:focus-within {
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25), 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    }
+    
+    .btn-gradient {
+      background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+      box-shadow: 0 4px 18px -2px rgba(37, 99, 235, 0.45);
+    }
+    .btn-gradient:hover {
+      background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+      box-shadow: 0 6px 24px -2px rgba(37, 99, 235, 0.6);
+    }
 
-.login-card button {
-    height: 50px !important;
-    font-size: 16px !important;
-    font-weight: 700 !important;
-    margin-top: 16px !important;
-    border-radius: 10px !important;
-    background: linear-gradient(180deg, #3b82f6 0%, #2563eb 100%) !important;
-    box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.3), inset 0 1px 0 rgba(255,255,255,0.15) !important;
-    border: none !important;
-    color: white !important;
-    cursor: pointer;
-    transition: all 0.2s ease !important;
-}
-.login-card button:hover {
-    background: linear-gradient(180deg, #60a5fa 0%, #3b82f6 100%) !important;
-    box-shadow: 0 8px 12px -2px rgba(37, 99, 235, 0.4), inset 0 1px 0 rgba(255,255,255,0.15) !important;
-    transform: translateY(-1px) !important;
-}
+    /* Cartão translúcido (Glassmorphism sutil na imagem) */
+    .glass-badge {
+      background: rgba(11, 22, 44, 0.7);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+  </style>
+</head>
+<body class="h-full text-slate-100 flex flex-col justify-between antialiased selection:bg-brand-blue selection:text-white">
 
-.login-card .muted {
-    font-size: 15px !important;
-    margin-bottom: 32px !important;
-    color: #475569 !important;
-}
-</style>
-</head><body class="login-page"><section class="login-card"><div class="login-logo"><img src="{% static 'images/logo.png' %}" alt="WW Gestão de Frotas"></div><p class="muted">Acesse para consultar e operar a frota institucional.</p>{% if form.errors %}<p class="error">Usuário ou senha inválidos.</p>{% endif %}<form method="post">{% csrf_token %}<label>E-mail (login)<input name="username" type="email" autocomplete="username" autofocus required placeholder="seu@email.com"></label><label>Senha<input name="password" type="password" autocomplete="current-password" required></label><button type="submit">Entrar no sistema</button></form></section></body></html>
+  <!-- Feedback Toast flutuante (Mensagens de status) -->
+  <div id="toastMessage" class="fixed top-5 right-5 z-50 transform translate-x-96 opacity-0 transition-all duration-300 pointer-events-none flex items-center gap-3 py-3 px-4 rounded-xl border text-sm shadow-2xl backdrop-blur-md">
+    <i id="toastIcon" data-lucide="info" class="w-5 h-5 flex-shrink-0"></i>
+    <span id="toastText">Notificação do sistema</span>
+  </div>
+
+  <!-- CONTAINER SPLIT SCREEN -->
+  <div class="min-h-screen w-full flex flex-col lg:flex-row">
+
+    <!-- ========================================================
+         COLUNA 1 (ESQUERDA): FORMULÁRIO DE LOGIN LIMPO & ELEGANTE
+         ======================================================== -->
+    <div class="w-full lg:w-[46%] xl:w-[40%] flex flex-col justify-between p-6 sm:p-10 lg:p-14 bg-navy-900 border-r border-navy-800/80 z-20">
+      
+      <!-- Cabeçalho / Tag Institucional -->
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <span class="inline-block w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_8px_#34d399]"></span>
+          <span class="text-xs uppercase tracking-wider font-semibold text-slate-400">Portal de Operações</span>
+        </div>
+        <span class="text-[11px] font-mono font-medium text-slate-500">v4.2.0</span>
+      </div>
+
+      <!-- Centro: Card de Acesso -->
+      <div class="w-full max-w-sm mx-auto my-auto py-8">
+        
+        <!-- LOGOTIPO WW RECRIADO COM DESIGN VETORIAL MODERNO -->
+        <div class="flex flex-col items-center text-center mb-8">
+          <div class="relative mb-3 group cursor-pointer">
+            <!-- Escudo / Logo SVG Estilizado inspirado no original -->
+            <svg class="w-24 h-24 drop-shadow-[0_8px_20px_rgba(37,99,235,0.3)] transition-transform duration-300 group-hover:scale-105" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <!-- Escudo de Fundo Azul -->
+              <path d="M60 6L98 22V54C98 80 60 110 60 110C60 110 22 80 22 54V22L60 6Z" fill="#0d213f" stroke="#1d4ed8" stroke-width="3" stroke-linejoin="round"/>
+              <!-- Borda Interna / Destaque Laranja do Escudo Original -->
+              <path d="M60 14L90 27V53C90 73 60 98 60 98C60 98 30 73 30 53V27L60 14Z" stroke="#f97316" stroke-width="2.5" stroke-dasharray="88 8" opacity="0.9"/>
+              
+              <!-- Silhuetas de Carros da Frota -->
+              <!-- Carro Traseiro Esquerdo -->
+              <path d="M34 50C37 46 45 44 49 44L56 50H32L34 50Z" fill="#64748b"/>
+              <rect x="31" y="49" width="27" height="6" rx="2" fill="#94a3b8"/>
+              <circle cx="37" cy="55" r="2" fill="#0f172a"/>
+              <circle cx="52" cy="55" r="2" fill="#0f172a"/>
+
+              <!-- Carro Traseiro Direito -->
+              <path d="M64 50L71 44C75 44 83 46 86 50L88 50H64Z" fill="#64748b"/>
+              <rect x="62" y="49" width="27" height="6" rx="2" fill="#94a3b8"/>
+              <circle cx="68" cy="55" r="2" fill="#0f172a"/>
+              <circle cx="83" cy="55" r="2" fill="#0f172a"/>
+
+              <!-- Carro Principal Frontal / Central -->
+              <path d="M46 59L53 51H67L74 59L78 61V67H42V61L46 59Z" fill="#2563eb"/>
+              <path d="M49 58L55 53H65L71 58H49Z" fill="#bae6fd"/>
+              <!-- Faróis Laranja / Característicos -->
+              <rect x="44" y="62" width="5" height="2.5" rx="1" fill="#f97316"/>
+              <rect x="71" y="62" width="5" height="2.5" rx="1" fill="#f97316"/>
+              <!-- Rodas do Carro Central -->
+              <circle cx="48" cy="67" r="3" fill="#020617"/>
+              <circle cx="72" cy="67" r="3" fill="#020617"/>
+              
+              <!-- Flecha de Crescimento e Direção (Laranja e Azul) -->
+              <path d="M50 78L60 66L70 78" stroke="#f97316" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M60 67V82" stroke="#f97316" stroke-width="3" stroke-linecap="round"/>
+            </svg>
+          </div>
+
+          <!-- Tipografia Oficial da Logo WW -->
+          <div class="tracking-tight">
+            <h1 class="text-3xl font-extrabold tracking-tight text-white flex items-center justify-center gap-1">
+              <span class="text-white">W</span><span class="text-white">W</span>
+            </h1>
+            <span class="block text-[11px] font-bold tracking-[0.25em] text-slate-400 uppercase mt-0.5">
+              Sistema de Gestão de Frotas
+            </span>
+          </div>
+
+          <!-- Frase de Acesso idêntica à aplicação atual -->
+          <p class="text-slate-400 text-xs sm:text-sm mt-3 max-w-xs leading-relaxed">
+            Acesse para consultar e operar a frota institucional.
+          </p>
+        </div>
+
+        {% if form.errors %}
+        <div class="mb-5 p-3.5 rounded-xl bg-red-950/40 border border-red-900/50 text-red-400 text-sm flex items-center gap-3">
+          <i data-lucide="alert-triangle" class="w-5 h-5 flex-shrink-0 text-red-500"></i>
+          <span>Usuário ou senha inválidos. Tente novamente.</span>
+        </div>
+        {% endif %}
+
+        <!-- FORMULÁRIO DE LOGIN -->
+        <form id="wwLoginForm" method="post" onsubmit="handleLoginSubmit(event)" class="space-y-4">
+          {% csrf_token %}
+          <!-- Campo 1: E-mail (login) -->
+          <div>
+            <label for="email" class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+              E-mail (login)
+            </label>
+            <div class="relative input-glow rounded-xl transition duration-200">
+              <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                <i data-lucide="mail" class="w-4 h-4"></i>
+              </div>
+              <input 
+                type="email" 
+                id="email" 
+                name="username"
+                required
+                autocomplete="email"
+                placeholder="seu.email@orgao.gov.br"
+                class="w-full pl-10 pr-4 py-3 bg-navy-950/80 border border-slate-700/80 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-brand-blue transition duration-200"
+              >
+            </div>
+          </div>
+
+          <!-- Campo 2: Senha -->
+          <div>
+            <div class="flex items-center justify-between mb-1.5">
+              <label for="password" class="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                Senha
+              </label>
+              <a href="#recuperar" onclick="forgotPasswordNotice(event)" class="text-xs font-medium text-brand-light hover:text-white transition-colors">
+                Esqueceu a senha?
+              </a>
+            </div>
+            <div class="relative input-glow rounded-xl transition duration-200">
+              <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                <i data-lucide="lock" class="w-4 h-4"></i>
+              </div>
+              <input 
+                type="password" 
+                id="password" 
+                name="password"
+                required
+                autocomplete="current-password"
+                placeholder="Digite sua senha de acesso"
+                class="w-full pl-10 pr-11 py-3 bg-navy-950/80 border border-slate-700/80 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-brand-blue transition duration-200"
+              >
+              <!-- Botão de Mostrar / Ocultar Senha -->
+              <button 
+                type="button" 
+                onclick="togglePassword()" 
+                class="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-white transition-colors"
+                title="Mostrar ou ocultar senha"
+              >
+                <i id="eyeIcon" data-lucide="eye" class="w-4 h-4"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- Lembrar de mim & Segurança -->
+          <div class="flex items-center justify-between pt-1 pb-2">
+            <label class="flex items-center space-x-2 text-xs text-slate-400 cursor-pointer select-none">
+              <input type="checkbox" name="remember" checked class="w-4 h-4 rounded bg-navy-950 border-slate-700 text-brand-blue focus:ring-0 cursor-pointer accent-blue-600">
+              <span>Lembrar neste computador</span>
+            </label>
+            <div class="flex items-center text-[11px] text-slate-500 gap-1">
+              <i data-lucide="shield-check" class="w-3.5 h-3.5 text-emerald-400"></i>
+              <span>Ambiente Seguro</span>
+            </div>
+          </div>
+
+          <!-- Botão Principal: Entrar no sistema -->
+          <button 
+            type="submit" 
+            id="loginButton"
+            class="w-full py-3.5 px-4 btn-gradient text-white font-semibold text-sm rounded-xl transition duration-200 flex items-center justify-center gap-2 group cursor-pointer active:scale-[0.99]"
+          >
+            <span id="btnLabel" class="flex items-center gap-2">
+              Entrar no sistema
+              <i data-lucide="arrow-right" class="w-4 h-4 group-hover:translate-x-1 transition-transform"></i>
+            </span>
+            <span id="btnSpinner" class="hidden">
+              <svg class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+            </span>
+          </button>
+
+        </form>
+
+      </div>
+
+      <!-- Rodapé da lateral esquerda -->
+      <div class="pt-6 border-t border-navy-800/80 flex flex-wrap items-center justify-between text-[11px] text-slate-500 gap-2">
+        <span>© 2026 WW Frotas • Transfrota Digital</span>
+        <div class="flex space-x-3">
+          <a href="#termos" class="hover:text-slate-300 transition">Termos de Uso</a>
+          <span>•</span>
+          <a href="#ajuda" class="hover:text-slate-300 transition">Suporte Técnico</a>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ========================================================
+         COLUNA 2 (DIREITA): IMAGEM MODERNA DE FROTA COM EFEITO
+         ======================================================== -->
+    <div class="hidden lg:flex lg:w-[54%] xl:w-[60%] relative overflow-hidden bg-navy-950 flex-col justify-between p-12 xl:p-16">
+      
+      <!-- Imagem de Fundo de Alta Resolução (Pátio de veículos corporativos / executivos modernos) -->
+      <img 
+        src="https://images.unsplash.com/photo-1503376780353-7e6692767b70?q=80&w=2070&auto=format&fit=crop" 
+        alt="Frota de Veículos Institucionais e Executivos" 
+        class="absolute inset-0 w-full h-full object-cover object-center filter brightness-[0.78] contrast-105 transform scale-100 hover:scale-105 transition-transform duration-1000 ease-out"
+        onerror="this.src='https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?q=80&w=2070&auto=format&fit=crop'"
+      >
+
+      <!-- Overlay Gradiente Profundo inspirado no azul marinho da tela original -->
+      <div class="absolute inset-0 bg-gradient-to-r from-navy-900 via-navy-950/70 to-blue-950/40"></div>
+      <div class="absolute inset-0 bg-gradient-to-t from-navy-950 via-transparent to-navy-950/50"></div>
+
+      <!-- Topo: Selo de Frota Institucional Conectada -->
+      <div class="relative z-10 flex justify-end">
+        <div class="glass-badge rounded-2xl py-2.5 px-4 flex items-center space-x-3 shadow-xl">
+          <div class="w-8 h-8 rounded-lg bg-orange-500/20 border border-orange-500/40 flex items-center justify-center text-orange-400">
+            <i data-lucide="car" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <p class="text-xs font-bold text-white tracking-wide">Frota Institucional</p>
+            <p class="text-[11px] text-slate-300">Rastreamento e disponibilidade 24h</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Centro / Base: Texto de Apresentação e Indicadores -->
+      <div class="relative z-10 max-w-xl">
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 border border-blue-400/30 text-sky-300 text-xs font-semibold uppercase tracking-wider mb-4 backdrop-blur-md">
+          <i data-lucide="check-circle-2" class="w-3.5 h-3.5 text-blue-400"></i>
+          Controle Operacional Inteligente
+        </div>
+
+        <h2 class="text-3xl xl:text-4xl font-extrabold text-white leading-tight drop-shadow-md">
+          Eficiência, transparência e controle na gestão dos veículos institucionais.
+        </h2>
+
+        <p class="text-slate-300 text-sm mt-3 leading-relaxed drop-shadow">
+          Acompanhamento de saídas, agendamentos de viagens, controle de hodômetro, abastecimento e manutenções com total conformidade.
+        </p>
+
+        <!-- Três cards compactos de destaques na base -->
+        <div class="grid grid-cols-3 gap-3.5 mt-8">
+          <div class="glass-badge p-3.5 rounded-xl">
+            <span class="text-[11px] text-slate-400 block font-medium">Disponibilidade</span>
+            <span class="text-lg font-bold text-white tracking-tight mt-0.5 block">Tempo Real</span>
+          </div>
+
+          <div class="glass-badge p-3.5 rounded-xl">
+            <span class="text-[11px] text-slate-400 block font-medium">Controle de KM</span>
+            <span class="text-lg font-bold text-sky-400 tracking-tight mt-0.5 block">Auditado</span>
+          </div>
+
+          <div class="glass-badge p-3.5 rounded-xl">
+            <span class="text-[11px] text-slate-400 block font-medium">Manutenção</span>
+            <span class="text-lg font-bold text-orange-400 tracking-tight mt-0.5 block">Preventiva</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- SCRIPT DE INTERAÇÕES E VALIDAÇÕES -->
+  <script>
+    // Inicializa ícones Lucide
+    document.addEventListener("DOMContentLoaded", () => {
+      lucide.createIcons();
+      {% if form.errors %}
+      showToast('Usuário ou senha inválidos. Tente novamente.', 'warning');
+      {% endif %}
+    });
+
+    let passwordVisible = false;
+    let toastTimer = null;
+
+    // Alternar visibilidade de Senha
+    function togglePassword() {
+      const passField = document.getElementById('password');
+      const eyeIcon = document.getElementById('eyeIcon');
+      
+      passwordVisible = !passwordVisible;
+      passField.type = passwordVisible ? 'text' : 'password';
+      
+      eyeIcon.setAttribute('data-lucide', passwordVisible ? 'eye-off' : 'eye');
+      lucide.createIcons();
+    }
+
+    // Submissão do Formulário (Pronto para AJAX ou POST regular)
+    function handleLoginSubmit(event) {
+      event.preventDefault();
+
+      const btn = document.getElementById('loginButton');
+      const label = document.getElementById('btnLabel');
+      const spinner = document.getElementById('btnSpinner');
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value.trim();
+
+      if (!email || !password) {
+        showToast('Por favor, informe seu e-mail e senha de acesso.', 'warning');
+        return;
+      }
+
+      // Ativa efeito de carregamento
+      label.classList.add('hidden');
+      spinner.classList.remove('hidden');
+      btn.disabled = true;
+      btn.classList.add('opacity-85', 'cursor-wait');
+
+      // Simulação de autenticação (troque pelo seu submit real ou fetch/axios)
+      setTimeout(() => {
+        // Envio do form para o Django gerenciar a autenticação real
+        event.target.submit();
+      }, 800);
+    }
+
+    // Toast de notificação moderno
+    function showToast(message, type = 'info') {
+      const toast = document.getElementById('toastMessage');
+      const toastText = document.getElementById('toastText');
+      const toastIcon = document.getElementById('toastIcon');
+
+      toastText.textContent = message;
+
+      if (type === 'success') {
+        toast.className = 'fixed top-5 right-5 z-50 transition-all duration-300 flex items-center gap-3 py-3 px-4 rounded-xl border text-sm shadow-2xl backdrop-blur-md bg-emerald-950/80 border-emerald-500/40 text-emerald-200';
+        toastIcon.setAttribute('data-lucide', 'check-circle-2');
+      } else if (type === 'warning') {
+        toast.className = 'fixed top-5 right-5 z-50 transition-all duration-300 flex items-center gap-3 py-3 px-4 rounded-xl border text-sm shadow-2xl backdrop-blur-md bg-amber-950/80 border-amber-500/40 text-amber-200';
+        toastIcon.setAttribute('data-lucide', 'alert-circle');
+      } else {
+        toast.className = 'fixed top-5 right-5 z-50 transition-all duration-300 flex items-center gap-3 py-3 px-4 rounded-xl border text-sm shadow-2xl backdrop-blur-md bg-navy-850 border-slate-700 text-slate-200';
+        toastIcon.setAttribute('data-lucide', 'info');
+      }
+
+      lucide.createIcons();
+      toast.classList.remove('translate-x-96', 'opacity-0');
+      toast.classList.add('translate-x-0', 'opacity-100');
+
+      if (toastTimer) clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => {
+        toast.classList.add('translate-x-96', 'opacity-0');
+        toast.classList.remove('translate-x-0', 'opacity-100');
+      }, 3500);
+    }
+
+    function forgotPasswordNotice(event) {
+      event.preventDefault();
+      showToast('Entre em contato com o administrador do sistema para redefinir sua senha.', 'info');
+    }
+  </script>
+</body>
+</html>
