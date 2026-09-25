@@ -121,40 +121,6 @@ class Vehicle(BaseModel):
         indexes = [models.Index(fields=["status"]), models.Index(fields=["unit", "base"])]
 
 
-class VehicleCustody(BaseModel):
-    SEI = "SEI"
-    ACAUTELAMENTO = "ACAUTELAMENTO"
-    OUTRO = "OUTRO"
-    LEGADO = "LEGADO"
-
-    KIND_CHOICES = [
-        (SEI, "SEI"),
-        (ACAUTELAMENTO, "Acautelamento"),
-        (OUTRO, "Outro"),
-        (LEGADO, "Registro legado"),
-    ]
-
-    vehicle = models.ForeignKey(
-        Vehicle,
-        on_delete=models.PROTECT,
-        related_name="custody_records",
-    )
-    kind = models.CharField(max_length=20, choices=KIND_CHOICES, default=OUTRO)
-    reference = models.CharField(max_length=120)
-    starts_on = models.DateTimeField(default=timezone.now)
-    ends_on = models.DateTimeField(null=True, blank=True)
-    notes = models.TextField(blank=True)
-    created_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        null=True,
-        on_delete=models.PROTECT,
-        related_name="vehicle_custodies_created",
-    )
-
-    class Meta:
-        ordering = ["-starts_on", "-created_at"]
-
-
 class VehicleDriverAssignment(BaseModel):
     vehicle = models.ForeignKey(Vehicle, on_delete=models.PROTECT, related_name="driver_assignments")
     driver = models.ForeignKey(Driver, on_delete=models.PROTECT, related_name="vehicle_assignments")
