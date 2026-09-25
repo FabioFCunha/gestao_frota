@@ -1,6 +1,5 @@
 from rest_framework import serializers
-from .models import Maintenance, Vehicle,
-    VehicleCustody, VehicleHistory
+from .models import Maintenance, Vehicle, VehicleCustody, VehicleHistory
 from .services import open_maintenance
 
 
@@ -35,7 +34,6 @@ class VehicleSerializer(serializers.ModelSerializer):
         active_plate = next((p for p in obj.plate_history.all() if p.kind == "RESERVED" and p.ends_on is None), None)
         return active_plate.plate if active_plate else ""
 
-
     def get_latest_inspection_date(self, obj):
         latest = next(iter(obj.inspections.all()), None)
         return latest.date if latest else None
@@ -51,7 +49,9 @@ class VehicleHistorySerializer(serializers.ModelSerializer):
         fields = "__all__"
         read_only_fields = ["id", "created_at", "changed_by"]
 
+
 from .models import VehicleInspection
+
 
 class VehicleInspectionSerializer(serializers.ModelSerializer):
     class Meta:
@@ -59,7 +59,9 @@ class VehicleInspectionSerializer(serializers.ModelSerializer):
         fields = "__all__"
         read_only_fields = ["id", "created_at", "updated_at", "created_by"]
 
+
 from .models import VehicleFine
+
 
 class VehicleFineSerializer(serializers.ModelSerializer):
     sei_process = serializers.SerializerMethodField()
@@ -78,10 +80,12 @@ class VehicleFineSerializer(serializers.ModelSerializer):
 
 from .models import SEIProcess, SEIProcessRelation
 
+
 class SEIProcessRelationSerializer(serializers.ModelSerializer):
     class Meta:
         model = SEIProcessRelation
         fields = ["id", "content_type", "object_id", "created_at"]
+
 
 class SEIProcessSerializer(serializers.ModelSerializer):
     class Meta:
@@ -89,26 +93,31 @@ class SEIProcessSerializer(serializers.ModelSerializer):
         fields = "__all__"
         read_only_fields = ["id", "created_at", "updated_at", "created_by"]
 
+
 from .models import Document, DocumentVersion, DocumentRelation
+
 
 class DocumentRelationSerializer(serializers.ModelSerializer):
     class Meta:
         model = DocumentRelation
         fields = ["id", "content_type", "object_id", "created_at"]
 
+
 class DocumentVersionSerializer(serializers.ModelSerializer):
     class Meta:
         model = DocumentVersion
         fields = ["id", "original_filename", "file_extension", "mime_type", "file_size", "uploaded_at", "uploaded_by"]
 
+
 class DocumentSerializer(serializers.ModelSerializer):
     versions = DocumentVersionSerializer(many=True, read_only=True)
     relations = DocumentRelationSerializer(many=True, read_only=True)
-    
+
     class Meta:
         model = Document
         fields = "__all__"
         read_only_fields = ["id", "status", "created_at", "updated_at", "created_by"]
+
 
 class MaintenanceSerializer(serializers.ModelSerializer):
     class Meta:
