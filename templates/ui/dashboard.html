@@ -107,7 +107,7 @@
         </div>
     </div>
 
-    <div class="grid" style="margin-top:12px;">
+    <div class="grid" style="margin-top:12px; grid-template-columns: repeat(3, 1fr);">
         <article class="panel">
             <div class="panel-title">
                 <div><h3>📄 Contratos</h3></div>
@@ -117,7 +117,7 @@
                 <div><strong>{{ dashboard_alerts.contracts_expiring|length }}</strong> contrato(s) a vencer</div>
             </div>
             {% if dashboard_alerts.contracts_expired or dashboard_alerts.contracts_expiring %}
-            <div style="margin-top:14px;">
+            <div style="margin-top:14px; max-height:85px; overflow-y:auto; padding-right:4px;">
                 {% for c in dashboard_alerts.contracts_expired %}
                 <div style="padding:8px 0;border-bottom:1px solid #eee;">
                     <button type="button" class="dashboard-informe-item" data-informe-id="contract-{{ c.id }}" data-informe-title="Contrato {{ c.number }}"><strong>{{ c.number }}</strong> — vencido em {{ c.ends_on|date:"d/m/Y" }}</button>
@@ -142,7 +142,7 @@
                 <div><strong>{{ dashboard_alerts.fines_pending|length }}</strong> multa(s) pendente(s) ou em análise/recurso</div>
             </div>
             {% if dashboard_alerts.fines_pending %}
-            <div style="margin-top:14px;">
+            <div style="margin-top:14px; max-height:85px; overflow-y:auto; padding-right:4px;">
                 {% for f in dashboard_alerts.fines_pending %}
                 <div style="padding:8px 0;border-bottom:1px solid #eee;">
                     <button type="button" class="dashboard-informe-item" data-informe-id="fine-{{ f.id }}" data-informe-title="Multa {{ f.vehicle__plate_history__plate|default:"Sem placa" }}"><strong>{{ f.vehicle__plate_history__plate|default:"Sem placa" }}</strong>
@@ -163,7 +163,7 @@
                 <div><strong>{{ dashboard_alerts.cnh_expired|length }}</strong> motorista(s) com CNH vencida</div>
             </div>
             {% if dashboard_alerts.cnh_expired %}
-            <div style="margin-top:14px;">
+            <div style="margin-top:14px; max-height:85px; overflow-y:auto; padding-right:4px;">
                 {% for d in dashboard_alerts.cnh_expired %}
                 <div style="padding:8px 0;border-bottom:1px solid #eee;">
                     <a href="{% url 'driver_list' %}?status=cnh_vencida" class="dashboard-informe-item" style="display:block; text-decoration:none; color:inherit;">
@@ -346,3 +346,4 @@
 })();
 </script>
 {% endblock %}
+
