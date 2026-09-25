@@ -6,7 +6,11 @@
   <div class="form-card">
     <p class="section-eyebrow">ACESSO AO SISTEMA</p>
     <h2>{{ title }}</h2>
-    <p class="muted">A senha não é cadastrada aqui. Para novos usuários, ela será criada pelo próprio usuário através do link enviado pelo WhatsApp.</p>
+    {% if editing %}
+      <p class="muted">Para redefinir a senha de um usuário, informe uma nova senha inicial. No próximo acesso, o sistema exigirá a troca.</p>
+    {% else %}
+      <p class="muted">Defina uma senha inicial e entregue-a ao usuário. No primeiro acesso, o sistema exigirá a troca.</p>
+    {% endif %}
     <form method="post" class="accounts-form">{% csrf_token %}
       {{ form.non_field_errors }}
       {% for field in form %}
