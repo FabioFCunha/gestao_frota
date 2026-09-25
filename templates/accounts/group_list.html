@@ -1,0 +1,21 @@
+{% extends "ui/base.html" %}
+{% block title %}Perfis e permissões · Gestão de Frotas{% endblock %}
+{% block heading %}Perfis e permissões{% endblock %}
+{% block content %}
+<section class="accounts-page">
+  <div class="accounts-head">
+    <div><p class="section-eyebrow">CONTROLE DE ACESSO</p><h2>Perfis</h2><p>Os perfis agrupam as permissões de cada usuário.</p></div>
+    <div class="accounts-actions"><a class="primary-action" href="{% url 'group_create' %}">+ Novo perfil</a><a class="secondary-action" href="{% url 'user_list' %}">Usuários</a></div>
+  </div>
+  <div class="profile-grid">
+  {% for group in groups %}
+    <article class="profile-card">
+      <div><span class="profile-icon">✓</span><h3>{{ group.name }}</h3><p>{{ group.permissions.count }} permissões</p></div>
+      <a class="table-action secondary" href="{% url 'group_edit' group.pk %}">Editar permissões</a>
+    </article>
+  {% empty %}
+    <p class="empty">Nenhum perfil cadastrado.</p>
+  {% endfor %}
+  </div>
+</section>
+{% endblock %}

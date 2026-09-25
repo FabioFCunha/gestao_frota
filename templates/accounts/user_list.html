@@ -1,0 +1,31 @@
+{% extends "ui/base.html" %}
+{% block title %}Usuários · Gestão de Frotas{% endblock %}
+{% block heading %}Usuários{% endblock %}
+{% block content %}
+<section class="accounts-page">
+  <div class="accounts-head">
+    <div><p class="section-eyebrow">ADMINISTRAÇÃO</p><h2>Usuários do sistema</h2><p>Somente o criador do sistema pode administrar acessos.</p></div>
+    <div class="accounts-actions"><a class="primary-action" href="{% url 'user_create' %}">+ Novo usuário</a><a class="secondary-action" href="{% url 'group_list' %}">Perfis e permissões</a></div>
+  </div>
+  <div class="accounts-table-wrap">
+    <table class="accounts-table">
+      <thead><tr><th>Nome</th><th>E-mail / login</th><th>ID funcional</th><th>Perfil</th><th>Situação</th><th>Acesso</th><th></th></tr></thead>
+      <tbody>
+      {% for user in users %}
+        <tr>
+          <td><strong>{{ user.get_full_name|default:user.username }}</strong>{% if user.is_system_creator %}<span class="owner-badge">CRIADOR</span>{% endif %}</td>
+          <td>{{ user.email }}</td>
+          <td>{{ user.functional_id }}</td>
+          <td>{% for group in user.groups.all %}<span class="profile-tag">{{ group.name }}</span>{% empty %}<span class="muted">Sem perfil</span>{% endfor %}</td>
+          <td>{% if user.is_active %}<span class="status-active">Ativo</span>{% else %}<span class="status-inactive">Inativo</span>{% endif %}{% if user.must_change_password %}<span class="muted"> · Troca pendente</span>{% endif %}</td>
+          <td>{% if user.is_system_creator %}<span class="muted">Conta principal</span>{% else %}<span class="muted">Senha gerenciada pelo usuário</span>{% endif %}</td>
+          <td><a class="table-action secondary" href="{% url 'user_edit' user.pk %}">Editar</a></td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="7" class="empty">Nenhum usuário cadastrado.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

@@ -29,13 +29,7 @@
             <tbody>
                 {% for vehicle in vehicles %}
                 <tr>
-                    <td>
-                        {% for custody in vehicle.custody_records.all %}
-                            <div><strong>{{ custody.reference }}</strong> <small>({{ custody.get_kind_display }})</small></div>
-                        {% empty %}
-                            -
-                        {% endfor %}
-                    </td>
+                    <td>{% with assignments=vehicle.active_driver_assignments %}{% if assignments %}{% with custodies=assignments.0.active_custodies %}{% if custodies %}{{ custodies.0.sei_number }}{% else %}{{ vehicle.custody_info|default:"-" }}{% endif %}{% endwith %}{% else %}{{ vehicle.custody_info|default:"-" }}{% endif %}{% endwith %}</td>
                     <td><strong>
                         {% for p in vehicle.plate_history.all %}
                             {% if not p.ends_on and p.kind == 'CURRENT' %}{{ p.plate }}{% endif %}
@@ -45,7 +39,7 @@
                     </strong></td>
                     <td>{{ vehicle.brand.name|default:"-" }} / {{ vehicle.model.name|default:"-" }}</td>
                     <td><span class="tag">{{ vehicle.status.name }}</span></td>
-                    <td><a href="{% url 'vehicle_dossier' vehicle.id %}">Ver Prontuário</a></td>
+                    <td><a href="{% url 'vehicle_dossier' vehicle.id %}">Ver Prontuário</a> &nbsp; | &nbsp; <a href="{% url 'vehicle_contract_edit' vehicle.id %}">Contrato</a></td>
                 </tr>
                 {% endfor %}
             </tbody>

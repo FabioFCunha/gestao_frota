@@ -5,7 +5,7 @@
 {% block content %}
 <section class="welcome" style="margin-bottom:20px;">
     <div><h2>Preencha os dados abaixo</h2></div>
-    <a class="primary-action" href="{% url back_url %}">← Voltar</a>
+    <a class="primary-action" href="{% if back_url_url %}{{ back_url_url }}{% else %}{% url back_url %}{% endif %}">← Voltar</a>
 </section>
 
 {% if messages %}
@@ -24,9 +24,61 @@
             {% csrf_token %}
             <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
             {% for field in form %}
-                <div style="display:flex; flex-direction:column; {% if field.name == 'notes' %}grid-column: 1/-1;{% endif %}">
+                <div style="display:flex; flex-direction:column; {% if field.name == 'notes' or field.name == 'vehicles' %}grid-column: 1/-1;{% endif %}">
                     <label style="font-weight:bold; margin-bottom:5px;">{{ field.label }} {% if field.field.required %}<span style="color:red">*</span>{% endif %}</label>
+                    {% if field.name == 'vehicles' %}
+                    <button type="button" id="open-vehicle-picker" class="secondary-action" style="width:100%; text-align:left; padding:12px;">
+                        <span id="vehicle-picker-label">Selecionar veículos</span>
+                    </button>
+                    <div id="selected-vehicles-summary" style="margin-top:8px; color:#555;"></div>
+                    <div id="vehicle-picker" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:1100; align-items:center; justify-content:center;">
+                        <div class="panel" style="width:min(620px,92vw); max-height:80vh; display:flex; flex-direction:column; padding:20px;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+                                <h3 style="margin:0;">Vincular veículos</h3>
+                                <button type="button" id="close-vehicle-picker" class="secondary-action">Fechar</button>
+                            </div>
+                            <input type="search" id="vehicle-search" class="form-input" placeholder="Pesquisar por placa, marca ou modelo..." autocomplete="off" style="margin-bottom:10px;">
+                            <div id="vehicle-options" style="overflow-y:auto; border:1px solid #ddd; border-radius:6px; padding:8px; min-height:180px;">
+                                {% for option in field %}
+                                <label class="vehicle-option" data-search="{{ option.choice_label|lower }}" style="display:flex; align-items:center; gap:10px; padding:9px; border-bottom:1px solid #eee; cursor:pointer;">
+                                    {{ option.tag }}
+                                    <span>{{ option.choice_label }}</span>
+                                </label>
+                                {% endfor %}
+                            </div>
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:14px; gap:10px;">
+                                <span id="vehicle-count" style="color:#555;">0 veículos selecionados</span>
+                                <button type="button" id="apply-vehicle-picker" class="primary-action">Concluir seleção</button>
+                            </div>
+                        </div>
+                    </div>
+                    {% elif quick_renter and field.name == 'renter' %}
+                    <div style="display:flex; gap:8px; align-items:center;">
+                        {{ field }}
+                        <button type="button" id="open-renter-create" class="secondary-action" style="white-space:nowrap;">+ Nova locadora</button>
+                    </div>
+                    <div id="renter-create-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:1200; align-items:center; justify-content:center;">
+                        <div class="panel" style="width:min(460px,92vw); padding:20px;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                                <h3 style="margin:0;">Nova locadora</h3>
+                                <button type="button" id="close-renter-create" class="secondary-action">Fechar</button>
+                            </div>
+                            <label for="new-renter-name" style="font-weight:bold; display:block; margin-bottom:6px;">Nome da locadora</label>
+                            <input type="text" id="new-renter-name" class="form-input" placeholder="Digite o nome da locadora" autocomplete="off">
+                            <div id="renter-create-error" style="display:none; color:#b91c1c; margin-top:10px;"></div>
+                            <div style="margin-top:18px; text-align:right;">
+                                <button type="button" id="save-renter-create" class="primary-action">Adicionar locadora</button>
+                            </div>
+                        </div>
+                    </div>
+                    {% elif quick_create and field.name == 'brand' or quick_create and field.name == 'model' or quick_create and field.name == 'unit' or quick_create and field.name == 'base' %}
+                    <div style="display:flex; gap:8px; align-items:center;">
+                        {{ field }}
+                        <button type="button" class="secondary-action quick-add" data-entity="{{ field.name }}" style="white-space:nowrap;">+ Novo</button>
+                    </div>
+                    {% else %}
                     {{ field }}
+                    {% endif %}
                     {% if field.help_text %}<small style="color:#666;">{{ field.help_text }}</small>{% endif %}
                     {% if field.errors %}<small style="color:red;">{{ field.errors.0 }}</small>{% endif %}
                 </div>
@@ -38,4 +90,137 @@
         </form>
     </article>
 </section>
+
+<script>
+(function () {
+    const openButton = document.getElementById('open-vehicle-picker');
+    const closeButton = document.getElementById('close-vehicle-picker');
+    const applyButton = document.getElementById('apply-vehicle-picker');
+    const picker = document.getElementById('vehicle-picker');
+    const search = document.getElementById('vehicle-search');
+    const options = document.querySelectorAll('.vehicle-option');
+    const count = document.getElementById('vehicle-count');
+    const summary = document.getElementById('selected-vehicles-summary');
+    const label = document.getElementById('vehicle-picker-label');
+
+    if (!openButton || !picker) return;
+
+    function updateSelection() {
+        const checked = document.querySelectorAll('#vehicle-options input[type="checkbox"]:checked');
+        count.textContent = checked.length + (checked.length === 1 ? ' veículo selecionado' : ' veículos selecionados');
+        label.textContent = checked.length
+            ? checked.length + (checked.length === 1 ? ' veículo selecionado' : ' veículos selecionados')
+            : 'Selecionar veículos';
+        summary.textContent = checked.length
+            ? Array.from(checked).map(input => input.closest('.vehicle-option').querySelector('span').textContent.trim()).join(' • ')
+            : '';
+    }
+
+    openButton.addEventListener('click', function () {
+        picker.style.display = 'flex';
+        updateSelection();
+        setTimeout(() => search.focus(), 50);
+    });
+
+    closeButton.addEventListener('click', function () {
+        picker.style.display = 'none';
+    });
+
+    applyButton.addEventListener('click', function () {
+        picker.style.display = 'none';
+        updateSelection();
+    });
+
+    picker.addEventListener('click', function (event) {
+        if (event.target === picker) picker.style.display = 'none';
+    });
+
+    search.addEventListener('input', function () {
+        const term = this.value.trim().toLowerCase();
+        options.forEach(function (option) {
+            option.style.display = !term || option.dataset.search.includes(term) ? 'flex' : 'none';
+        });
+    });
+
+    options.forEach(function (option) {
+        const checkbox = option.querySelector('input[type="checkbox"]');
+
+        checkbox.addEventListener('change', updateSelection);
+
+        option.addEventListener('click', function () {
+            setTimeout(updateSelection, 0);
+        });
+    });
+
+    updateSelection();
+})();
+</script>
+
+<script>
+(function () {
+    const openButton = document.getElementById('open-renter-create');
+    const closeButton = document.getElementById('close-renter-create');
+    const saveButton = document.getElementById('save-renter-create');
+    const modal = document.getElementById('renter-create-modal');
+    const nameInput = document.getElementById('new-renter-name');
+    const error = document.getElementById('renter-create-error');
+    const select = document.getElementById('id_renter');
+
+    if (!openButton || !modal || !select) return;
+
+    function closeModal() {
+        modal.style.display = 'none';
+        error.style.display = 'none';
+    }
+
+    openButton.addEventListener('click', function () {
+        modal.style.display = 'flex';
+        nameInput.value = '';
+        error.style.display = 'none';
+        setTimeout(() => nameInput.focus(), 50);
+    });
+
+    closeButton.addEventListener('click', closeModal);
+    modal.addEventListener('click', function (event) {
+        if (event.target === modal) closeModal();
+    });
+
+    saveButton.addEventListener('click', async function () {
+        const name = nameInput.value.trim();
+        if (!name) {
+            error.textContent = 'Informe o nome da locadora.';
+            error.style.display = 'block';
+            return;
+        }
+
+        const body = new URLSearchParams();
+        body.append('name', name);
+        body.append('csrfmiddlewaretoken', document.querySelector('[name="csrfmiddlewaretoken"]').value);
+
+        saveButton.disabled = true;
+        error.style.display = 'none';
+
+        try {
+            const response = await fetch('{% url "renter_quick_create" %}', {
+                method: 'POST',
+                headers: {'X-Requested-With': 'XMLHttpRequest'},
+                body: body
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || 'Não foi possível cadastrar a locadora.');
+
+            const option = new Option(data.name, data.id, true, true);
+            select.add(option);
+            select.value = data.id;
+            closeModal();
+        } catch (err) {
+            error.textContent = err.message;
+            error.style.display = 'block';
+        } finally {
+            saveButton.disabled = false;
+        }
+    });
+})();
+</script>
+
 {% endblock %}

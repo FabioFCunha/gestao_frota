@@ -1,0 +1,72 @@
+{% extends 'ui/base.html' %}
+{% block title %}{{ contract.number }} | Contratos{% endblock %}
+{% block heading %}Detalhes do Contrato{% endblock %}
+{% block content %}
+<section class="welcome" style="margin-bottom:20px;">
+    <div>
+        <h2>{{ contract.number }}</h2>
+        <p>
+            <strong>Locadora:</strong> {{ contract.renter.name|default:"-" }}
+            &nbsp; | &nbsp;
+            <strong>Vigência:</strong> {{ contract.starts_on|date:"d/m/Y" }} a {{ contract.ends_on|date:"d/m/Y" }}
+            &nbsp; | &nbsp;
+            <span class="tag">{{ contract.administrative_status }}</span>
+        </p>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <a class="secondary-action" href="{% url 'contract_list' %}">← Voltar</a>
+        <a class="primary-action" href="{% url 'contract_edit' contract.pk %}">Editar contrato</a>
+    </div>
+</section>
+
+<section class="grid">
+    <article class="panel" style="grid-column:1/-1;">
+        <div class="panel-title">
+            <div>
+                <h3>🚗 Veículos do contrato</h3>
+                <small>{{ vehicle_count }} veículo{{ vehicle_count|pluralize:"s" }}</small>
+            </div>
+        </div>
+
+        {% if vehicle_rows %}
+        <table>
+            <thead>
+                <tr>
+                    <th>MODELO</th>
+                    <th>PLACA</th>
+                    <th>MOTORISTA</th>
+                    <th>SEI / ACAUTELAMENTO</th>
+                    <th>SITUAÇÃO</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in vehicle_rows %}
+                <tr>
+                    <td>
+                        <a href="{% url 'vehicle_dossier' row.vehicle.pk %}">
+                            <strong>{{ row.vehicle.brand.name|default:"-" }} {{ row.vehicle.model.name|default:"-" }}</strong>
+                        </a>
+                    </td>
+                    <td>{{ row.plate|default:"-" }}</td>
+                    <td>{{ row.driver.name|default:"-" }}</td>
+                    <td>
+                        {% if row.custody %}
+                            {{ row.custody.sei_number }}
+                            {% if row.custody.started_on %}
+                                <br><small>Vigência: {{ row.custody.started_on|date:"d/m/Y" }}</small>
+                            {% endif %}
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+                    <td><span class="tag">{{ row.vehicle.status.name }}</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty">Nenhum veículo está vinculado a este contrato.</div>
+        {% endif %}
+    </article>
+</section>
+{% endblock %}

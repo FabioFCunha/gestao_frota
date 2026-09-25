@@ -1,5 +1,151 @@
+import re
+
 from django.db import transaction
-from .models import AuditLog, Driver, Maintenance, VehicleHistory, VehicleStatus, VehicleDriverAssignment, Vehicle
+from django.db import models
+from .models import AuditLog, Driver, Maintenance, VehicleHistory, VehicleStatus, VehicleDriverAssignment, VehicleCustody, Vehicle
+
+
+# === WW TRANS: REGRA DE REVISÃO PREVENTIVA ===
+
+REVISION_INTERVAL_KM = 10_000
+REVISION_ALERT_KM = 3_000
+
+
+def get_vehicle_revision_status(*, vehicle):
+    """
+    Calcula a situação da revisão preventiva do veículo.
+
+    A próxima revisão é sempre 10.000 km após a última revisão
+    efetivamente concluída e registrada com quilometragem.
+
+    Apenas manutenções:
+      - do tipo "Revisão";
+      - com status "Concluída";
+      - com KM informado
+
+    podem estabelecer uma nova referência.
+
+    Para veículos legados sem manutenção de revisão registrada, utiliza a
+    referência ``[KM_PROX_REVISAO]`` armazenada nas observações do veículo.
+    """
+    from .models import MaintenanceType, MaintenanceStatus, VehicleMileage
+
+    revision_type = MaintenanceType.objects.filter(
+        name__iexact="Revisão",
+        active=True,
+    ).first()
+
+    completed_status = MaintenanceStatus.objects.filter(
+        name__iexact="Concluída",
+        active=True,
+    ).first()
+
+    current_mileage = (
+        VehicleMileage.objects
+        .filter(vehicle=vehicle)
+        .order_by("-date", "-created_at")
+        .values_list("mileage", flat=True)
+        .first()
+    ) or 0
+
+    active_revision = None
+
+    if revision_type:
+        active_revision = (
+            Maintenance.objects
+            .filter(
+                vehicle=vehicle,
+                type=revision_type,
+                exited_at__isnull=True,
+            )
+            .order_by("-entered_at", "-created_at")
+            .first()
+        )
+
+    last_revision = None
+
+    if revision_type and completed_status:
+        last_revision = (
+            Maintenance.objects
+            .filter(
+                vehicle=vehicle,
+                type=revision_type,
+                status=completed_status,
+            )
+            .filter(
+                models.Q(completion_mileage__isnull=False)
+                | models.Q(mileage__isnull=False)
+            )
+            .order_by(
+                models.F("completion_mileage").desc(nulls_last=True),
+                "-mileage",
+                "-entered_at",
+                "-created_at",
+            )
+            .first()
+        )
+
+    if last_revision:
+        last_revision_km = (
+            last_revision.completion_mileage
+            if last_revision.completion_mileage is not None
+            else last_revision.mileage
+        )
+        next_revision_km = last_revision_km + REVISION_INTERVAL_KM
+        has_history = True
+    else:
+        legacy_reference = re.search(
+            r"\[KM_PROX_REVISAO\]\s*(\d+)",
+            vehicle.notes or "",
+        )
+        if not legacy_reference:
+            return {
+                "last_revision_id": None,
+                "last_revision_km": None,
+                "last_revision_entered_at": None,
+                "last_revision_exited_at": None,
+                "last_revision_workshop": "",
+                "last_revision_workshop_name": "",
+                "last_revision_service": "",
+                "last_revision_completion_mileage": None,
+                "next_revision_km": None,
+                "current_km": current_mileage,
+                "km_remaining": None,
+                "status": "SEM_HISTORICO",
+                "has_history": False,
+            }
+        last_revision_km = None
+        next_revision_km = int(legacy_reference.group(1))
+        has_history = False
+
+    km_remaining = next_revision_km - current_mileage
+
+    if active_revision:
+        status = "EM_REVISAO"
+    elif km_remaining <= 0:
+        status = "DEVIDA"
+    elif km_remaining <= REVISION_ALERT_KM:
+        status = "PROXIMA"
+    else:
+        status = "OK"
+
+    return {
+        "last_revision_id": last_revision.id if last_revision else None,
+        "last_revision_km": last_revision_km,
+        "last_revision_entered_at": last_revision.entered_at if last_revision else None,
+        "last_revision_exited_at": last_revision.exited_at if last_revision else None,
+        "last_revision_workshop": last_revision.workshop.name if last_revision and last_revision.workshop else "",
+        "last_revision_workshop_name": last_revision.workshop_name if last_revision else "",
+        "last_revision_service": last_revision.service if last_revision else "",
+        "last_revision_completion_mileage": last_revision.completion_mileage if last_revision else None,
+        "active_revision_id": active_revision.id if active_revision else None,
+        "active_revision_entered_at": active_revision.entered_at if active_revision else None,
+        "next_revision_km": next_revision_km,
+        "current_km": current_mileage,
+        "km_remaining": km_remaining,
+        "status": status,
+        "has_history": has_history,
+    }
 
 
 @transaction.atomic
@@ -51,14 +197,18 @@ def open_maintenance(*, maintenance: Maintenance, user):
         
     vehicle = maintenance.vehicle
     
-    # Previne múltiplas manutenções abertas
-    existing_open = Maintenance.objects.filter(
-        vehicle=vehicle, 
-        status__name__iexact="Aberta"
+    # Previne múltiplas manutenções operacionais simultâneas.
+    # "Aberta" e "Em andamento" ocupam a manuten??o operacional do veículo.
+    existing_active = Maintenance.objects.filter(
+        vehicle=vehicle,
+        status__name__in=["Aberta", "Em andamento"]
     ).exclude(id=maintenance.id).exists()
-    
-    if existing_open:
-        raise ValueError("O veículo já possui uma manutenção aberta. Conclua ou cancele a atual antes de abrir outra.")
+
+    if existing_active:
+        raise ValueError(
+            "O veículo já possui uma manuten??o aberta ou em andamento. "
+            "Conclua ou cancele a atual antes de abrir outra."
+        )
         
     previous = vehicle.status
     
@@ -76,12 +226,23 @@ def open_maintenance(*, maintenance: Maintenance, user):
     return maintenance
 
 @transaction.atomic
-def complete_maintenance(*, maintenance: Maintenance, user, resulting_status: str = None, reason: str = ""):
+def complete_maintenance(
+    *,
+    maintenance: Maintenance,
+    user,
+    resulting_status: str = None,
+    reason: str = "",
+    completion_mileage: int = None,
+    exited_at=None,
+    allow_already_completed: bool = False,
+):
     if not resulting_status:
         raise ValueError("O status resultante do veículo deve ser explicitamente informado ao concluir a manutenção.")
         
     current_status = maintenance.status.name.casefold()
-    if current_status in ["concluída", "cancelada"]:
+    if current_status == "cancelada":
+        raise ValueError(f"Não é possível concluir uma manutenção que já está {current_status}.")
+    if current_status == "concluída" and not allow_already_completed:
         raise ValueError(f"Não é possível concluir uma manutenção que já está {current_status}.")
         
     try:
@@ -92,14 +253,38 @@ def complete_maintenance(*, maintenance: Maintenance, user, resulting_status: st
         
     from django.utils import timezone
     now = timezone.now()
+    exit_timestamp = exited_at or now
+    
+    if maintenance.entered_at and exit_timestamp < maintenance.entered_at:
+        raise ValueError("A data de retorno não pode ser anterior à data de envio para revisão.")
     
     old_status_name = maintenance.status.name
-    
+
+    if completion_mileage is not None:
+        completion_mileage = int(completion_mileage)
+        if completion_mileage < 0:
+            raise ValueError("A quilometragem de retorno não pode ser negativa.")
+        if maintenance.mileage is not None and completion_mileage < maintenance.mileage:
+            raise ValueError("A quilometragem de retorno não pode ser menor que a quilometragem de entrada.")
+        maintenance.completion_mileage = completion_mileage
+
     maintenance.status = concluida_status
-    maintenance.exited_at = now
+    maintenance.exited_at = exit_timestamp
     maintenance.resolved_by = user
-    maintenance.save(update_fields=["status", "exited_at", "resolved_by", "updated_at"])
+    update_fields = ["status", "exited_at", "resolved_by", "updated_at"]
+    if completion_mileage is not None:
+        update_fields.append("completion_mileage")
+    maintenance.save(update_fields=update_fields)
     
+    if completion_mileage is not None:
+        record_vehicle_mileage(
+            vehicle=maintenance.vehicle,
+            mileage=completion_mileage,
+            user=user,
+            origin="MANUAL",
+            notes=f"Retorno da revisão #{maintenance.id}",
+        )
+
     AuditLog.objects.create(
         user=user,
         module="manutenções",
@@ -167,53 +352,102 @@ def cancel_maintenance(*, maintenance: Maintenance, user, resulting_status: str 
 
 
 @transaction.atomic
-def assign_driver_to_vehicle(*, vehicle: Vehicle, driver: Driver, user, notes: str = ""):
+def assign_driver_to_vehicle(
+    *,
+    vehicle: Vehicle,
+    driver: Driver,
+    user,
+    notes: str = "",
+    sei_number: str = "",
+    custody_started_on=None,
+    custody_ended_on=None,
+):
     from django.utils import timezone
+
+    sei_number = (sei_number or "").strip()
+
+    if sei_number and not custody_started_on:
+        raise ValueError(
+            "A data de início da vigência do SEI é obrigatória quando o SEI é informado."
+        )
+
+    if custody_ended_on and not custody_started_on:
+        raise ValueError(
+            "A data de início da vigência do SEI é obrigatória quando a data final é informada."
+        )
+
+    if custody_started_on and custody_ended_on and custody_ended_on < custody_started_on:
+        raise ValueError(
+            "A data final da vigência do SEI não pode ser anterior à data inicial."
+        )
+
     current_assignment = vehicle.driver_assignments.filter(is_active=True).first()
-    
+
     if current_assignment and current_assignment.driver_id == driver.id:
         return current_assignment
-        
+
     old_value = None
     now = timezone.now()
-    
+
     if current_assignment:
-        old_value = {"id": str(current_assignment.driver_id), "name": current_assignment.driver.name}
+        old_value = {
+            "id": str(current_assignment.driver_id),
+            "name": current_assignment.driver.name,
+        }
         current_assignment.is_active = False
         current_assignment.ends_on = now
-        current_assignment.save(update_fields=["is_active", "ends_on", "updated_at"])
-        
+        current_assignment.save(
+            update_fields=["is_active", "ends_on", "updated_at"]
+        )
+
+        VehicleCustody.objects.filter(
+            assignment=current_assignment,
+            ended_on__isnull=True,
+        ).update(
+            ended_on=now.date(),
+            updated_at=now,
+        )
+
     new_assignment = VehicleDriverAssignment.objects.create(
         vehicle=vehicle,
         driver=driver,
         starts_on=now,
         is_active=True,
         notes=notes,
-        assigned_by=user
+        assigned_by=user,
     )
-    
+
+    if sei_number:
+        VehicleCustody.objects.create(
+            assignment=new_assignment,
+            sei_number=sei_number,
+            started_on=custody_started_on,
+            ended_on=custody_ended_on,
+            notes=notes,
+        )
+
     new_value = {"id": str(driver.id), "name": driver.name}
-    
+
     VehicleHistory.objects.create(
-        vehicle=vehicle, 
-        field="driver", 
-        old_value=old_value, 
-        new_value=new_value, 
-        reason=notes or "Troca de motorista", 
-        changed_by=user
+        vehicle=vehicle,
+        field="driver",
+        old_value=old_value,
+        new_value=new_value,
+        reason=notes or "Troca de motorista",
+        changed_by=user,
     )
-    
+
     AuditLog.objects.create(
-        user=user, 
-        module="veículos", 
-        action="VÍNCULO MOTORISTA", 
-        entity_type="vehicle", 
-        entity_id=vehicle.id, 
-        old_values={"driver": old_value["name"] if old_value else None}, 
-        new_values={"driver": new_value["name"]}, 
-        reason=notes or "Troca de motorista"
+        user=user,
+        module="veículos",
+        action="VÍNCULO MOTORISTA",
+        entity_type="vehicle",
+        entity_id=vehicle.id,
+        old_values={"driver": old_value["name"] if old_value else None},
+        new_values={"driver": new_value["name"]},
+        reason=notes or "Troca de motorista",
     )
-    
+
     return new_assignment
 
 
@@ -823,18 +1057,20 @@ def get_dashboard_metrics(filters: dict) -> dict:
         "by_status": {item['status__name']: item['count'] for item in f_counts}
     }
     
-    # 6. SEI Processes
-    # SEI processes are related via generic relation, or maybe we just show global SEI?
-    # The prompt says: "Não assumir que multas, documentos ou processos devem necessariamente ser filtrados da mesma maneira se a relação com veículo não existir."
-    # Let's just return global SEI and Documents if filters aren't applicable.
-    # Actually, if we filter by vehicle, SEI processes related to that vehicle could be found, but it's expensive.
-    # Let's just return global for SEI and Documents.
+    # 6. Processos SEI e acautelamentos legados.
+    # Os veículos importados guardam seu SEI/acautelamento em ``custody_info``.
+    # Enquanto esses registros não forem convertidos em SEIProcess, eles também
+    # precisam integrar o indicador operacional.
     sei_counts = SEIProcess.objects.values('status__name').annotate(count=Count('id'))
+    legacy_custody_count = v_qs.exclude(custody_info__isnull=True).exclude(custody_info__exact='').count()
     sei_metrics = {
-        "total": SEIProcess.objects.count(),
-        "by_status": {item['status__name']: item['count'] for item in sei_counts}
+        "total": SEIProcess.objects.count() + legacy_custody_count,
+        "by_status": {
+            **{item['status__name']: item['count'] for item in sei_counts},
+            "Acautelamentos legados": legacy_custody_count,
+        }
     }
-    
+
     doc_counts = Document.objects.values('status__name').annotate(count=Count('id'))
     doc_metrics = {
         "total": Document.objects.count(),
@@ -887,9 +1123,35 @@ def get_operational_alerts(filters: dict) -> dict:
     ).select_related('vehicle').values("id", "vehicle__plate_history__plate", "status__name", "entered_at")
     
     # 3. Pending Fines
-    pending_fines = VehicleFine.objects.filter(
+    from django.db.models import Prefetch
+    from .models import VehicleDriverAssignment
+
+    pending_fines_qs = VehicleFine.objects.filter(
         status__name__in=["Pendente", "Em análise", "Em recurso"]
-    ).select_related('vehicle').values("id", "vehicle__plate_history__plate", "status__name", "date")
+    ).select_related('vehicle', 'status').prefetch_related(
+        Prefetch(
+            'vehicle__driver_assignments',
+            queryset=VehicleDriverAssignment.objects.filter(is_active=True).select_related('driver'),
+            to_attr='active_driver_assignments',
+        ),
+        'vehicle__plate_history',
+    )
+    pending_fines = []
+    for fine in pending_fines_qs:
+        driver_assignments = getattr(fine.vehicle, 'active_driver_assignments', [])
+        driver_name = driver_assignments[0].driver.name if driver_assignments else None
+        plate = next(
+            (p.plate for p in fine.vehicle.plate_history.all()
+             if p.kind == 'CURRENT' and p.ends_on is None),
+            None,
+        )
+        pending_fines.append({
+            "id": fine.id,
+            "vehicle__plate_history__plate": plate,
+            "status__name": fine.status.name,
+            "date": fine.date,
+            "driver__name": driver_name,
+        })
     
     # 4. Open SEI Processes
     open_sei = SEIProcess.objects.filter(
@@ -901,40 +1163,47 @@ def get_operational_alerts(filters: dict) -> dict:
         status__name__in=["Reprovada", "Com ressalvas"]
     ).select_related('vehicle').values("id", "vehicle__plate_history__plate", "status__name", "date")
 
-    # 6. Revisões Vencidas (from notes and mileage)
-    from .models import Vehicle, VehicleMileage
-    mileages = {}
-    for m in VehicleMileage.objects.order_by('-date'):
-        if m.vehicle_id not in mileages:
-            mileages[m.vehicle_id] = m.mileage
-            
+    # 6. Revisoes preventivas
+    # Regra oficial WW Trans:
+    # - intervalo de 10.000 km;
+    # - alerta nos ultimos 3.000 km;
+    # - somente Revisao + Concluida + KM informado estabelece o ciclo.
+    from .models import Vehicle
+
     revisoes_vencidas = []
-    qs_vehicles = Vehicle.objects.exclude(notes='').exclude(notes__isnull=True).prefetch_related('plate_history')
+
+    qs_vehicles = Vehicle.objects.prefetch_related('plate_history')
+
     for v in qs_vehicles:
-        km_prox_revisao = None
-        for line in v.notes.split('\n'):
-            line = line.strip()
-            if line.startswith('[KM_PROX_REVISAO]'):
-                try: km_prox_revisao = int(line.replace('[KM_PROX_REVISAO]', '').strip())
-                except ValueError: pass
-        
-        km_atual = mileages.get(v.id, 0)
-        if km_prox_revisao and km_atual and km_atual >= km_prox_revisao:
-            plate = "-"
-            for p in v.plate_history.all():
-                if not p.ends_on and p.kind == 'CURRENT':
-                    plate = p.plate
-                    break
-            revisoes_vencidas.append({
-                'vehicle_id': v.id,
-                'plate': plate,
-                'km_atual': km_atual,
-                'km_prox_revisao': km_prox_revisao,
-                'ultrapassado': km_atual - km_prox_revisao
-            })
-            
-    # Sort by most overdue
-    revisoes_vencidas.sort(key=lambda x: x['ultrapassado'], reverse=True)
+        revision = get_vehicle_revision_status(vehicle=v)
+
+        if revision['status'] not in ('DEVIDA', 'PROXIMA'):
+            continue
+
+        plate = "-"
+        for p in v.plate_history.all():
+            if not p.ends_on and p.kind == 'CURRENT':
+                plate = p.plate
+                break
+
+        revisoes_vencidas.append({
+            'vehicle_id': v.id,
+            'plate': plate,
+            'km_atual': revision['current_km'],
+            'km_prox_revisao': revision['next_revision_km'],
+            'km_faltando': revision['km_remaining'],
+            'status': revision['status'],
+            'last_revision_km': revision['last_revision_km'],
+            'ultrapassado': max(0, -revision['km_remaining']),
+        })
+
+    # Revisoes devidas primeiro; depois as proximas mais urgentes.
+    revisoes_vencidas.sort(
+        key=lambda x: (
+            0 if x['status'] == 'DEVIDA' else 1,
+            x['km_faltando'] if x['km_faltando'] is not None else 999999,
+        )
+    )
 
     return {
         "expiring_contracts": list(expiring_contracts),
@@ -943,5 +1212,5 @@ def get_operational_alerts(filters: dict) -> dict:
         "pending_fines": list(pending_fines),
         "open_sei": list(open_sei),
         "pending_inspections": list(pending_inspections),
-        "revisoes_vencidas": revisoes_vencidas[:15] # Top 15 worst
+        "revisoes_vencidas": revisoes_vencidas
     }

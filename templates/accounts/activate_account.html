@@ -1,0 +1,17 @@
+{% load static %}
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Ativar conta · Gestão de Frotas</title><link rel="stylesheet" href="{% static 'ui/app.css' %}"></head>
+<body class="login-page"><section class="login-card">
+{% if valid %}
+  <div class="login-logo"><span class="brand-mark">GF</span></div>
+  <p class="eyebrow">PRIMEIRO ACESSO</p><h1>Crie sua senha</h1>
+  <p class="muted">Olá, {{ user.first_name }}. Defina sua senha para ativar seu acesso ao Gestão de Frotas.</p>
+  {% if messages %}{% for message in messages %}<p class="error">{{ message }}</p>{% endfor %}{% endif %}
+  <form method="post">{% csrf_token %}
+    <label>Senha<input name="password" type="password" minlength="8" autocomplete="new-password" required></label>
+    <label>Confirmar senha<input name="confirmation" type="password" minlength="8" autocomplete="new-password" required></label>
+    <button type="submit">Ativar minha conta</button>
+  </form>
+{% else %}
+  <p class="eyebrow">LINK INVÁLIDO</p><h1>Convite indisponível</h1><p class="muted">Este link expirou ou já foi utilizado. Solicite um novo convite ao administrador do sistema.</p>
+{% endif %}
+</section></body></html>

@@ -15,7 +15,7 @@
     <article class="panel" style="grid-column:1/-1;">
         {% if fines %}
         <table>
-            <thead><tr><th>VEÍCULO (PLACA)</th><th>AUTO Nº</th><th>ÓRGÃO</th><th>VALOR</th><th>SITUAÇÃO</th><th>DATA</th></tr></thead>
+            <thead><tr><th>VEÍCULO (PLACA)</th><th>AUTO Nº</th><th>ÓRGÃO</th><th>VALOR</th><th>SITUAÇÃO</th><th>DATA</th><th>AÇÕES</th></tr></thead>
             <tbody>
                 {% for f in fines %}
                 <tr>
@@ -24,11 +24,11 @@
                             {% if not p.ends_on %}{{ p.plate }}{% endif %}
                         {% empty %}Sem placa{% endfor %}
                     </td>
-                    <td><strong>{{ f.auto_number }}</strong></td>
+                    <td><button type="button" class="secondary-action" data-fine-id="{{ f.id }}" data-fine-title="Multa {{ f.auto_number }}">{{ f.auto_number }}</button></td>
                     <td>{{ f.agency|default:"-" }}</td>
                     <td>{% if f.amount %}R$ {{ f.amount }}{% else %}-{% endif %}</td>
                     <td><span class="tag">{{ f.status.name }}</span></td>
-                    <td>{{ f.date|date:"d/m/Y" }}</td>
+                    <td>{{ f.date|date:"d/m/Y" }}</td><td><button type="button" class="secondary-action" data-fine-id="{{ f.id }}" data-fine-title="Multa {{ f.auto_number }}">Ver</button></td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -38,4 +38,56 @@
         {% endif %}
     </article>
 </section>
+
+{% for f in fines %}
+<div id="fine-detail-{{ f.id }}" style="display:none;">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px 24px;">
+        <div><strong>Placa</strong><br>{% for p in f.vehicle.plate_history.all %}{% if not p.ends_on %}{{ p.plate }}{% endif %}{% empty %}Sem placa{% endfor %}</div>
+        <div><strong>Motorista vinculado</strong><br>{% if f.vehicle.active_driver_assignments %}{{ f.vehicle.active_driver_assignments.0.driver.name }}{% else %}Sem motorista vinculado{% endif %}</div>
+        <div><strong>Situação</strong><br><span class="tag">{{ f.status.name }}</span></div>
+        <div><strong>Nº do Auto de Infração</strong><br>{{ f.auto_number }}</div>
+        <div><strong>Órgão Autuador</strong><br>{{ f.agency|default:"-" }}</div>
+        <div><strong>Data da Infração</strong><br>{{ f.date|date:"d/m/Y H:i" }}</div>
+        <div><strong>Valor</strong><br>{% if f.amount %}R$ {{ f.amount }}{% else %}-{% endif %}</div>
+        <div><strong>Vencimento</strong><br>{{ f.due_date|date:"d/m/Y"|default:"-" }}</div>
+        <div style="grid-column:1/-1;"><strong>Observações / Processo SEI</strong><br>{{ f.notes|default:"-"|linebreaksbr }}</div>
+    </div>
+    <div style="margin-top:24px;display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;">
+        <a class="secondary-action" href="{% url 'fine_full_edit' f.id %}">Editar multa</a>
+        <a class="primary-action" href="{% url 'fine_edit' f.id %}">Mudar situação</a>
+    </div>
+</div>
+{% endfor %}
+<div id="fine-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1100;align-items:center;justify-content:center;padding:20px;">
+    <div class="panel" style="width:min(720px,96vw);max-height:90vh;overflow:auto;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
+            <h3 id="fine-modal-title" style="margin:0;">Detalhes da multa</h3>
+            <button type="button" id="fine-modal-close" class="secondary-action">Fechar</button>
+        </div>
+        <div id="fine-modal-content"></div>
+    </div>
+</div>
+<script>
+(function () {
+    const modal = document.getElementById('fine-modal');
+    const content = document.getElementById('fine-modal-content');
+    const title = document.getElementById('fine-modal-title');
+
+    function openFine(id, titleText) {
+        const source = document.getElementById('fine-detail-' + id);
+        if (!source) return;
+        title.textContent = titleText;
+        content.innerHTML = source.innerHTML;
+        modal.style.display = 'flex';
+    }
+
+    function closeFine() { modal.style.display = 'none'; }
+
+    document.querySelectorAll('[data-fine-id]').forEach(button => {
+        button.addEventListener('click', () => openFine(button.dataset.fineId, button.dataset.fineTitle));
+    });
+    document.getElementById('fine-modal-close').addEventListener('click', closeFine);
+    modal.addEventListener('click', event => { if (event.target === modal) closeFine(); });
+})();
+</script>
 {% endblock %}

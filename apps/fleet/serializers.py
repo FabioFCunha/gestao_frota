@@ -106,7 +106,7 @@ class DocumentRelationSerializer(serializers.ModelSerializer):
 class DocumentVersionSerializer(serializers.ModelSerializer):
     class Meta:
         model = DocumentVersion
-        fields = ["id", "original_filename", "file_extension", "mime_type", "file_size", "uploaded_at", "uploaded_by"]
+        fields = ["id", "original_filename", "file_extension", "mime_type", "file_size", "created_at", "updated_at", "uploaded_by"]
 
 
 class DocumentSerializer(serializers.ModelSerializer):

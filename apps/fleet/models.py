@@ -174,6 +174,29 @@ class VehicleDriverAssignment(BaseModel):
         ]
 
 
+class VehicleCustody(BaseModel):
+    assignment = models.ForeignKey(
+        VehicleDriverAssignment,
+        on_delete=models.PROTECT,
+        related_name="custodies",
+    )
+    sei_number = models.CharField(
+        "SEI do acautelamento",
+        max_length=100,
+    )
+    started_on = models.DateField(
+        "Início do acautelamento",
+    )
+    ended_on = models.DateField(
+        "Fim do acautelamento",
+        null=True,
+        blank=True,
+    )
+    notes = models.TextField(
+        "Observações",
+        blank=True,
+    )
+
 class VehiclePlate(BaseModel):
     CURRENT, RESERVED = "CURRENT", "RESERVED"
     vehicle = models.ForeignKey(Vehicle, on_delete=models.PROTECT, related_name="plate_history")
@@ -338,6 +361,8 @@ class Maintenance(BaseModel):
     type = models.ForeignKey(MaintenanceType, on_delete=models.PROTECT)
     status = models.ForeignKey(MaintenanceStatus, on_delete=models.PROTECT)
     mileage = models.PositiveIntegerField(null=True, blank=True)
+    completion_mileage = models.PositiveIntegerField(null=True, blank=True)
+    workshop_name = models.CharField(max_length=150, blank=True)
     service = models.CharField(max_length=200, blank=True)
     description = models.TextField(blank=True)
     value = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
