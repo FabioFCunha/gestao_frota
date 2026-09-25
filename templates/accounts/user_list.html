@@ -17,8 +17,8 @@
           <td>{{ user.email }}</td>
           <td>{{ user.functional_id }}</td>
           <td>{% for group in user.groups.all %}<span class="profile-tag">{{ group.name }}</span>{% empty %}<span class="muted">Sem perfil</span>{% endfor %}</td>
-          <td>{% if user.is_active %}<span class="status-active">Ativo</span>{% else %}<span class="status-inactive">Pendente</span>{% endif %}</td>
-          <td>{% if user.is_system_creator %}<span class="muted">Conta principal</span>{% elif not user.is_active %}<form method="post" action="{% url 'user_whatsapp' user.pk %}" style="display:inline">{% csrf_token %}<button class="whatsapp-action" type="submit">WhatsApp</button></form>{% else %}<span class="muted">Ativado</span>{% endif %}</td>
+          <td>{% if user.is_active %}<span class="status-active">Ativo</span>{% else %}<span class="status-inactive">Inativo</span>{% endif %}{% if user.must_change_password %}<span class="muted"> · Troca pendente</span>{% endif %}</td>
+          <td>{% if user.is_system_creator %}<span class="muted">Conta principal</span>{% else %}<span class="muted">Senha gerenciada pelo usuário</span>{% endif %}</td>
           <td><a class="table-action secondary" href="{% url 'user_edit' user.pk %}">Editar</a></td>
         </tr>
       {% empty %}
