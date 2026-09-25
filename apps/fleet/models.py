@@ -84,6 +84,17 @@ class Driver(NamedModel):
     cnh_expiration = models.DateField("Validade CNH", null=True, blank=True)
 
 
+class DriverCNHHistory(BaseModel):
+    driver = models.ForeignKey(Driver, on_delete=models.CASCADE, related_name="cnh_history")
+    renewal_date = models.DateField("Data da renovação")
+    new_expiration = models.DateField("Nova validade")
+    cnh_number = models.CharField("Nº CNH", max_length=20, blank=True)
+    cnh_category = models.CharField("Categoria", max_length=5, blank=True)
+
+    class Meta:
+        ordering = ['-renewal_date', '-created_at']
+
+
 class Contract(BaseModel):
     number = models.CharField(max_length=80, unique=True)
     renter = models.ForeignKey(Renter, on_delete=models.PROTECT, related_name="contracts")

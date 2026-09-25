@@ -11,9 +11,16 @@ SELECT = {'class': 'form-input'}
 
 
 class DriverForm(forms.ModelForm):
+    renewal_date = forms.DateField(
+        label="Data da Renovação",
+        required=False,
+        widget=forms.DateInput(format='%Y-%m-%d', attrs={**INPUT, 'type': 'date'}),
+        help_text="Preencha apenas se estiver registrando uma renovação de CNH."
+    )
+
     class Meta:
         model = Driver
-        fields = ['name', 'registration', 'unit', 'phone', 'email', 'cnh_number', 'cnh_category', 'cnh_expiration', 'active']
+        fields = ['name', 'registration', 'unit', 'phone', 'email', 'cnh_number', 'cnh_category', 'cnh_expiration', 'renewal_date', 'active']
         labels = {
             'name': 'Nome',
             'registration': 'Matrícula',
@@ -33,9 +40,27 @@ class DriverForm(forms.ModelForm):
             'email': forms.EmailInput(attrs={**INPUT, 'placeholder': 'email@exemplo.com'}),
             'cnh_number': forms.TextInput(attrs={**INPUT, 'placeholder': 'Número da CNH'}),
             'cnh_category': forms.TextInput(attrs={**INPUT, 'placeholder': 'Ex: AB, D, E'}),
-            'cnh_expiration': forms.DateInput(attrs={**INPUT, 'type': 'date'}),
+            'cnh_expiration': forms.DateInput(format='%Y-%m-%d', attrs={**INPUT, 'type': 'date'}),
             'active': forms.Select(choices=[(True, 'Ativo'), (False, 'Inativo')], attrs=SELECT),
         }
+
+    def save(self, commit=True):
+        driver = super().save(commit=False)
+        renewal_date = self.cleaned_data.get('renewal_date')
+
+        if commit:
+            driver.save()
+            if renewal_date and driver.cnh_expiration:
+                from apps.fleet.models import DriverCNHHistory
+                DriverCNHHistory.objects.create(
+                    driver=driver,
+                    renewal_date=renewal_date,
+                    new_expiration=driver.cnh_expiration,
+                    cnh_number=driver.cnh_number or "",
+                    cnh_category=driver.cnh_category or "",
+                )
+
+        return driver
 
 
 class DriverVehicleAssignmentForm(forms.Form):
