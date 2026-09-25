@@ -129,6 +129,11 @@
                 </div>
                 {% endfor %}
             </div>
+            <div style="margin-top:14px;">
+                <a class="primary-action" href="{% url 'contract_list' %}" style="display:inline-block; text-align:center; width:100%;">
+                    Ver todos os contratos
+                </a>
+            </div>
             {% else %}
             <div class="empty" style="margin-top:12px;">Nenhum contrato exige atenção no momento.</div>
             {% endif %}
@@ -149,6 +154,11 @@
                     — {{ f.status__name }} — {{ f.date|date:"d/m/Y" }}</button>
                 </div>
                 {% endfor %}
+            </div>
+            <div style="margin-top:14px;">
+                <a class="primary-action" href="{% url 'fine_list' %}" style="display:inline-block; text-align:center; width:100%;">
+                    Ver todas as multas
+                </a>
             </div>
             {% else %}
             <div class="empty" style="margin-top:12px;">Nenhuma multa pendente no momento.</div>
@@ -346,4 +356,5 @@
 })();
 </script>
 {% endblock %}
+
 
