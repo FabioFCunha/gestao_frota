@@ -285,3 +285,11 @@ tbody tr:hover {
 .vc-plate {
     box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05) !important;
 }
+
+
+/* Accent bar on the main title */
+header h1, .fd-title {
+    border-left: 5px solid var(--blue) !important;
+    padding-left: 14px !important;
+    border-radius: 2px !important;
+}
