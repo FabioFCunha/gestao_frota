@@ -436,3 +436,94 @@ header .eyebrow {
     margin-bottom: 32px !important;
     color: #475569 !important;
 }
+
+/* =========================================================
+   GLOBAL DESIGN SYSTEM UPGRADE (Matching Login Screen)
+   ========================================================= */
+
+/* Base Typography */
+body {
+    font-family: 'Inter', sans-serif !important;
+    background-color: #f8fafc !important; /* Soft light background for workspace */
+}
+
+h1, h2, h3, h4, h5, h6, .brand-ww, .vc-plate-text, .panel h3, .welcome h2, .fd-title, header h1 {
+    font-family: 'Plus Jakarta Sans', sans-serif !important;
+}
+
+/* Sidebar Upgrade (Navy-900 to Navy-950) */
+.sidebar {
+    background: #0b162c !important; /* Navy-900 */
+    border-right: 1px solid rgba(255, 255, 255, 0.05) !important;
+}
+
+.brand-ww {
+    font-weight: 800 !important;
+    letter-spacing: -0.03em !important;
+}
+
+nav a.active {
+    background: rgba(37, 99, 235, 0.2) !important; /* Brand-blue tint */
+    box-shadow: inset 3px 0 0 #3b82f6 !important;
+    color: #ffffff !important;
+}
+
+/* Header Banner Upgrade */
+header {
+    background: linear-gradient(135deg, #0b162c 0%, #070d18 100%) !important;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15) !important;
+    border-radius: 20px !important;
+}
+
+/* Buttons Upgrade (btn-gradient) */
+.primary-action, button:not(.side-logout):not(.dashboard-informe-item):not(.secondary-action):not(.fd-chip) {
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
+    box-shadow: 0 4px 18px -2px rgba(37, 99, 235, 0.45) !important;
+    border-radius: 12px !important;
+    font-family: 'Inter', sans-serif !important;
+    font-weight: 600 !important;
+    border: none !important;
+    color: #ffffff !important;
+    text-shadow: none !important;
+    transition: all 0.2s ease !important;
+}
+
+.primary-action:hover, button:not(.side-logout):not(.dashboard-informe-item):not(.secondary-action):not(.fd-chip):hover {
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
+    box-shadow: 0 6px 24px -2px rgba(37, 99, 235, 0.6) !important;
+    transform: translateY(-1px) !important;
+}
+
+/* Inputs Upgrade (input-glow) */
+input:not([type="checkbox"]):not([type="radio"]), select, textarea, .form-input {
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 12px !important;
+    padding: 12px 14px !important;
+    background: #ffffff !important;
+    font-family: 'Inter', sans-serif !important;
+    font-size: 14px !important;
+    color: #1e293b !important;
+    transition: all 0.2s ease !important;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.02) !important;
+}
+
+input:not([type="checkbox"]):not([type="radio"]):focus, select:focus, textarea:focus, .form-input:focus {
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25), 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
+    border-color: #3b82f6 !important;
+    outline: none !important;
+}
+
+/* Cards & Panels Smoothness */
+.panel, .metrics article, .notice, table {
+    border-radius: 16px !important;
+    box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.03), 0 2px 6px -2px rgba(0, 0, 0, 0.02) !important;
+    border: 1px solid #e2e8f0 !important;
+}
+
+.panel:hover, .metrics article:hover {
+    box-shadow: 0 10px 20px -3px rgba(0, 0, 0, 0.05), 0 4px 8px -2px rgba(0, 0, 0, 0.03) !important;
+}
+
+.vc {
+    border-radius: 16px !important;
+}
