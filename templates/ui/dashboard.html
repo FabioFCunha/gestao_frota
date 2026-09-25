@@ -154,6 +154,33 @@
             <div class="empty" style="margin-top:12px;">Nenhuma multa pendente no momento.</div>
             {% endif %}
         </article>
+
+        <article class="panel">
+            <div class="panel-title">
+                <div><h3>🪪 CNHs Vencidas</h3></div>
+            </div>
+            <div style="display:grid;gap:8px;">
+                <div><strong>{{ dashboard_alerts.cnh_expired|length }}</strong> motorista(s) com CNH vencida</div>
+            </div>
+            {% if dashboard_alerts.cnh_expired %}
+            <div style="margin-top:14px;">
+                {% for d in dashboard_alerts.cnh_expired %}
+                <div style="padding:8px 0;border-bottom:1px solid #eee;">
+                    <a href="{% url 'driver_list' %}?status=cnh_vencida" class="dashboard-informe-item" style="display:block; text-decoration:none; color:inherit;">
+                        <strong>{{ d.name }}</strong> - {{ d.cnh_number }} (venceu em {{ d.cnh_expiration|date:"d/m/Y" }})
+                    </a>
+                </div>
+                {% endfor %}
+            </div>
+            <div style="margin-top:14px;">
+                <a class="primary-action" href="{% url 'driver_list' %}?status=cnh_vencida" style="display:inline-block; text-align:center; width:100%;">
+                    Ver todos os motoristas
+                </a>
+            </div>
+            {% else %}
+            <div class="empty" style="margin-top:12px;">Nenhuma CNH vencida identificada.</div>
+            {% endif %}
+        </article>
     </div>
 </section>
 

@@ -191,6 +191,7 @@ def dashboard(request):
             "contracts_expired": alerts.get("expired_contracts", []),
             "contracts_expiring": alerts.get("expiring_contracts", []),
             "fines_pending": alerts.get("pending_fines", []),
+            "cnh_expired": alerts.get("expired_cnh", []),
         },
     }
     return render(request, "ui/dashboard.html", context)
@@ -509,15 +510,19 @@ def driver_list(request):
         Prefetch('vehicle_assignments', queryset=active_assignments, to_attr='active_assignments')
     ).order_by('name')
 
+    from django.utils.timezone import now
+
     if status == 'inactive':
         qs = qs.filter(active=False)
+    elif status == 'cnh_vencida':
+        qs = qs.filter(active=True, cnh_expiration__lt=now().date())
     else:
         qs = qs.filter(active=True)
 
     q = request.GET.get('q', '')
     if q:
         qs = qs.filter(Q(name__icontains=q) | Q(phone__icontains=q))
-    from django.utils.timezone import now
+
     context = {"drivers": qs, "q": q, "status": status, "today": now().date()}
     return render(request, "ui/driver_list.html", context)
 

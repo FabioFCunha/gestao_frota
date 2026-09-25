@@ -9,6 +9,7 @@
             <select name="status" style="padding:10px;border-radius:4px;border:1px solid #ccc;">
                 <option value="active" {% if status == "active" %}selected{% endif %}>Motoristas ativos</option>
                 <option value="inactive" {% if status == "inactive" %}selected{% endif %}>Motoristas inativos</option>
+                <option value="cnh_vencida" {% if status == "cnh_vencida" %}selected{% endif %}>CNHs Vencidas</option>
             </select>
             <button type="submit" class="primary-action">Buscar</button>
         </form>

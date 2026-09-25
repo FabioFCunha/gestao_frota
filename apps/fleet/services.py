@@ -1205,6 +1205,11 @@ def get_operational_alerts(filters: dict) -> dict:
         )
     )
 
+    from .models import Driver
+    expired_cnh = Driver.objects.filter(
+        cnh_expiration__lt=today
+    ).values("id", "name", "cnh_number", "cnh_expiration")
+
     return {
         "expiring_contracts": list(expiring_contracts),
         "expired_contracts": list(expired_contracts),
@@ -1212,5 +1217,6 @@ def get_operational_alerts(filters: dict) -> dict:
         "pending_fines": list(pending_fines),
         "open_sei": list(open_sei),
         "pending_inspections": list(pending_inspections),
-        "revisoes_vencidas": revisoes_vencidas
+        "revisoes_vencidas": revisoes_vencidas,
+        "expired_cnh": list(expired_cnh),
     }
