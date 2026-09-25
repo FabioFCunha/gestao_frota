@@ -1,6 +1,112 @@
 {% load static %}
-<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{% block title %}Gestão de Frotas{% endblock %}</title><link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="{% static 'ui/app.css' %}?v=31"></head>
-<body><aside class="sidebar"><div class="brand"><span class="brand-ww">WW</span><span class="brand-name">Gestão de Frotas</span></div><nav><a class="{% if request.path == '/' %}active{% endif %}" href="/">▦ <span>Dashboard</span></a><a class="{% if '/veiculos/' in request.path %}active{% endif %}" href="/veiculos/">▣ <span>Veículos</span></a><a class="{% if '/contratos/' in request.path %}active{% endif %}" href="/contratos/">▤ <span>Contratos</span></a><a class="{% if '/motoristas/' in request.path %}active{% endif %}" href="/motoristas/">♙ <span>Motoristas</span></a><a class="{% if '/manutencoes/' in request.path %}active{% endif %}" href="/manutencoes/">⚒ <span>Manutenções</span></a><a class="{% if '/multas/' in request.path %}active{% endif %}" href="/multas/">⚑ <span>Multas</span></a>{% if request.user.is_system_creator %}<a class="{% if "/usuarios/" in request.path or "/perfis/" in request.path %}active{% endif %}" href="{% url "user_list" %}">⚙ <span>Usuários e permissões</span></a>{% endif %}</nav><div class="side-bottom"><span class="side-user">{{ request.user.username }}</span><div class="side-actions"><a href="{% url 'password_change' %}">🔑 Alterar senha</a><form method="post" action="{% url 'logout' %}" style="display:inline">{% csrf_token %}<button type="submit" class="side-logout">🚪 Sair</button></form></div></div></aside><main><header><div><p class="eyebrow">VISÃO GERAL</p><h1>{% block heading %}Dashboard{% endblock %}</h1></div><div class="header-user"><span class="avatar">{{ request.user.username|first|upper }}</span><div><strong>{{ request.user.username }}</strong><small>Usuário autenticado</small></div></div></header>{% block content %}{% endblock %}</main></body></html>
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{% block title %}Gestão de Frotas{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <link rel="stylesheet" href="{% static 'ui/app.css' %}?v=32">
+</head>
+<body>
+  <aside class="sidebar">
+
+    <!-- Brand -->
+    <div class="sb-brand">
+      <div class="sb-brand-icon">
+        <svg viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg" width="38" height="38">
+          <path d="M60 6L98 22V54C98 80 60 110 60 110C60 110 22 80 22 54V22L60 6Z" fill="#0d213f" stroke="#2563eb" stroke-width="4"/>
+          <path d="M60 14L90 27V53C90 73 60 98 60 98C60 98 30 73 30 53V27L60 14Z" stroke="#f97316" stroke-width="3" stroke-dasharray="88 8"/>
+          <path d="M46 59L53 51H67L74 59L78 61V67H42V61L46 59Z" fill="#2563eb"/>
+          <circle cx="48" cy="67" r="3" fill="#020617"/>
+          <circle cx="72" cy="67" r="3" fill="#020617"/>
+          <path d="M50 78L60 66L70 78" stroke="#f97316" stroke-width="3" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <span class="brand-ww">WW</span>
+      <span class="brand-name">GESTÃO DE FROTAS</span>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="sb-nav">
+      <a class="sb-link {% if request.path == '/' %}active{% endif %}" href="/">
+        <i data-lucide="layout-dashboard" class="sb-icon"></i>
+        <span>Dashboard</span>
+      </a>
+      <a class="sb-link {% if '/veiculos/' in request.path %}active{% endif %}" href="/veiculos/">
+        <i data-lucide="car" class="sb-icon"></i>
+        <span>Veículos</span>
+      </a>
+      <a class="sb-link {% if '/contratos/' in request.path %}active{% endif %}" href="/contratos/">
+        <i data-lucide="file-text" class="sb-icon"></i>
+        <span>Contratos</span>
+      </a>
+      <a class="sb-link {% if '/motoristas/' in request.path %}active{% endif %}" href="/motoristas/">
+        <i data-lucide="users" class="sb-icon"></i>
+        <span>Motoristas</span>
+      </a>
+      <a class="sb-link {% if '/manutencoes/' in request.path %}active{% endif %}" href="/manutencoes/">
+        <i data-lucide="wrench" class="sb-icon"></i>
+        <span>Manutenções</span>
+      </a>
+      <a class="sb-link {% if '/multas/' in request.path %}active{% endif %}" href="/multas/">
+        <i data-lucide="flag" class="sb-icon"></i>
+        <span>Multas</span>
+      </a>
+      {% if request.user.is_system_creator %}
+      <a class="sb-link {% if '/usuarios/' in request.path or '/perfis/' in request.path %}active{% endif %}" href="{% url 'user_list' %}">
+        <i data-lucide="shield-check" class="sb-icon"></i>
+        <span>Usuários e permissões</span>
+      </a>
+      {% endif %}
+    </nav>
+
+    <!-- Footer do usuário -->
+    <div class="sb-footer">
+      <div class="sb-user">
+        <div class="sb-avatar">{{ request.user.username|first|upper }}</div>
+        <div class="sb-user-info">
+          <span class="sb-user-email">{{ request.user.username }}</span>
+          <span class="sb-user-status"><span class="sb-online-dot"></span> Operador Conectado</span>
+        </div>
+      </div>
+      <div class="sb-user-actions">
+        <a href="{% url 'password_change' %}" class="sb-footer-link">🔑 Alterar senha</a>
+        <form method="post" action="{% url 'logout' %}" style="display:inline">
+          {% csrf_token %}
+          <button type="submit" class="sb-footer-link sb-logout-btn">⇥ Sair</button>
+        </form>
+      </div>
+    </div>
+
+  </aside>
+
+  <main>
+    <header>
+      <div>
+        <p class="eyebrow">VISÃO GERAL</p>
+        <h1>{% block heading %}Dashboard{% endblock %}</h1>
+      </div>
+      <div class="header-user">
+        <span class="avatar">{{ request.user.username|first|upper }}</span>
+        <div>
+          <strong>{{ request.user.username }}</strong>
+          <small>Usuário autenticado</small>
+        </div>
+      </div>
+    </header>
+    {% block content %}{% endblock %}
+  </main>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+      }
+    });
+  </script>
+</body>
+</html>
