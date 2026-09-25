@@ -5,7 +5,11 @@ from rest_framework.views import APIView
 from django.db import models
 from django.utils import timezone
 from .models import Maintenance, Vehicle, VehicleCustody, VehicleDriverAssignment
-from .serializers import MaintenanceSerializer, VehicleHistorySerializer, VehicleSerializer
+from .serializers import (
+    DocumentSerializer, MaintenanceSerializer, SEIProcessSerializer,
+    VehicleCustodySerializer, VehicleFineSerializer, VehicleHistorySerializer,
+    VehicleInspectionSerializer, VehicleSerializer,
+)
 
 class DashboardAPIView(APIView):
     def get(self, request):
