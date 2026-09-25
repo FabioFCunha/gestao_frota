@@ -12,6 +12,8 @@ ALLOWED_HOSTS = [
     ).split(",")
     if host.strip()
 ]
+USE_X_FORWARDED_HOST = True
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 CSRF_TRUSTED_ORIGINS = [
     origin.strip()
