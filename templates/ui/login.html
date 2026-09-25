@@ -1,5 +1,96 @@
 {% load static %}
-<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Entrar · WW Gestão de Frotas</title><link rel="preconnect" href="https://fonts.googleapis.com">
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Entrar · WW Gestão de Frotas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="{% static 'ui/app.css' %}?v=16"></head><body class="login-page"><section class="login-card"><div class="login-logo"><img src="{% static 'images/logo.png' %}" alt="WW Gestão de Frotas"></div><p class="muted">Acesse para consultar e operar a frota institucional.</p>{% if form.errors %}<p class="error">Usuário ou senha inválidos.</p>{% endif %}<form method="post">{% csrf_token %}<label>E-mail (login)<input name="username" type="email" autocomplete="username" autofocus required placeholder="seu@email.com"></label><label>Senha<input name="password" type="password" autocomplete="current-password" required></label><button type="submit">Entrar no sistema</button></form></section></body></html>
+<link rel="stylesheet" href="{% static 'ui/app.css' %}?v=17">
+<style>
+/* PREMIUM LOGIN OVERRIDES */
+body.login-page {
+    background: radial-gradient(circle at 15% 50%, rgba(37, 99, 235, 0.4), transparent 50%),
+                radial-gradient(circle at 85% 30%, rgba(14, 165, 233, 0.3), transparent 50%),
+                radial-gradient(circle at 50% 100%, rgba(30, 58, 138, 0.5), transparent 50%),
+                #020617 !important;
+    background-size: 150% 150%;
+    animation: gradientShift 15s ease infinite;
+    position: relative;
+    overflow: hidden;
+    font-family: 'Inter', 'DM Sans', sans-serif !important;
+}
+
+@keyframes gradientShift {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+
+body.login-page::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0IiBoZWlnaHQ9IjQiPjxyZWN0IHdpZHRoPSI0IiBoZWlnaHQ9IjQiIGZpbGw9InRyYW5zcGFyZW50Ii8+PGNpcmNsZSBjeD0iMiIgY3k9IjIiIHI9IjAuNSIgZmlsbD0icmdiYSgyNTUsIDI1NSwgMjU1LCAwLjA1KSIvPjwvc3ZnPg==');
+    z-index: 0;
+}
+
+.login-card {
+    position: relative;
+    z-index: 1;
+    background: rgba(255, 255, 255, 0.97) !important;
+    backdrop-filter: blur(20px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.5) !important;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.1) inset !important;
+    border-radius: 24px !important;
+    padding: 48px 40px !important;
+    width: min(440px, calc(100% - 32px)) !important;
+}
+
+.login-logo img {
+    width: 220px !important;
+    max-width: 100% !important;
+    height: auto !important;
+    filter: none !important;
+    mix-blend-mode: multiply !important;
+    margin-bottom: 8px !important;
+}
+
+.login-card input {
+    height: 48px !important;
+    font-size: 15px !important;
+    background: #f8fafc !important;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 10px !important;
+    font-family: 'Inter', sans-serif !important;
+}
+.login-card input:focus {
+    background: #ffffff !important;
+    border-color: #3b82f6 !important;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15) !important;
+    outline: none !important;
+}
+
+.login-card button {
+    height: 50px !important;
+    font-size: 16px !important;
+    font-weight: 700 !important;
+    margin-top: 16px !important;
+    border-radius: 10px !important;
+    background: linear-gradient(180deg, #3b82f6 0%, #2563eb 100%) !important;
+    box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.3), inset 0 1px 0 rgba(255,255,255,0.15) !important;
+    border: none !important;
+    color: white !important;
+    cursor: pointer;
+    transition: all 0.2s ease !important;
+}
+.login-card button:hover {
+    background: linear-gradient(180deg, #60a5fa 0%, #3b82f6 100%) !important;
+    box-shadow: 0 8px 12px -2px rgba(37, 99, 235, 0.4), inset 0 1px 0 rgba(255,255,255,0.15) !important;
+    transform: translateY(-1px) !important;
+}
+
+.login-card .muted {
+    font-size: 15px !important;
+    margin-bottom: 32px !important;
+    color: #475569 !important;
+}
+</style>
+</head><body class="login-page"><section class="login-card"><div class="login-logo"><img src="{% static 'images/logo.png' %}" alt="WW Gestão de Frotas"></div><p class="muted">Acesse para consultar e operar a frota institucional.</p>{% if form.errors %}<p class="error">Usuário ou senha inválidos.</p>{% endif %}<form method="post">{% csrf_token %}<label>E-mail (login)<input name="username" type="email" autocomplete="username" autofocus required placeholder="seu@email.com"></label><label>Senha<input name="password" type="password" autocomplete="current-password" required></label><button type="submit">Entrar no sistema</button></form></section></body></html>
