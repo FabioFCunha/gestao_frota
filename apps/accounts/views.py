@@ -1,44 +1,12 @@
-from urllib.parse import quote
-
 from django.contrib import messages
-from django.contrib.auth import login
 from django.contrib.auth.models import Group
-from django.contrib.auth.tokens import default_token_generator
+from django.contrib.auth.views import PasswordChangeView
 from django.core.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404, redirect, render
-from django.urls import reverse
-from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
-from django.utils.encoding import force_bytes
 
 from .decorators import system_creator_required
-from .forms import GroupForm, UserForm
+from .forms import FleetPasswordChangeForm, GroupForm, UserForm
 from .models import User
-
-
-def _activation_url(request, user):
-    uid = urlsafe_base64_encode(force_bytes(user.pk))
-    token = default_token_generator.make_token(user)
-    return request.build_absolute_uri(
-        reverse("activate_account", kwargs={"uidb64": uid, "token": token})
-    )
-
-
-def _whatsapp_url(user, message):
-    digits = "".join(ch for ch in user.whatsapp if ch.isdigit())
-    if not digits:
-        return ""
-    if not digits.startswith("55"):
-        digits = "55" + digits
-    return f"https://wa.me/{digits}?text={quote(message)}"
-
-
-def _invite_message(user, activation_url):
-    return (
-        f"Olá, {user.get_full_name() or user.first_name}. "
-        "Seu acesso ao Gestão de Frotas foi criado. "
-        "Para definir sua senha e ativar sua conta, acesse o link: "
-        f"{activation_url}"
-    )
 
 
 def _ensure_default_groups():
@@ -62,11 +30,14 @@ def user_create(request):
         if form.is_valid():
             user = form.save(commit=False)
             user.username = form.cleaned_data["email"].lower()
-            user.set_unusable_password()
-            user.is_active = False
+            user.set_password(form.cleaned_data["initial_password"])
+            user.must_change_password = True
             user.save()
             form.save_m2m()
-            messages.success(request, "Usuário criado. Use o botão WhatsApp para enviar o link de ativação.")
+            messages.success(
+                request,
+                "Usuário criado. Entregue a senha inicial ao usuário; ela deverá ser trocada no primeiro acesso.",
+            )
             return redirect("user_list")
     else:
         form = UserForm(initial={"is_active": True})
@@ -83,6 +54,9 @@ def user_edit(request, pk):
         if form.is_valid():
             user = form.save(commit=False)
             user.username = form.cleaned_data["email"].lower()
+            if form.cleaned_data.get("initial_password"):
+                user.set_password(form.cleaned_data["initial_password"])
+                user.must_change_password = True
             user.save()
             form.save_m2m()
             messages.success(request, "Usuário atualizado com sucesso.")
@@ -93,28 +67,11 @@ def user_edit(request, pk):
         form.fields["email"].disabled = True
         form.fields["is_active"].disabled = True
         form.fields["groups"].disabled = True
-    return render(request, "accounts/user_form.html", {"form": form, "title": "Editar usuário", "editing": True})
-
-
-@system_creator_required
-def user_whatsapp(request, pk):
-    if request.method != "POST":
-        raise PermissionDenied
-    user = get_object_or_404(User, pk=pk)
-    if user.is_system_creator:
-        messages.error(request, "O criador do sistema não utiliza convite de ativação.")
-        return redirect("user_list")
-
-    user.set_unusable_password()
-    user.is_active = False
-    user.save(update_fields=["password", "is_active", "last_changed_at"])
-    activation_url = _activation_url(request, user)
-    message = _invite_message(user, activation_url)
-    whatsapp_url = _whatsapp_url(user, message)
-    if not whatsapp_url:
-        messages.error(request, "O usuário não possui um WhatsApp válido.")
-        return redirect("user_list")
-    return redirect(whatsapp_url)
+    return render(
+        request,
+        "accounts/user_form.html",
+        {"form": form, "title": "Editar usuário", "editing": True},
+    )
 
 
 @system_creator_required
@@ -151,28 +108,14 @@ def group_edit(request, pk):
     return render(request, "accounts/group_form.html", {"form": form, "title": f"Permissões: {group.name}"})
 
 
-def activate_account(request, uidb64, token):
-    try:
-        uid = urlsafe_base64_decode(uidb64).decode()
-        user = User.objects.get(pk=uid)
-    except (TypeError, ValueError, OverflowError, User.DoesNotExist):
-        user = None
+class FleetPasswordChangeView(PasswordChangeView):
+    template_name = "accounts/password_change.html"
+    form_class = FleetPasswordChangeForm
+    success_url = "/"
 
-    if not user or not default_token_generator.check_token(user, token):
-        return render(request, "accounts/activate_account.html", {"valid": False})
-
-    if request.method == "POST":
-        password = request.POST.get("password", "")
-        confirmation = request.POST.get("confirmation", "")
-        if len(password) < 8:
-            messages.error(request, "A senha deve ter pelo menos 8 caracteres.")
-        elif password != confirmation:
-            messages.error(request, "As senhas não conferem.")
-        else:
-            user.set_password(password)
-            user.is_active = True
-            user.save(update_fields=["password", "is_active", "last_changed_at"])
-            login(request, user)
-            return redirect("dashboard")
-
-    return render(request, "accounts/activate_account.html", {"valid": True, "user": user})
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        self.request.user.must_change_password = False
+        self.request.user.save(update_fields=["must_change_password", "last_changed_at"])
+        messages.success(self.request, "Senha alterada com sucesso.")
+        return response

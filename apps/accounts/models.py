@@ -11,6 +11,7 @@ class User(AbstractUser):
     external_id = models.CharField(max_length=255, blank=True)
     functional_id = models.CharField("ID funcional", max_length=50, unique=True, null=True, blank=True)
     whatsapp = models.CharField("WhatsApp", max_length=30, blank=True)
+    must_change_password = models.BooleanField("Exigir troca de senha", default=False)
     last_changed_at = models.DateTimeField(auto_now=True)
 
     @property
