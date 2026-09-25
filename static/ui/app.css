@@ -527,3 +527,262 @@ input:not([type="checkbox"]):not([type="radio"]):focus, select:focus, textarea:f
 .vc {
     border-radius: 16px !important;
 }
+
+
+/* ═══════════════════════════════════════════════════
+   VEHICLE LIST — Enterprise Table Design
+   ═══════════════════════════════════════════════════ */
+
+/* Wrapper card */
+.vl-wrap {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+
+/* Header row */
+.vl-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 24px;
+    border-bottom: 1px solid #f1f5f9;
+}
+.vl-header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.vl-header-title {
+    font: 700 15px 'Plus Jakarta Sans', Manrope, sans-serif;
+    color: #0f172a;
+}
+.vl-badge-count {
+    background: #eff6ff;
+    color: #2563eb;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 4px 12px;
+    border-radius: 20px;
+    border: 1px solid #dbeafe;
+}
+.vl-header-hint {
+    font-size: 12px;
+    color: #94a3b8;
+    font-style: italic;
+}
+
+/* Table */
+.vl-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0 !important;
+    border-radius: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+.vl-th {
+    text-align: left;
+    font-size: 10px !important;
+    font-weight: 800 !important;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #64748b !important;
+    padding: 14px 24px !important;
+    border-bottom: 1px solid #e2e8f0 !important;
+    background: #f8fafc !important;
+}
+
+.vl-td {
+    padding: 16px 24px !important;
+    vertical-align: middle;
+    border-bottom: 1px solid #f1f5f9 !important;
+    border-top: none !important;
+    font-size: 13px;
+    color: #334155;
+}
+
+.vl-row {
+    transition: background 0.15s ease;
+}
+.vl-row:hover {
+    background: #f8fafc !important;
+}
+.vl-row:last-child .vl-td {
+    border-bottom: none !important;
+}
+
+/* SEI field */
+.vl-sei {
+    font-family: 'DM Sans', monospace;
+    font-size: 12px;
+    font-weight: 600;
+    color: #334155;
+    letter-spacing: 0.01em;
+}
+.vl-copy-btn {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    cursor: pointer;
+    font-size: 13px;
+    padding: 2px 4px !important;
+    margin-left: 6px;
+    opacity: 0.4;
+    transition: opacity 0.15s;
+    transform: none !important;
+}
+.vl-copy-btn:hover {
+    opacity: 1;
+    transform: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+}
+.vl-pending {
+    font-size: 12px;
+    color: #94a3b8;
+    font-style: italic;
+}
+
+/* Placa Mercosul */
+.vl-plate {
+    display: inline-flex;
+    flex-direction: column;
+    width: 120px;
+    background: #ffffff;
+    border: 2px solid #1e293b;
+    border-radius: 5px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+.vl-plate-top {
+    background: #003399;
+    color: #ffffff;
+    font-size: 7px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    padding: 2px 6px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    line-height: 1.2;
+}
+.vl-plate-num {
+    font-family: 'Manrope', monospace;
+    font-weight: 800;
+    font-size: 17px;
+    letter-spacing: 0.1em;
+    color: #0f172a;
+    text-align: center;
+    padding: 5px 0 4px;
+    background: #ffffff;
+    line-height: 1;
+}
+
+/* Marca / Modelo */
+.vl-model-main {
+    font-weight: 700;
+    font-size: 13px;
+    color: #1e293b;
+    margin-bottom: 2px;
+}
+.vl-model-sub {
+    font-size: 11px;
+    color: #94a3b8;
+    font-weight: 500;
+}
+
+/* Status badges */
+.vl-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+.vl-status-dot {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+}
+
+/* Green (Ativo) */
+.vl-status--green {
+    background: #f0fdf4;
+    color: #15803d;
+    border: 1px solid #bbf7d0;
+}
+.vl-status-dot--green {
+    background: #22c55e;
+}
+
+/* Amber (Em Análise) */
+.vl-status--amber {
+    background: #fffbeb;
+    color: #b45309;
+    border: 1px solid #fde68a;
+}
+.vl-status-dot--amber {
+    background: #f59e0b;
+}
+
+/* Red (Inativo) */
+.vl-status--red {
+    background: #fef2f2;
+    color: #b91c1c;
+    border: 1px solid #fecaca;
+}
+.vl-status-dot--red {
+    background: #ef4444;
+}
+
+/* Slate (outros) */
+.vl-status--slate {
+    background: #f1f5f9;
+    color: #475569;
+    border: 1px solid #e2e8f0;
+}
+.vl-status-dot--slate {
+    background: #94a3b8;
+}
+
+/* Action buttons (ghost / outline) */
+.vl-action-btn {
+    display: inline-block;
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #475569;
+    background: #f8fafc !important;
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 8px !important;
+    text-decoration: none;
+    margin-left: 6px;
+    transition: all 0.15s ease;
+    box-shadow: none !important;
+    text-shadow: none !important;
+}
+.vl-action-btn:hover {
+    background: #eff6ff !important;
+    border-color: #bfdbfe !important;
+    color: #1d4ed8;
+    transform: none !important;
+    box-shadow: none !important;
+}
+.vl-action-btn--outline {
+    background: transparent !important;
+    border: 1px solid #e2e8f0 !important;
+    color: #64748b;
+}
+.vl-action-btn--outline:hover {
+    background: #f8fafc !important;
+    border-color: #cbd5e1 !important;
+    color: #334155;
+}

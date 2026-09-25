@@ -6,47 +6,138 @@
 <section class="welcome" style="margin-bottom: 20px;">
     <div>
         <form method="get" action="" style="display:flex; gap:10px;">
-            <input type="text" name="q" value="{{ q }}" placeholder="Busca global (Placa, Renavam, Contrato)..." style="padding:10px; width:400px; border-radius:4px; border:1px solid #ccc;" />
+            <input type="text" name="q" value="{{ q }}" placeholder="Buscar por placa, marca, modelo, SEI ou situação..." class="form-input" style="width:480px;" />
             <button type="submit" class="primary-action">Buscar</button>
         </form>
     </div>
     <a class="primary-action" href="{% url 'vehicle_create' %}">+ Novo Veículo</a>
 </section>
 
-<section class="grid">
-    <article class="panel" style="grid-column: 1 / -1;">
-        {% if vehicles %}
-        <table>
-            <thead>
-                <tr>
-                    <th>SEI / ACAUTELAMENTO</th>
-                    <th>PLACA</th>
-                    <th>MARCA/MODELO</th>
-                    <th>SITUAÇÃO</th>
-                    <th>AÇÕES</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for vehicle in vehicles %}
-                <tr>
-                    <td>{% with assignments=vehicle.active_driver_assignments %}{% if assignments %}{% with custodies=assignments.0.active_custodies %}{% if custodies %}{{ custodies.0.sei_number }}{% else %}{{ vehicle.custody_info|default:"-" }}{% endif %}{% endwith %}{% else %}{{ vehicle.custody_info|default:"-" }}{% endif %}{% endwith %}</td>
-                    <td><strong>
-                        {% for p in vehicle.plate_history.all %}
-                            {% if not p.ends_on and p.kind == 'CURRENT' %}{{ p.plate }}{% endif %}
-                        {% empty %}
-                            Sem placa
-                        {% endfor %}
-                    </strong></td>
-                    <td>{{ vehicle.brand.name|default:"-" }} / {{ vehicle.model.name|default:"-" }}</td>
-                    <td><span class="tag">{{ vehicle.status.name }}</span></td>
-                    <td><a href="{% url 'vehicle_dossier' vehicle.id %}">Ver Prontuário</a> &nbsp; | &nbsp; <a href="{% url 'vehicle_contract_edit' vehicle.id %}">Contrato</a></td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        {% else %}
-        <div class="empty">Nenhum veículo encontrado com os filtros atuais.</div>
-        {% endif %}
-    </article>
+<!-- Tabela Enterprise de Veículos -->
+<section class="vl-wrap">
+
+    <!-- Cabeçalho da tabela -->
+    <div class="vl-header">
+        <div class="vl-header-left">
+            <span class="vl-header-title">Registros Ativos da Frota</span>
+            <span class="vl-badge-count">{{ vehicles|length }} exibidos</span>
+        </div>
+        <span class="vl-header-hint">Clique na linha ou nas ações para ver detalhes</span>
+    </div>
+
+    {% if vehicles %}
+    <table class="vl-table">
+        <thead>
+            <tr>
+                <th class="vl-th" style="width:22%;">SEI / ACAUTELAMENTO</th>
+                <th class="vl-th" style="width:14%;">PLACA</th>
+                <th class="vl-th" style="width:30%;">MARCA / MODELO</th>
+                <th class="vl-th" style="width:12%;">SITUAÇÃO</th>
+                <th class="vl-th" style="width:22%; text-align:right;">AÇÕES OPERACIONAIS</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for vehicle in vehicles %}
+            <tr class="vl-row">
+                <!-- SEI / ACAUTELAMENTO -->
+                <td class="vl-td">
+                    {% with assignments=vehicle.active_driver_assignments %}
+                        {% if assignments %}
+                            {% with custodies=assignments.0.active_custodies %}
+                                {% if custodies %}
+                                    <span class="vl-sei">{{ custodies.0.sei_number }}</span>
+                                    <button class="vl-copy-btn" onclick="vlCopy('{{ custodies.0.sei_number }}')" title="Copiar SEI">📋</button>
+                                {% else %}
+                                    {% if vehicle.custody_info %}
+                                        <span class="vl-sei">{{ vehicle.custody_info }}</span>
+                                        <button class="vl-copy-btn" onclick="vlCopy('{{ vehicle.custody_info }}')" title="Copiar">📋</button>
+                                    {% else %}
+                                        <span class="vl-pending">Pendente / Não vinculado</span>
+                                    {% endif %}
+                                {% endif %}
+                            {% endwith %}
+                        {% else %}
+                            {% if vehicle.custody_info %}
+                                <span class="vl-sei">{{ vehicle.custody_info }}</span>
+                                <button class="vl-copy-btn" onclick="vlCopy('{{ vehicle.custody_info }}')" title="Copiar">📋</button>
+                            {% else %}
+                                <span class="vl-pending">Pendente / Não vinculado</span>
+                            {% endif %}
+                        {% endif %}
+                    {% endwith %}
+                </td>
+
+                <!-- PLACA MERCOSUL -->
+                <td class="vl-td">
+                    <div class="vl-plate">
+                        <div class="vl-plate-top">
+                            <span>BRASIL</span>
+                            <span>BR</span>
+                        </div>
+                        <div class="vl-plate-num">
+                            {% for p in vehicle.plate_history.all %}
+                                {% if not p.ends_on and p.kind == 'CURRENT' %}{{ p.plate }}{% endif %}
+                            {% empty %}
+                                SEM PLACA
+                            {% endfor %}
+                        </div>
+                    </div>
+                </td>
+
+                <!-- MARCA / MODELO -->
+                <td class="vl-td">
+                    <div class="vl-model-main">{{ vehicle.brand.name|default:"-" }} / {{ vehicle.model.name|default:"-" }}</div>
+                    <div class="vl-model-sub">Veículo Institucional</div>
+                </td>
+
+                <!-- SITUAÇÃO -->
+                <td class="vl-td">
+                    {% if vehicle.status.name == 'Ativo' %}
+                        <span class="vl-status vl-status--green">
+                            <span class="vl-status-dot vl-status-dot--green"></span>
+                            Ativo
+                        </span>
+                    {% elif vehicle.status.name == 'Em Análise' or vehicle.status.name == 'Em análise' %}
+                        <span class="vl-status vl-status--amber">
+                            <span class="vl-status-dot vl-status-dot--amber"></span>
+                            Em Análise
+                        </span>
+                    {% elif vehicle.status.name == 'Inativo' %}
+                        <span class="vl-status vl-status--red">
+                            <span class="vl-status-dot vl-status-dot--red"></span>
+                            Inativo
+                        </span>
+                    {% else %}
+                        <span class="vl-status vl-status--slate">
+                            <span class="vl-status-dot vl-status-dot--slate"></span>
+                            {{ vehicle.status.name }}
+                        </span>
+                    {% endif %}
+                </td>
+
+                <!-- AÇÕES -->
+                <td class="vl-td" style="text-align:right;">
+                    <a href="{% url 'vehicle_dossier' vehicle.id %}" class="vl-action-btn">Ver Prontuário</a>
+                    <a href="{% url 'vehicle_contract_edit' vehicle.id %}" class="vl-action-btn vl-action-btn--outline">Contrato</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty">Nenhum veículo encontrado com os filtros atuais.</div>
+    {% endif %}
 </section>
+
+<script>
+function vlCopy(text) {
+    var t = document.createElement('textarea');
+    t.value = text;
+    document.body.appendChild(t);
+    t.select();
+    document.execCommand('copy');
+    document.body.removeChild(t);
+    alert('Copiado: ' + text);
+}
+</script>
 {% endblock %}
