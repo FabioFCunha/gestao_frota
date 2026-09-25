@@ -293,3 +293,59 @@ header h1, .fd-title {
     padding-left: 14px !important;
     border-radius: 2px !important;
 }
+
+/* --- BANNER HEADER STYLES --- */
+header {
+    background: linear-gradient(135deg, #0f172a 0%, #020617 100%) !important;
+    border-radius: 16px !important;
+    margin-top: 24px !important;
+    padding: 32px 40px !important;
+    height: auto !important;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
+    border: none !important;
+    position: relative;
+    overflow: hidden;
+}
+
+header::before {
+    content: '';
+    position: absolute;
+    top: 0; right: 0; bottom: 0; left: 0;
+    background: radial-gradient(circle at top right, rgba(37, 99, 235, 0.15), transparent 60%);
+    pointer-events: none;
+}
+
+header h1 {
+    color: #ffffff !important;
+    border-left: none !important;
+    padding-left: 0 !important;
+    font-size: 28px !important;
+    margin-top: 6px !important;
+    letter-spacing: -0.03em !important;
+}
+
+header .eyebrow {
+    color: #94a3b8 !important;
+    letter-spacing: 0.15em !important;
+    font-size: 11px !important;
+}
+
+.header-user strong {
+    color: #ffffff !important;
+}
+
+.header-user small {
+    color: #94a3b8 !important;
+}
+
+.header-user .avatar {
+    background: rgba(255, 255, 255, 0.1) !important;
+    color: #ffffff !important;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.2);
+}
+
+/* We also need to remove the left border from .fd-title if it was there */
+.fd-title {
+    border-left: none !important;
+    padding-left: 0 !important;
+}
