@@ -161,59 +161,7 @@
     </article>
 </section>
 
-<!-- SEI / ACAUTELAMENTOS -->
-<section class="grid">
-    <article class="panel" style="grid-column:1/-1;">
-        <div class="panel-title">
-            <div><h3>📁 SEI / Acautelamentos</h3></div>
-        </div>
-        <form method="post" style="display:grid;grid-template-columns:150px 1fr 220px;gap:10px;align-items:end;margin-bottom:15px;">
-            {% csrf_token %}
-            <input type="hidden" name="action" value="add_custody">
-            <div>
-                <label for="kind"><strong>Tipo</strong></label>
-                <select id="kind" name="kind" style="width:100%;padding:9px;">
-                    {% for value,label in custody_kinds %}
-                    <option value="{{ value }}">{{ label }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div>
-                <label for="reference"><strong>SEI / Referência</strong></label>
-                <input id="reference" name="reference" type="text" required placeholder="Número do SEI ou acautelamento" style="width:100%;padding:9px;box-sizing:border-box;">
-            </div>
-            <div>
-                <label for="starts_on"><strong>Início</strong></label>
-                <input id="starts_on" name="starts_on" type="datetime-local" style="width:100%;padding:9px;box-sizing:border-box;">
-            </div>
-            <div style="grid-column:1/-1;">
-                <label for="custody_notes"><strong>Observação</strong></label>
-                <input id="custody_notes" name="custody_notes" type="text" placeholder="Observação opcional" style="width:100%;padding:9px;box-sizing:border-box;">
-            </div>
-            <div>
-                <button type="submit" class="primary-action">+ Adicionar registro</button>
-            </div>
-        </form>
-        {% if custody_records %}
-        <table>
-            <thead><tr><th>TIPO</th><th>SEI / REFERÊNCIA</th><th>INÍCIO</th><th>FIM</th><th>OBSERVAÇÃO</th></tr></thead>
-            <tbody>
-                {% for custody in custody_records %}
-                <tr>
-                    <td>{{ custody.get_kind_display }}</td>
-                    <td><strong>{{ custody.reference }}</strong></td>
-                    <td>{{ custody.starts_on|date:"d/m/Y H:i" }}</td>
-                    <td>{% if custody.ends_on %}{{ custody.ends_on|date:"d/m/Y H:i" }}{% else %}<span class="tag">Ativo</span>{% endif %}</td>
-                    <td>{{ custody.notes|default:"-" }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        {% else %}
-        <div class="empty">Nenhum SEI/acautelamento registrado para este veículo.</div>
-        {% endif %}
-    </article>
-</section>
+
 
 <!-- MANUTENÇÕES -->
 <section class="grid">
