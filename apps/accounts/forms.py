@@ -1,8 +1,8 @@
 from django import forms
 from django.conf import settings
-from django.contrib.auth.forms import AuthenticationForm
-from django.core.exceptions import ValidationError
+from django.contrib.auth.forms import AuthenticationForm, PasswordChangeForm
 from django.contrib.auth.models import Group, Permission
+from django.core.exceptions import ValidationError
 
 from .models import User
 
@@ -34,7 +34,6 @@ class FleetAuthenticationForm(AuthenticationForm):
         if user:
             self.cleaned_data["username"] = user.username
 
-        # Somente no ambiente local de desenvolvimento: permite teste sem senha.
         if settings.DEBUG and user:
             if not user.is_active:
                 raise ValidationError("Este usuário está inativo.")
@@ -45,6 +44,29 @@ class FleetAuthenticationForm(AuthenticationForm):
 
 
 class UserForm(forms.ModelForm):
+    initial_password = forms.CharField(
+        label="Senha inicial",
+        required=False,
+        widget=forms.PasswordInput(
+            attrs={
+                **INPUT,
+                "autocomplete": "new-password",
+                "placeholder": "Mínimo de 8 caracteres",
+            }
+        ),
+        help_text="O usuário deverá trocar esta senha no primeiro acesso.",
+    )
+    initial_password_confirmation = forms.CharField(
+        label="Confirmar senha inicial",
+        required=False,
+        widget=forms.PasswordInput(
+            attrs={
+                **INPUT,
+                "autocomplete": "new-password",
+                "placeholder": "Repita a senha inicial",
+            }
+        ),
+    )
     groups = forms.ModelMultipleChoiceField(
         queryset=Group.objects.none(),
         required=False,
@@ -54,7 +76,15 @@ class UserForm(forms.ModelForm):
 
     class Meta:
         model = User
-        fields = ["first_name", "last_name", "email", "functional_id", "whatsapp", "groups", "is_active"]
+        fields = [
+            "first_name",
+            "last_name",
+            "email",
+            "functional_id",
+            "whatsapp",
+            "groups",
+            "is_active",
+        ]
         labels = {
             "first_name": "Nome",
             "last_name": "Sobrenome",
@@ -82,6 +112,10 @@ class UserForm(forms.ModelForm):
         self.fields["functional_id"].required = True
         self.fields["whatsapp"].required = True
         self.fields["groups"].help_text = "O perfil define as permissões deste usuário."
+        if self.instance and self.instance.pk:
+            self.fields["initial_password"].help_text = (
+                "Preencha somente se quiser definir uma nova senha inicial e exigir troca no próximo acesso."
+            )
 
     def clean_email(self):
         email = self.cleaned_data["email"].strip().lower()
@@ -106,6 +140,40 @@ class UserForm(forms.ModelForm):
         if len("".join(ch for ch in value if ch.isdigit())) < 10:
             raise forms.ValidationError("Informe um número de WhatsApp válido.")
         return value
+
+    def clean(self):
+        cleaned = super().clean()
+        password = cleaned.get("initial_password", "")
+        confirmation = cleaned.get("initial_password_confirmation", "")
+
+        if not self.instance.pk and not password:
+            self.add_error("initial_password", "Informe a senha inicial.")
+
+        if password:
+            if len(password) < 8:
+                self.add_error("initial_password", "A senha deve ter pelo menos 8 caracteres.")
+            if password != confirmation:
+                self.add_error("initial_password_confirmation", "As senhas não conferem.")
+        elif confirmation:
+            self.add_error("initial_password", "Informe a senha inicial.")
+
+        return cleaned
+
+
+class FleetPasswordChangeForm(PasswordChangeForm):
+    old_password = forms.CharField(
+        label="Senha atual",
+        widget=forms.PasswordInput(attrs={**INPUT, "autocomplete": "current-password"}),
+    )
+    new_password1 = forms.CharField(
+        label="Nova senha",
+        widget=forms.PasswordInput(attrs={**INPUT, "autocomplete": "new-password"}),
+        help_text="A senha deve ter pelo menos 8 caracteres.",
+    )
+    new_password2 = forms.CharField(
+        label="Confirmar nova senha",
+        widget=forms.PasswordInput(attrs={**INPUT, "autocomplete": "new-password"}),
+    )
 
 
 class GroupForm(forms.ModelForm):
