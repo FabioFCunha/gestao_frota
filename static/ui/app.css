@@ -349,3 +349,11 @@ header .eyebrow {
     border-left: none !important;
     padding-left: 0 !important;
 }
+
+/* Uniform filter chips */
+.fd-chip {
+    height: 44px !important;
+    min-width: 150px !important;
+    justify-content: center !important;
+    padding: 0 16px !important;
+}
