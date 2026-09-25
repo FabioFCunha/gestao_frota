@@ -894,7 +894,7 @@ input:not([type="checkbox"]):not([type="radio"]):focus, select:focus, textarea:f
 
 /* Footer */
 .sb-footer {
-    padding: 16px;
+    padding: 16px 16px 32px 16px;
     border-top: 1px solid rgba(255,255,255,0.06);
     background: rgba(0, 4, 15, 0.5);
 }
@@ -982,23 +982,27 @@ input:not([type="checkbox"]):not([type="radio"]):focus, select:focus, textarea:f
 }
 
 .sb-logout-btn {
-    background: transparent !important;
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
     border: none !important;
-    box-shadow: none !important;
+    box-shadow: 0 2px 6px rgba(37, 99, 235, 0.4) !important;
     cursor: pointer;
-    padding: 0 !important;
+    padding: 5px 12px !important;
+    border-radius: 6px !important;
     font-size: 11px !important;
-    color: #64748b !important;
-    font-weight: 500 !important;
+    color: #ffffff !important;
+    font-weight: 700 !important;
     font-family: 'Inter', sans-serif !important;
-    text-shadow: none !important;
-    transform: none !important;
+    transition: all 0.2s ease !important;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
 }
 .sb-logout-btn:hover {
-    color: #f87171 !important;
-    background: transparent !important;
-    transform: none !important;
-    box-shadow: none !important;
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
+    transform: translateY(-1px) !important;
+    box-shadow: 0 4px 8px rgba(37, 99, 235, 0.5) !important;
+    color: #ffffff !important;
 }
 
 /* Hide old side-bottom since we use sb-footer now */
