@@ -197,6 +197,7 @@
     const service = document.getElementById('id_service');
     const notes = document.getElementById('id_notes');
     const help = document.getElementById('revision-help');
+    let currentVehicleId = '';
 
     function resetFields() {
         sentDate.value = '';
@@ -213,6 +214,7 @@
         resetFields();
 
         const id = button.dataset.id;
+        currentVehicleId = id;
         const plate = button.dataset.plate;
         const km = button.dataset.km || '0';
         const next = button.dataset.next || '';
@@ -266,27 +268,32 @@
     });
 
     form.addEventListener('submit', function (event) {
-        // Garante que o POST leve sempre os identificadores e dados atuais
-        // do modal, mesmo após abrir/editar mais de uma revisão na mesma página.
-        const currentButton = document.querySelector('.revision-edit[data-active-id="' + maintenanceId.value + '"]');
-        if (!maintenanceId.value) {
+        const currentAction = (action.value || '').trim().toLowerCase();
+
+        if (!currentVehicleId) {
             event.preventDefault();
-            help.textContent = 'Não foi possível identificar a revisão deste veículo. Feche e abra o modal novamente.';
+            help.textContent = 'Nao foi possivel identificar o veiculo. Feche e abra o modal novamente.';
+            return;
+        }
+
+        // Para uma nova revisao (open) ou para inicializar o historico,
+        // ainda nao existe maintenance_id. O backend cria a revisao.
+        if (!['open', 'initialize'].includes(currentAction) && !maintenanceId.value) {
+            event.preventDefault();
+            help.textContent = 'Nao foi possivel identificar a revisao deste veiculo. Feche e abra o modal novamente.';
             return;
         }
 
         if (returnDate.value && !completionInput.value) {
             event.preventDefault();
-            help.textContent = 'Informe a quilometragem registrada no retorno da revisão.';
+            help.textContent = 'Informe a quilometragem registrada no retorno da revisao.';
             completionInput.focus();
             return;
         }
 
-        if (returnDate.value) {
-            action.value = 'edit';
-        }
-
-        form.action = '/manutencoes/' + (currentButton ? currentButton.dataset.id : form.action.split('/manutencoes/')[1].split('/')[0]) + '/revisao/';
+        // A acao ja foi definida quando o modal foi aberto.
+        // Nao transformar open/initialize em edit automaticamente.
+        form.action = '/manutencoes/' + currentVehicleId + '/revisao/';
     });
 
     document.getElementById('revision-modal-close').addEventListener('click', closeModal);
