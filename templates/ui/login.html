@@ -104,49 +104,21 @@
         <!-- LOGOTIPO WW RECRIADO COM DESIGN VETORIAL MODERNO -->
         <div class="flex flex-col items-center text-center mb-8">
           <div class="relative mb-3 group cursor-pointer">
-            <!-- Escudo / Logo SVG Estilizado inspirado no original -->
-            <svg class="w-24 h-24 drop-shadow-[0_8px_20px_rgba(37,99,235,0.3)] transition-transform duration-300 group-hover:scale-105" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <!-- Escudo de Fundo Azul -->
-              <path d="M60 6L98 22V54C98 80 60 110 60 110C60 110 22 80 22 54V22L60 6Z" fill="#0d213f" stroke="#1d4ed8" stroke-width="3" stroke-linejoin="round"/>
-              <!-- Borda Interna / Destaque Laranja do Escudo Original -->
-              <path d="M60 14L90 27V53C90 73 60 98 60 98C60 98 30 73 30 53V27L60 14Z" stroke="#f97316" stroke-width="2.5" stroke-dasharray="88 8" opacity="0.9"/>
-              
-              <!-- Silhuetas de Carros da Frota -->
-              <!-- Carro Traseiro Esquerdo -->
-              <path d="M34 50C37 46 45 44 49 44L56 50H32L34 50Z" fill="#64748b"/>
-              <rect x="31" y="49" width="27" height="6" rx="2" fill="#94a3b8"/>
-              <circle cx="37" cy="55" r="2" fill="#0f172a"/>
-              <circle cx="52" cy="55" r="2" fill="#0f172a"/>
-
-              <!-- Carro Traseiro Direito -->
-              <path d="M64 50L71 44C75 44 83 46 86 50L88 50H64Z" fill="#64748b"/>
-              <rect x="62" y="49" width="27" height="6" rx="2" fill="#94a3b8"/>
-              <circle cx="68" cy="55" r="2" fill="#0f172a"/>
-              <circle cx="83" cy="55" r="2" fill="#0f172a"/>
-
-              <!-- Carro Principal Frontal / Central -->
-              <path d="M46 59L53 51H67L74 59L78 61V67H42V61L46 59Z" fill="#2563eb"/>
-              <path d="M49 58L55 53H65L71 58H49Z" fill="#bae6fd"/>
-              <!-- Faróis Laranja / Característicos -->
-              <rect x="44" y="62" width="5" height="2.5" rx="1" fill="#f97316"/>
-              <rect x="71" y="62" width="5" height="2.5" rx="1" fill="#f97316"/>
-              <!-- Rodas do Carro Central -->
-              <circle cx="48" cy="67" r="3" fill="#020617"/>
-              <circle cx="72" cy="67" r="3" fill="#020617"/>
-              
-              <!-- Flecha de Crescimento e Direção (Laranja e Azul) -->
-              <path d="M50 78L60 66L70 78" stroke="#f97316" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M60 67V82" stroke="#f97316" stroke-width="3" stroke-linecap="round"/>
-            </svg>
+            <!-- Logo Operação Lei Seca -->
+            <img 
+              src="{% static 'images/operacao-lei-seca-logo.png' %}" 
+              alt="Operação Lei Seca" 
+              class="w-20 h-20 object-contain drop-shadow-[0_8px_20px_rgba(37,99,235,0.3)] transition-transform duration-300 group-hover:scale-105"
+            >
           </div>
 
-          <!-- Tipografia Oficial da Logo WW -->
+          <!-- Título do Sistema -->
           <div class="tracking-tight">
-            <h1 class="text-3xl font-extrabold tracking-tight text-white flex items-center justify-center gap-1">
-              <span class="text-white">W</span><span class="text-white">W</span>
+            <h1 class="text-2xl font-extrabold tracking-tight text-white">
+              GESTÃO DE FROTAS
             </h1>
             <span class="block text-[11px] font-bold tracking-[0.25em] text-slate-400 uppercase mt-0.5">
-              Sistema de Gestão de Frotas
+              Sistema de Controle Operacional
             </span>
           </div>
 
@@ -273,16 +245,18 @@
          ======================================================== -->
     <div class="hidden lg:flex lg:w-[54%] xl:w-[60%] relative overflow-hidden bg-navy-950 flex-col justify-between p-12 xl:p-16">
       
-      <!-- Imagem de Fundo de Alta Resolução (Pátio de veículos corporativos / executivos modernos) -->
-      <img 
-        src="{% static 'images/operacao-lei-seca-logo.png' %}" 
-        alt="Operação Lei Seca" 
-        class="absolute inset-0 w-full h-full object-contain object-center p-12"
-      >
+      <!-- Logo Operação Lei Seca centralizada e proporcional -->
+      <div class="absolute inset-0 flex items-center justify-center z-0">
+        <img 
+          src="{% static 'images/operacao-lei-seca-logo.png' %}" 
+          alt="Operação Lei Seca" 
+          class="max-w-xs w-2/5 object-contain opacity-30"
+        >
+      </div>
 
-      <!-- Overlay Gradiente Profundo inspirado no azul marinho da tela original -->
-      <div class="absolute inset-0 bg-gradient-to-r from-navy-900 via-navy-950/70 to-blue-950/40"></div>
-      <div class="absolute inset-0 bg-gradient-to-t from-navy-950 via-transparent to-navy-950/50"></div>
+      <!-- Overlay Gradiente suave -->
+      <div class="absolute inset-0 bg-gradient-to-r from-navy-900/80 via-navy-950/40 to-blue-950/20"></div>
+      <div class="absolute inset-0 bg-gradient-to-t from-navy-950 via-transparent to-navy-950/30"></div>
 
       <!-- Topo: Selo de Frota Institucional Conectada -->
       <div class="relative z-10 flex justify-end">
