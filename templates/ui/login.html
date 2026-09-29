@@ -101,14 +101,15 @@
       <!-- Centro: Card de Acesso -->
       <div class="w-full max-w-sm mx-auto my-auto py-8">
         
-        <!-- LOGOTIPO WW RECRIADO COM DESIGN VETORIAL MODERNO -->
+        <!-- LOGO OPERAÇÃO LEI SECA -->
         <div class="flex flex-col items-center text-center mb-8">
-          <div class="relative mb-3 group cursor-pointer">
-            <!-- Logo Operação Lei Seca -->
+          <div class="relative mb-5 group cursor-pointer w-full flex justify-center">
+            <!-- Logo Operação Lei Seca - Grande, ocupando o topo -->
             <img 
               src="{% static 'images/operacao-lei-seca-logo.png' %}" 
               alt="Operação Lei Seca" 
-              class="w-20 h-20 object-contain drop-shadow-[0_8px_20px_rgba(37,99,235,0.3)] transition-transform duration-300 group-hover:scale-105"
+              class="w-full max-w-[280px] object-contain transition-transform duration-300 group-hover:scale-105"
+              style="filter: drop-shadow(0 0 20px rgba(37, 99, 235, 0.4)) drop-shadow(0 0 8px rgba(255,255,255,0.15));"
             >
           </div>
 
@@ -122,7 +123,7 @@
             </span>
           </div>
 
-          <!-- Frase de Acesso idêntica à aplicação atual -->
+          <!-- Frase de Acesso -->
           <p class="text-slate-400 text-xs sm:text-sm mt-3 max-w-xs leading-relaxed">
             Acesse para consultar e operar a frota institucional.
           </p>
@@ -245,19 +246,19 @@
          ======================================================== -->
     <div class="hidden lg:flex lg:w-[54%] xl:w-[60%] relative overflow-hidden bg-navy-950 flex-col justify-between p-12 xl:p-16">
       
-      <!-- Logo Operação Lei Seca grande e destacada -->
-      <div class="absolute inset-0 flex items-center justify-center z-0">
+      <!-- Logo Operação Lei Seca preenchendo toda a lateral -->
+      <div class="absolute inset-0 flex items-center justify-center z-0 p-16">
         <img 
           src="{% static 'images/operacao-lei-seca-logo.png' %}" 
           alt="Operação Lei Seca" 
-          class="w-3/5 max-w-md object-contain drop-shadow-[0_0_40px_rgba(37,99,235,0.5)] brightness-110"
-          style="filter: drop-shadow(0 0 50px rgba(37, 99, 235, 0.4)) drop-shadow(0 0 20px rgba(255,255,255,0.15));"
+          class="w-full h-full object-contain"
+          style="filter: drop-shadow(0 0 60px rgba(37, 99, 235, 0.5)) drop-shadow(0 0 25px rgba(255,255,255,0.2));"
         >
       </div>
 
-      <!-- Overlay Gradiente suave (não esconde a logo) -->
-      <div class="absolute inset-0 bg-gradient-to-r from-navy-900/60 via-transparent to-transparent"></div>
-      <div class="absolute inset-0 bg-gradient-to-t from-navy-950/80 via-transparent to-navy-950/20"></div>
+      <!-- Overlay Gradiente mínimo (apenas nas bordas para integrar) -->
+      <div class="absolute inset-0 bg-gradient-to-r from-navy-900/40 via-transparent to-transparent"></div>
+      <div class="absolute inset-0 bg-gradient-to-t from-navy-950/70 via-transparent to-navy-950/10"></div>
 
       <!-- Topo: Selo de Frota Institucional Conectada -->
       <div class="relative z-10 flex justify-end">
