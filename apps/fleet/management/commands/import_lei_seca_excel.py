@@ -150,8 +150,9 @@ class Command(BaseCommand):
                     contract.renter = renter
                     contract.save(update_fields=["renter", "updated_at"])
                 return contract
-            missing_contracts.add(number)
-            stats["contracts_missing"] += 1
+            if number not in missing_contracts:
+                missing_contracts.add(number)
+                stats["contracts_missing"] += 1
             return None
 
         def get_brand(name):
@@ -302,11 +303,9 @@ class Command(BaseCommand):
                     raise CommandError(f"Erro na linha {excel_row} / placa {plate}: {exc}")
 
         if dry_run:
-            before = stats.copy()
             with transaction.atomic():
                 process()
                 transaction.set_rollback(True)
-            stats = before
         else:
             with transaction.atomic():
                 process()
