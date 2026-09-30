@@ -1,21 +1,16 @@
-from __future__ import annotations
-
-from dataclasses import dataclass
-from datetime import datetime, timedelta
+import json
+import logging
 import os
+import time
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import psycopg
-from django.contrib.auth import get_user_model
-from django.db import transaction
-from django.utils import timezone
+import requests
 
-from .models import (
-    BDT,
-    Driver,
-    Vehicle,
-    VehiclePlate,
-    VehicleStatus,
-)
+from dataclasses import dataclass
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -34,36 +29,31 @@ class SyncStats:
 
 class HorusBDTSyncer:
     """
-    Sincroniza a frota Lei Seca e seus BDTs do Hórus.
-
-    A origem Hórus é acessada por uma conexão PostgreSQL separada,
-    exclusivamente para leitura.
+    Agente Windows standalone que sincroniza BDTs da Lei Seca.
+    Conecta-se ao Hórus (PostgreSQL local), extrai dados incrementais
+    e envia via HTTPS POST para a VPS do Gestão de Frotas.
     """
 
-    def __init__(
-        self,
-        *,
-        dry_run: bool = False,
-        limit: int | None = None,
-    ):
+    STATE_FILE = Path(".bdt_horus_sync_state.json")
+
+    def __init__(self, dry_run=False, limit=None):
         self.dry_run = dry_run
         self.limit = limit
 
-        self.management_id = int(
-            os.getenv("HORUS_LEI_SECA_MANAGEMENT_ID", "49")
-        )
-        self.lookback_days = int(
-            os.getenv("HORUS_BDT_LOOKBACK_DAYS", "90")
-        )
+        # Horus Configs
+        self.management_id = int(os.getenv("HORUS_LEI_SECA_MANAGEMENT_ID", "49"))
+        self.lookback_days = int(os.getenv("HORUS_BDT_LOOKBACK_DAYS", "90"))
+
+        # API Configs
+        self.api_url = self._required_env("VPS_API_URL").rstrip("/")
+        self.api_token = self._required_env("VPS_SYNC_TOKEN")
 
         self.stats = SyncStats()
 
     def _required_env(self, name: str) -> str:
         value = os.getenv(name)
         if not value:
-            raise RuntimeError(
-                f"Variável de ambiente obrigatória não configurada: {name}"
-            )
+            raise RuntimeError(f"Variável de ambiente obrigatória não configurada: {name}")
         return value
 
     def _connect(self):
@@ -73,79 +63,55 @@ class HorusBDTSyncer:
             dbname=self._required_env("HORUS_DB_NAME"),
             user=self._required_env("HORUS_DB_USER"),
             password=self._required_env("HORUS_DB_PASSWORD"),
-            connect_timeout=int(
-                os.getenv("HORUS_DB_CONNECT_TIMEOUT", "10")
-            ),
+            connect_timeout=int(os.getenv("HORUS_DB_CONNECT_TIMEOUT", "10")),
         )
-
         conn.read_only = True
         conn.autocommit = False
-
         return conn
 
-    def _system_user(self):
-        email = os.getenv("SYSTEM_CREATOR_EMAIL")
+    def _load_cursor(self):
+        if self.STATE_FILE.exists():
+            try:
+                with open(self.STATE_FILE, "r") as f:
+                    data = json.load(f)
+                    dt = datetime.fromisoformat(data["last_sync_updated_at"])
+                    last_id = data.get("last_sync_id", "00000000-0000-0000-0000-000000000000")
+                    return dt, last_id
+            except Exception as e:
+                logger.warning(f"Falha ao ler estado local. Fazendo sync completo de {self.lookback_days} dias. Erro: {e}")
 
-        if not email:
-            raise RuntimeError(
-                "SYSTEM_CREATOR_EMAIL não configurado."
-            )
+        fallback_dt = datetime.now(timezone.utc) - timedelta(days=self.lookback_days)
+        return fallback_dt, "00000000-0000-0000-0000-000000000000"
 
-        User = get_user_model()
+    def _save_cursor(self, max_updated_at, max_id):
+        if max_updated_at and max_id and not self.dry_run:
+            with open(self.STATE_FILE, "w") as f:
+                json.dump({
+                    "last_sync_updated_at": max_updated_at.isoformat(),
+                    "last_sync_id": str(max_id)
+                }, f)
 
-        user = User.objects.filter(email__iexact=email).first()
-
-        if not user:
-            raise RuntimeError(
-                f"Usuário de sistema não encontrado: {email}"
-            )
-
-        return user
-
-    def _vehicle_status(self):
-        status, _ = VehicleStatus.objects.get_or_create(
-            name="Operacional",
-            defaults={
-                "color": "#16A34A",
-            },
-        )
-        return status
-
-    def _fleet_cutoff(self):
-        return timezone.now() - timedelta(days=self.lookback_days)
-
-    def _fetch_bdts(self, conn):
-        cutoff = self._fleet_cutoff()
+    def _fetch_bdts(self, conn, last_updated_at, last_id):
+        # A janela de segurança atua no LIMITE SUPERIOR para ignorar commits em andamento.
+        safe_now = datetime.now(timezone.utc) - timedelta(minutes=15)
 
         sql = """
             SELECT
-                b.id,
-                b.management_id,
-                b.fleet_id,
-                b.user_id,
-                b.adm_id,
-                b.started_at,
-                b.started_km,
-                b.ended_at,
-                b.ended_km,
-                b.latitude_match,
-                b.longitude_match,
-                b.latitude_retreat,
-                b.longitude_retreat,
-                b.note,
-                b.active,
-                b.created_at,
-                b.updated_at,
-                b.service_id,
-                b.sector_id
+                b.id, b.management_id, b.fleet_id, b.user_id, b.adm_id,
+                b.started_at, b.started_km, b.ended_at, b.ended_km,
+                b.latitude_match, b.longitude_match, b.latitude_retreat,
+                b.longitude_retreat, b.note, b.active, b.created_at,
+                b.updated_at, b.service_id, b.sector_id
             FROM public.bdtds b
             WHERE b.management_id = %s
-              AND b.started_at >= %s
-            ORDER BY b.started_at, b.id
+              AND (
+                  COALESCE(b.updated_at, b.created_at) > %s
+                  OR (COALESCE(b.updated_at, b.created_at) = %s AND b.id::text > %s)
+              )
+              AND COALESCE(b.updated_at, b.created_at) <= %s
+            ORDER BY COALESCE(b.updated_at, b.created_at) ASC, b.id::text ASC
         """
-
-        params = [self.management_id, cutoff]
-
+        params = [self.management_id, last_updated_at, last_updated_at, last_id, safe_now]
         if self.limit:
             sql += " LIMIT %s"
             params.append(self.limit)
@@ -158,23 +124,11 @@ class HorusBDTSyncer:
     def _fetch_fleets(self, conn, fleet_ids):
         if not fleet_ids:
             return []
-
         sql = """
-            SELECT
-                f.id,
-                f.management_id,
-                f.user_id,
-                f.plate,
-                f.special_plate,
-                f.make_car_id,
-                f.model_car_id,
-                f.status_vehicle,
-                f.created_at,
-                f.updated_at
+            SELECT f.id, f.plate, f.special_plate
             FROM public.fleets f
             WHERE f.id = ANY(%s)
         """
-
         with conn.cursor() as cursor:
             cursor.execute(sql, (list(fleet_ids),))
             columns = [item.name for item in cursor.description]
@@ -183,204 +137,140 @@ class HorusBDTSyncer:
     def _fetch_users(self, conn, user_ids):
         if not user_ids:
             return []
-
         sql = """
-            SELECT
-                u.id,
-                u.first_name,
-                u.last_name,
-                u.document
+            SELECT u.id, u.first_name, u.last_name, u.document
             FROM public.users u
             WHERE u.id = ANY(%s)
         """
-
         with conn.cursor() as cursor:
             cursor.execute(sql, (list(user_ids),))
             columns = [item.name for item in cursor.description]
             return [dict(zip(columns, row)) for row in cursor.fetchall()]
 
-    def _sync_driver(self, row):
-        driver, created = Driver.objects.get_or_create(
-            horus_user_id=row["id"],
-            defaults={
-                "name": (f'{row.get("first_name") or ""} ' f'{row.get("last_name") or ""}').strip() or f'Horus {row["id"]}',
-            },
-        )
+    def _post_data(self, endpoint, payload):
+        if not payload:
+            return None
 
-        changed = False
-        name = (f'{row.get("first_name") or ""} ' f'{row.get("last_name") or ""}').strip()
+        url = f"{self.api_url}/api/sync/{endpoint}/"
+        headers = {
+            "Authorization": f"Bearer {self.api_token}",
+            "Content-Type": "application/json"
+        }
 
-        if name and driver.name != name:
-            driver.name = name
-            changed = True
+        def json_serial(obj):
+            if isinstance(obj, (datetime)):
+                return obj.isoformat()
+            return str(obj)
 
-        if row.get("document") and not driver.registration:
-            driver.registration = row["document"]
-            changed = True
+        data = json.dumps(payload, default=json_serial)
 
-        if changed and not self.dry_run:
-            driver.save(update_fields=["name", "registration", "updated_at"])
+        for attempt in range(3):
+            try:
+                resp = requests.post(url, data=data, headers=headers, timeout=(10, 120))
 
-        if created:
-            self.stats.drivers_created += 1
-        elif changed:
-            self.stats.drivers_updated += 1
+                # Falha rápida e explícita para erros do cliente (4xx)
+                if 400 <= resp.status_code < 500:
+                    logger.error(f"Erro cliente {resp.status_code} ao enviar {endpoint}: {resp.text}")
+                    resp.raise_for_status()
 
-        return driver
+                if resp.status_code in (200, 201):
+                    return resp.json()
 
-    def _sync_vehicle(self, row, system_user, vehicle_status):
-        vehicle, created = Vehicle.objects.get_or_create(
-            horus_fleet_id=row["id"],
-            defaults={
-                "status": vehicle_status,
-                "created_by": system_user,
-            },
-        )
+                resp.raise_for_status()
 
-        changed = False
+            except requests.exceptions.RequestException as e:
+                # Retenta somente se não for erro 4xx
+                if isinstance(e, requests.exceptions.HTTPError) and 400 <= e.response.status_code < 500:
+                    raise
 
-        if vehicle.status_id != vehicle_status.id:
-            vehicle.status = vehicle_status
-            changed = True
+                if attempt == 2:
+                    logger.error(f"Falha definitiva ao enviar {endpoint} após 3 tentativas: {e}")
+                    raise
+                logger.warning(f"Falha transitória ao enviar {endpoint} ({e}). Retentando em 5s...")
+                time.sleep(5)
 
-        if changed and not self.dry_run:
-            vehicle.save(update_fields=["status", "updated_at"])
-
-        if created:
-            self.stats.fleets_created += 1
-        elif changed:
-            self.stats.fleets_updated += 1
-
-        plate = row.get("plate") or row.get("special_plate")
-
-        if (
-            plate
-            and not self.dry_run
-            and not VehiclePlate.objects.filter(
-                vehicle=vehicle,
-                plate=plate,
-                kind=VehiclePlate.CURRENT,
-                ends_on__isnull=True,
-            ).exists()
-        ):
-            current = VehiclePlate.objects.filter(
-                vehicle=vehicle,
-                kind=VehiclePlate.CURRENT,
-                ends_on__isnull=True,
-            ).first()
-
-            if current:
-                current.ends_on = timezone.now()
-                current.save(update_fields=["ends_on", "updated_at"])
-
-            VehiclePlate.objects.create(
-                vehicle=vehicle,
-                plate=plate,
-                kind=VehiclePlate.CURRENT,
-                changed_by=system_user,
-            )
-
-        return vehicle
+        return None
 
     def run(self):
         conn = self._connect()
-
         try:
-            # Novo fluxo: BDTs são a fonte da verdade para o --limit
-            bdts = self._fetch_bdts(conn)
+            last_updated_at, last_id = self._load_cursor()
+            print(f"Buscando BDTs com atualizações > {last_updated_at} (ou id > {last_id})")
+
+            bdts = self._fetch_bdts(conn, last_updated_at, last_id)
             self.stats.bdts_read = len(bdts)
 
+            if not bdts:
+                print("Nenhum BDT novo ou alterado encontrado.")
+                return self.stats
+
             fleet_ids = {row["fleet_id"] for row in bdts if row.get("fleet_id")}
-            
-            # Identificamos os motoristas REAIS dos BDTs
-            bdt_user_ids = {row["user_id"] for row in bdts if row.get("user_id")}
+            user_ids = {row["user_id"] for row in bdts if row.get("user_id")}
 
             fleets = self._fetch_fleets(conn, fleet_ids)
             self.stats.fleets_read = len(fleets)
 
-            # Veículos podem ter um usuário associado diretamente na tabela fleets
-            fleet_user_ids = {row["user_id"] for row in fleets if row.get("user_id")}
-            
-            # Buscamos todos no Hórus para ter em memória (futuro e diagnóstico)
-            all_user_ids = bdt_user_ids.union(fleet_user_ids)
-
-            users = self._fetch_users(conn, all_user_ids)
+            users = self._fetch_users(conn, user_ids)
             self.stats.drivers_read = len(users)
 
-            # Dry run termina AQUI, ANTES de qualquer escrita no banco
-            if self.dry_run:
-                # --- INÍCIO DO DIAGNÓSTICO TEMPORÁRIO ---
-                if bdts:
-                    print("\n" + "="*50)
-                    print("DIAGNÓSTICO BDT (--dry-run ativado)")
-                    print("="*50)
-                    
-                    for b in bdts:
-                        print(f"--- BDT ID: {b.get('id')} ---")
-                        print(f"management_id: {b.get('management_id')}")
-                        print(f"fleet_id     : {b.get('fleet_id')}")
-                        print(f"user_id      : {b.get('user_id')}")
-                        print(f"adm_id       : {b.get('adm_id')}")
-                        print(f"started_at   : {b.get('started_at')}")
-                        print(f"ended_at     : {b.get('ended_at')}")
-                        print(f"started_km   : '{b.get('started_km')}'")
-                        print(f"ended_km     : '{b.get('ended_km')}'")
-                        print(f"active       : {b.get('active')}")
-                        print(f"created_at   : {b.get('created_at')}")
-                        print(f"updated_at   : {b.get('updated_at')}")
-                        print(f"service_id   : {b.get('service_id')}")
-                        print(f"sector_id    : {b.get('sector_id')}")
-                        print(f"note         : '{b.get('note')}'")
-                        print("")
-                        
-                        # Buscar veículo correspondente
-                        veiculo = next((f for f in fleets if f.get('id') == b.get('fleet_id')), None)
-                        if veiculo:
-                            print(f"  [VEÍCULO VINCULADO]")
-                            print(f"  fleet_id     : {veiculo.get('id')}")
-                            print(f"  plate        : '{veiculo.get('plate')}'")
-                            print(f"  special_plate: '{veiculo.get('special_plate')}'")
-                            print("")
+            print(f"Encontrados: {len(bdts)} BDTs, {len(fleets)} Veículos, {len(users)} Motoristas")
 
-                    if users:
-                        print("--- USUÁRIOS ENCONTRADOS ---")
-                        for u in users:
-                            role = "MOTORISTA DO BDT" if u.get("id") in bdt_user_ids else "OUTRO (EX: USUÁRIO DA FROTA)"
-                            print(f"user_id   : {u.get('id')} [{role}]")
-                            print(f"first_name: '{u.get('first_name')}'")
-                            print(f"last_name : '{u.get('last_name')}'")
-                            print(f"document  : '{u.get('document')}'")
-                            print("-" * 20)
-                            
-                    print("="*50 + "\n")
-                # --- FIM DO DIAGNÓSTICO TEMPORÁRIO ---
-                
+            if self.dry_run:
+                print("Dry Run finalizado. Nenhum dado enviado para a VPS.")
                 return self.stats
 
-            system_user = self._system_user()
-            vehicle_status = self._vehicle_status()
+            # 1. Sincronizar Veículos
+            print("Enviando Veículos...")
+            for f in fleets:
+                v_payload = {
+                    "external_id": f["id"],
+                    "plate": f["plate"],
+                    "special_plate": f["special_plate"] or "",
+                    "management_name": "Lei Seca"
+                }
+                resp = self._post_data("vehicles", v_payload)
+                if resp:
+                    if resp.get("result") == "created":
+                        self.stats.fleets_created += 1
+                    elif resp.get("result") == "updated":
+                        self.stats.fleets_updated += 1
 
-            with transaction.atomic():
-                for row in users:
-                    # ATENÇÃO: Criamos/atualizamos o model Driver SOMENTE para motoristas de BDT
-                    if row["id"] in bdt_user_ids:
-                        self._sync_driver(row)
+            # 2. Sincronizar Motoristas
+            print("Enviando Motoristas...")
+            if users:
+                drivers_payload = [
+                    {
+                        "external_id": u["id"],
+                        "name": f"{u.get('first_name') or ''} {u.get('last_name') or ''}".strip(),
+                        "registration": u.get("document", "")
+                    }
+                    for u in users
+                ]
+                resp = self._post_data("drivers", drivers_payload)
+                if resp:
+                    self.stats.drivers_created += resp.get("criados", 0)
+                    self.stats.drivers_updated += resp.get("atualizados", 0)
 
-                for row in fleets:
-                    self._sync_vehicle(
-                        row,
-                        system_user,
-                        vehicle_status,
-                    )
+            # 3. Sincronizar BDTs
+            print("Enviando BDTs...")
+            bdt_resp = self._post_data("bdts", bdts)
+            if bdt_resp:
+                self.stats.bdts_created += bdt_resp.get("criados", 0)
+                self.stats.bdts_updated += bdt_resp.get("atualizados", 0)
+                self.stats.bdts_skipped += bdt_resp.get("falhas", 0)
+                print(f"Resultado BDTs: {bdt_resp}")
 
-            # Chama o BDTSyncWorker apenas se houver BDTs e NÃO for dry run
-            if bdts:
-                from apps.fleet.sync_bdt import BDTSyncWorker
-                worker = BDTSyncWorker(bdts)
-                worker_resumo = worker.run(managements_map={self.management_id: "Lei Seca"})
-                
-                self.stats.bdts_created = worker_resumo.get("criados", 0)
-                self.stats.bdts_updated = worker_resumo.get("atualizados", 0)
+                if bdt_resp.get("falhas", 0) > 0:
+                    erros = bdt_resp.get("erros", [])
+                    raise RuntimeError(f"O lote apresentou {bdt_resp['falhas']} falhas na API. O cursor não será avançado. Erros: {erros}")
+
+            # 4. Atualizar cursor state (determinístico da última row)
+            last_bdt = bdts[-1]
+            max_updated = last_bdt.get("updated_at") or last_bdt.get("created_at")
+            max_id = last_bdt.get("id")
+
+            self._save_cursor(max_updated, max_id)
+            print(f"Sincronização concluída. Cursor atualizado para {max_updated} / {max_id}")
 
             return self.stats
 

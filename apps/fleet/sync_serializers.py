@@ -80,3 +80,8 @@ class VehicleSyncSerializer(serializers.Serializer):
         required=False,
         allow_null=True,
     )
+
+class DriverSyncSerializer(serializers.Serializer):
+    external_id = serializers.UUIDField()
+    name = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    registration = serializers.CharField(required=False, allow_blank=True, allow_null=True)

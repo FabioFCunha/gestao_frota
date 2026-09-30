@@ -36,3 +36,9 @@ Thumbs.db
 # Temporários
 *.tmp
 *.bak
+
+# Estado local do agente Hórus
+.bdt_horus_sync_state.json
+
+# Backups locais do banco
+*.sqlite3.backup*

@@ -27,30 +27,7 @@ class VehicleSyncAPIView(APIView):
 
         horus_fleet_id = data["external_id"]
         plate = data.get("plate", "").strip().upper()
-        driver_horus_user_id = data.get("driver_horus_user_id")
         source_updated_at = data.get("source_updated_at")
-
-        driver = None
-
-        if driver_horus_user_id:
-            driver = Driver.objects.filter(
-                horus_user_id=driver_horus_user_id
-            ).first()
-
-            if driver is None:
-                return Response(
-                    {
-                        "result": "error",
-                        "detail": (
-                            "Usuario/motorista do Horus nao encontrado "
-                            "no Gestao de Frotas."
-                        ),
-                        "driver_horus_user_id": str(
-                            driver_horus_user_id
-                        ),
-                    },
-                    status=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                )
 
         vehicle_status = VehicleStatus.objects.filter(
             name="Ativo",
@@ -140,11 +117,6 @@ class VehicleSyncAPIView(APIView):
                         starts_on=timezone.now(),
                         changed_by=None,
                     )
-
-            if driver is not None:
-                # O BDT usa diretamente o motorista do Horus.
-                # Nao criamos VehicleDriverAssignment automaticamente.
-                pass
 
         return Response(
             {

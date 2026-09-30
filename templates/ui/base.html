@@ -32,6 +32,10 @@
         <i data-lucide="car" class="sb-icon"></i>
         <span>Veículos</span>
       </a>
+      <a class="sb-link {% if '/bdts/' in request.path %}active{% endif %}" href="/bdts/">
+        <i data-lucide="route" class="sb-icon"></i>
+        <span>BDTs</span>
+      </a>
       <a class="sb-link {% if '/contratos/' in request.path %}active{% endif %}" href="/contratos/">
         <i data-lucide="file-text" class="sb-icon"></i>
         <span>Contratos</span>

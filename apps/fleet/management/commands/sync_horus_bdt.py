@@ -1,4 +1,4 @@
-﻿from django.core.management.base import BaseCommand, CommandError
+from django.core.management.base import BaseCommand, CommandError
 
 from apps.fleet.horus_sync import HorusBDTSyncer
 
@@ -16,7 +16,7 @@ class Command(BaseCommand):
             "--limit",
             type=int,
             default=None,
-            help="Limita a quantidade de veículos processados.",
+            help="Limita a quantidade de BDTs processados por execução.",
         )
 
     def handle(self, *args, **options):

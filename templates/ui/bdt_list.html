@@ -1,0 +1,832 @@
+{% extends "ui/base.html" %}
+
+{% block content %}
+
+<style>
+  .bdt-page {
+    width: 100%;
+  }
+
+  .bdt-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+
+  .bdt-title {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 700;
+  }
+
+  .bdt-subtitle {
+    margin: 5px 0 0;
+    color: #64748b;
+    font-size: 14px;
+  }
+
+  .bdt-filters {
+    display: grid;
+    grid-template-columns: minmax(220px, 2fr) minmax(150px, 1fr) minmax(150px, 1fr) minmax(150px, 1fr) auto;
+    gap: 12px;
+    padding: 16px;
+    margin-bottom: 16px;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+  }
+
+  .bdt-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .bdt-field label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #475569;
+  }
+
+  .bdt-field input,
+  .bdt-field select {
+    width: 100%;
+    min-height: 38px;
+    padding: 8px 10px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    background: #fff;
+    color: #0f172a;
+    box-sizing: border-box;
+  }
+
+  .bdt-actions {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+  }
+
+  .bdt-button {
+    min-height: 38px;
+    padding: 8px 14px;
+    border: 0;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+  }
+
+  .bdt-button--primary {
+    background: #0f172a;
+    color: #fff;
+  }
+
+  .bdt-button--secondary {
+    background: #e2e8f0;
+    color: #334155;
+  }
+
+  .bdt-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 12px;
+    color: #64748b;
+    font-size: 13px;
+  }
+
+  .bdt-table-container {
+    overflow-x: auto;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+  }
+
+  .bdt-table {
+    width: 100%;
+    min-width: 1100px;
+    border-collapse: collapse;
+  }
+
+  .bdt-table th {
+    padding: 12px;
+    text-align: left;
+    white-space: nowrap;
+    font-size: 12px;
+    font-weight: 700;
+    color: #475569;
+    background: #f8fafc;
+    border-bottom: 1px solid #e2e8f0;
+  }
+
+  .bdt-table td {
+    padding: 12px;
+    border-bottom: 1px solid #f1f5f9;
+    font-size: 13px;
+    color: #334155;
+    white-space: nowrap;
+  }
+
+  .bdt-table tbody tr:hover {
+    background: #f8fafc;
+  }
+
+  .bdt-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .bdt-status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+
+  .bdt-status--green {
+    color: #15803d;
+  }
+
+  .bdt-status-dot--green {
+    background: #22c55e;
+  }
+
+  .bdt-status--amber {
+    color: #b45309;
+  }
+
+  .bdt-status-dot--amber {
+    background: #f59e0b;
+  }
+
+  .bdt-status--red {
+    color: #b91c1c;
+  }
+
+  .bdt-status-dot--red {
+    background: #ef4444;
+  }
+
+  .bdt-status--slate {
+    color: #475569;
+  }
+
+  .bdt-status-dot--slate {
+    background: #94a3b8;
+  }
+
+  .bdt-loading,
+  .bdt-error,
+  .bdt-empty {
+    padding: 40px 20px;
+    text-align: center;
+    color: #64748b;
+  }
+
+  .bdt-error {
+    color: #b91c1c;
+  }
+
+  .bdt-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 16px;
+  }
+
+  .bdt-page-button {
+    min-width: 36px;
+    height: 36px;
+    padding: 0 10px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    background: #fff;
+    color: #334155;
+    cursor: pointer;
+  }
+
+  .bdt-page-button:hover:not(:disabled) {
+    background: #f8fafc;
+  }
+
+  .bdt-page-button:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  .bdt-page-info {
+    padding: 0 8px;
+    font-size: 13px;
+    color: #64748b;
+  }
+
+  @media (max-width: 1100px) {
+    .bdt-filters {
+      grid-template-columns: repeat(2, minmax(180px, 1fr));
+    }
+
+    .bdt-actions {
+      align-items: center;
+    }
+  }
+
+  @media (max-width: 700px) {
+    .bdt-filters {
+      grid-template-columns: 1fr;
+    }
+
+    .bdt-header,
+    .bdt-summary {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+  }
+</style>
+
+<div class="bdt-page">
+
+  <div class="bdt-header">
+    <div>
+      <h1 class="bdt-title">BDTs</h1>
+      <p class="bdt-subtitle">
+        Boletins de Deslocamento de Viaturas sincronizados do Hórus.
+      </p>
+    </div>
+  </div>
+
+  <form id="bdt-filters" class="bdt-filters">
+
+    <div class="bdt-field">
+      <label for="bdt-search">Busca</label>
+      <input
+        id="bdt-search"
+        type="text"
+        placeholder="Placa, motorista ou observação"
+        autocomplete="off"
+      >
+    </div>
+
+    <div class="bdt-field">
+      <label for="bdt-date-from">Data inicial</label>
+      <input id="bdt-date-from" type="date">
+    </div>
+
+    <div class="bdt-field">
+      <label for="bdt-date-to">Data final</label>
+      <input id="bdt-date-to" type="date">
+    </div>
+
+    <div class="bdt-field">
+      <label for="bdt-management">Gestão</label>
+      <select id="bdt-management">
+        <option value="">Todas</option>
+        <option value="49">Lei Seca</option>
+      </select>
+    </div>
+
+    <div class="bdt-field">
+      <label for="bdt-status">Status</label>
+      <select id="bdt-status">
+        <option value="">Todos</option>
+        <option value="ABERTO">Em aberto</option>
+        <option value="CALCULADA">Calculada</option>
+        <option value="DADOS_INCOMPLETOS">Dados incompletos</option>
+      </select>
+    </div>
+
+    <div class="bdt-actions">
+      <button
+        type="submit"
+        class="bdt-button bdt-button--primary"
+      >
+        Filtrar
+      </button>
+
+      <button
+        type="button"
+        id="bdt-clear"
+        class="bdt-button bdt-button--secondary"
+      >
+        Limpar
+      </button>
+    </div>
+
+  </form>
+
+  <div class="bdt-summary">
+    <span id="bdt-count">Carregando...</span>
+    <span id="bdt-page-summary"></span>
+  </div>
+
+  <div
+    id="bdt-loading"
+    class="bdt-loading"
+  >
+    Carregando BDTs...
+  </div>
+
+  <div
+    id="bdt-error"
+    class="bdt-error"
+    style="display: none;"
+  >
+    Não foi possível carregar os BDTs.
+  </div>
+
+  <div
+    id="bdt-empty"
+    class="bdt-empty"
+    style="display: none;"
+  >
+    Nenhum BDT encontrado para os filtros informados.
+  </div>
+
+  <div
+    id="bdt-table-container"
+    class="bdt-table-container"
+    style="display: none;"
+  >
+
+    <table class="bdt-table">
+
+      <thead>
+        <tr>
+          <th>Início</th>
+          <th>Fim</th>
+          <th>Viatura</th>
+          <th>Motorista</th>
+          <th>KM inicial</th>
+          <th>KM final</th>
+          <th>Total KM</th>
+          <th>Status</th>
+          <th>Gestão</th>
+        </tr>
+      </thead>
+
+      <tbody id="bdt-tbody"></tbody>
+
+    </table>
+
+    <div class="bdt-pagination">
+
+      <button
+        type="button"
+        id="bdt-prev"
+        class="bdt-page-button"
+      >
+        Anterior
+      </button>
+
+      <span
+        id="bdt-page-info"
+        class="bdt-page-info"
+      >
+        Página 1
+      </span>
+
+      <button
+        type="button"
+        id="bdt-next"
+        class="bdt-page-button"
+      >
+        Próxima
+      </button>
+
+    </div>
+
+  </div>
+
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+
+    const loading = document.getElementById("bdt-loading");
+    const error = document.getElementById("bdt-error");
+    const empty = document.getElementById("bdt-empty");
+    const tableContainer = document.getElementById("bdt-table-container");
+    const tbody = document.getElementById("bdt-tbody");
+    const count = document.getElementById("bdt-count");
+    const pageSummary = document.getElementById("bdt-page-summary");
+    const pageInfo = document.getElementById("bdt-page-info");
+    const previousButton = document.getElementById("bdt-prev");
+    const nextButton = document.getElementById("bdt-next");
+
+    const filters = {
+        search: document.getElementById("bdt-search"),
+        dateFrom: document.getElementById("bdt-date-from"),
+        dateTo: document.getElementById("bdt-date-to"),
+        management: document.getElementById("bdt-management"),
+        status: document.getElementById("bdt-status")
+    };
+
+    let currentPage = 1;
+    let nextUrl = null;
+    let previousUrl = null;
+
+    function formatDate(value) {
+        if (!value) {
+            return "-";
+        }
+
+        const date = new Date(value);
+
+        if (Number.isNaN(date.getTime())) {
+            return "-";
+        }
+
+        return date.toLocaleString("pt-BR", {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit"
+        });
+    }
+
+    function formatKm(value) {
+        if (value === null || value === undefined || value === "") {
+            return "-";
+        }
+
+        return String(value);
+    }
+
+    function createCell(value, className = "bdt-td") {
+        const td = document.createElement("td");
+        td.className = className;
+        td.textContent = value ?? "-";
+        return td;
+    }
+
+    function createStatus(bdt) {
+        const wrapper = document.createElement("span");
+        wrapper.className = "bdt-status";
+
+        const dot = document.createElement("span");
+        dot.className = "bdt-status-dot";
+
+        const label = document.createElement("span");
+
+        const status = bdt.km_status;
+
+        if (
+            status === "CALCULADA"
+        ) {
+            wrapper.classList.add("bdt-status--green");
+            dot.classList.add("bdt-status-dot--green");
+            label.textContent = "Calculada";
+        }
+        else if (
+            status === "DADOS_INCOMPLETOS" &&
+            bdt.horus_active === true
+        ) {
+            wrapper.classList.add("bdt-status--amber");
+            dot.classList.add("bdt-status-dot--amber");
+            label.textContent = "Em aberto";
+        }
+        else if (
+            status === "DADOS_INCOMPLETOS"
+        ) {
+            wrapper.classList.add("bdt-status--amber");
+            dot.classList.add("bdt-status-dot--amber");
+            label.textContent = "Dados incompletos";
+        }
+        else if (
+            status === "QUILOMETRAGEM_NEGATIVA"
+        ) {
+            wrapper.classList.add("bdt-status--red");
+            dot.classList.add("bdt-status-dot--red");
+            label.textContent = "Inconsistente";
+        }
+        else if (
+            status === "FORMATO_INVALIDO"
+        ) {
+            wrapper.classList.add("bdt-status--red");
+            dot.classList.add("bdt-status-dot--red");
+            label.textContent = "Formato inválido";
+        }
+        else {
+            wrapper.classList.add("bdt-status--slate");
+            dot.classList.add("bdt-status-dot--slate");
+            label.textContent = status || "-";
+        }
+
+        wrapper.appendChild(dot);
+        wrapper.appendChild(label);
+
+        return wrapper;
+    }
+
+    function buildInitialUrl() {
+        const params = new URLSearchParams();
+
+        const search = filters.search.value.trim();
+        const dateFrom = filters.dateFrom.value;
+        const dateTo = filters.dateTo.value;
+        const management = filters.management.value;
+        const status = filters.status.value;
+
+        if (search) {
+            params.set("search", search);
+        }
+
+        if (dateFrom) {
+            params.set("date_from", dateFrom);
+        }
+
+        if (dateTo) {
+            params.set("date_to", dateTo);
+        }
+
+        if (management) {
+            params.set("management", management);
+        }
+
+        if (status) {
+            params.set("status", status);
+        }
+
+        const query = params.toString();
+
+        return query
+            ? "/api/bdts/?" + query
+            : "/api/bdts/";
+    }
+
+    function resetTable() {
+        while (tbody.firstChild) {
+            tbody.removeChild(tbody.firstChild);
+        }
+
+        tableContainer.style.display = "none";
+        empty.style.display = "none";
+        error.style.display = "none";
+    }
+
+    function updatePagination(data) {
+        nextUrl = data.next || null;
+        previousUrl = data.previous || null;
+
+        previousButton.disabled = !previousUrl;
+        nextButton.disabled = !nextUrl;
+
+        const total = Number(data.count || 0);
+        const pageSize = Array.isArray(data.results)
+            ? data.results.length
+            : 0;
+
+        let totalPages = 1;
+
+        if (pageSize > 0) {
+            totalPages = Math.ceil(total / 25);
+        }
+
+        pageInfo.textContent =
+            "Página " + currentPage + " de " + totalPages;
+
+        if (total > 0) {
+            const first = ((currentPage - 1) * 25) + 1;
+            const last = Math.min(currentPage * 25, total);
+
+            pageSummary.textContent =
+                "Exibindo " + first + "–" + last + " de " + total;
+        }
+        else {
+            pageSummary.textContent = "";
+        }
+    }
+
+    function renderRows(bdts) {
+        while (tbody.firstChild) {
+            tbody.removeChild(tbody.firstChild);
+        }
+
+        bdts.forEach(function (bdt) {
+
+            const tr = document.createElement("tr");
+
+            tr.appendChild(
+                createCell(formatDate(bdt.started_at))
+            );
+
+            tr.appendChild(
+                createCell(formatDate(bdt.ended_at))
+            );
+
+            const vehicleCell = createCell(
+                bdt.vehicle_plate || "-"
+            );
+
+            vehicleCell.style.fontWeight = "600";
+
+            tr.appendChild(vehicleCell);
+
+            tr.appendChild(
+                createCell(bdt.driver_name || "-")
+            );
+
+            tr.appendChild(
+                createCell(formatKm(bdt.started_km))
+            );
+
+            tr.appendChild(
+                createCell(formatKm(bdt.ended_km))
+            );
+
+            const totalCell = createCell(
+                bdt.total_km !== null &&
+                bdt.total_km !== undefined
+                    ? bdt.total_km
+                    : "-"
+            );
+
+            totalCell.style.fontWeight = "600";
+
+            tr.appendChild(totalCell);
+
+            const statusCell = document.createElement("td");
+            statusCell.className = "bdt-td";
+            statusCell.appendChild(createStatus(bdt));
+            tr.appendChild(statusCell);
+
+            tr.appendChild(
+                createCell(bdt.management_name || "-")
+            );
+
+            tbody.appendChild(tr);
+        });
+    }
+
+    function loadPage(url, pageNumber) {
+
+        loading.style.display = "block";
+        error.style.display = "none";
+        empty.style.display = "none";
+        tableContainer.style.display = "none";
+
+        fetch(url, {
+            method: "GET",
+            headers: {
+                "Accept": "application/json"
+            }
+        })
+        .then(function (response) {
+
+            if (response.status === 401 || response.status === 403) {
+                throw new Error("Não autorizado");
+            }
+
+            if (!response.ok) {
+                throw new Error("Falha na resposta da API");
+            }
+
+            return response.json();
+        })
+        .then(function (data) {
+
+            loading.style.display = "none";
+
+            const bdts = Array.isArray(data)
+                ? data
+                : (
+                    data &&
+                    Array.isArray(data.results)
+                        ? data.results
+                        : []
+                );
+
+            const total = Array.isArray(data)
+                ? bdts.length
+                : Number(data.count || 0);
+
+            count.textContent =
+                total + (total === 1 ? " registro" : " registros");
+
+            if (bdts.length === 0) {
+                empty.style.display = "block";
+                updatePagination(
+                    Array.isArray(data)
+                        ? {
+                            count: 0,
+                            next: null,
+                            previous: null,
+                            results: []
+                        }
+                        : data
+                );
+                return;
+            }
+
+            currentPage = pageNumber;
+
+            renderRows(bdts);
+
+            tableContainer.style.display = "block";
+
+            if (!Array.isArray(data)) {
+                updatePagination(data);
+            }
+            else {
+                previousButton.disabled = true;
+                nextButton.disabled = true;
+                pageInfo.textContent = "Página 1";
+                pageSummary.textContent =
+                    "Exibindo " + bdts.length + " registros";
+            }
+        })
+        .catch(function (err) {
+
+            console.error("Erro ao carregar BDTs:", err);
+
+            loading.style.display = "none";
+            tableContainer.style.display = "none";
+            error.style.display = "block";
+            count.textContent = "Erro";
+
+            if (err.message === "Não autorizado") {
+                error.textContent =
+                    "Sessão não autorizada para consultar os BDTs.";
+            }
+            else {
+                error.textContent =
+                    "Não foi possível carregar os BDTs.";
+            }
+        });
+    }
+
+    document
+        .getElementById("bdt-filters")
+        .addEventListener("submit", function (event) {
+
+            event.preventDefault();
+
+            currentPage = 1;
+
+            loadPage(
+                buildInitialUrl(),
+                1
+            );
+        });
+
+    document
+        .getElementById("bdt-clear")
+        .addEventListener("click", function () {
+
+            filters.search.value = "";
+            filters.dateFrom.value = "";
+            filters.dateTo.value = "";
+            filters.management.value = "";
+            filters.status.value = "";
+
+            currentPage = 1;
+
+            loadPage(
+                "/api/bdts/",
+                1
+            );
+        });
+
+    previousButton.addEventListener("click", function () {
+
+        if (!previousUrl) {
+            return;
+        }
+
+        currentPage = Math.max(1, currentPage - 1);
+
+        loadPage(
+            previousUrl,
+            currentPage
+        );
+    });
+
+    nextButton.addEventListener("click", function () {
+
+        if (!nextUrl) {
+            return;
+        }
+
+        currentPage += 1;
+
+        loadPage(
+            nextUrl,
+            currentPage
+        );
+    });
+
+    loadPage(
+        "/api/bdts/",
+        1
+    );
+
+});
+</script>
+
+{% endblock %}
