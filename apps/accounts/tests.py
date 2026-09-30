@@ -1,4 +1,4 @@
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from .forms import FleetAuthenticationForm, UserForm
@@ -6,6 +6,7 @@ from .models import User
 
 
 class AccountAccessTests(TestCase):
+    @override_settings(SYSTEM_CREATOR_EMAIL="fabiocunhaosp@gmail.com")
     def test_system_creator_is_identified_by_email(self):
         user = User.objects.create_user(
             username="fabiocunhaosp@gmail.com",

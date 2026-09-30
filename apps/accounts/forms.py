@@ -146,7 +146,7 @@ class UserForm(forms.ModelForm):
         password = cleaned.get("initial_password", "")
         confirmation = cleaned.get("initial_password_confirmation", "")
 
-        if not self.instance.pk and not password:
+        if self.instance._state.adding and not password:
             self.add_error("initial_password", "Informe a senha inicial.")
 
         if password:

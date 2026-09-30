@@ -56,11 +56,11 @@ def get_vehicle_revision_status(*, vehicle):
             .filter(
                 vehicle=vehicle,
                 type=revision_type,
-                exited_at__isnull=True,
+                status__name__iexact="Aberta",
             )
             .order_by("-entered_at", "-created_at")
             .first()
-        )
+    )
 
     last_revision = None
 
