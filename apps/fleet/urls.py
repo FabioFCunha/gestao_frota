@@ -1,5 +1,6 @@
 from django.urls import path, include
 from .sync_views import BDTSyncAPIView
+from .bdt_views import BDTViewSet
 from .sync_vehicle_views import VehicleSyncAPIView
 from .sync_driver_views import DriverSyncAPIView
 from rest_framework.routers import DefaultRouter
@@ -13,6 +14,7 @@ router.register("vehicle-inspections", VehicleInspectionViewSet)
 router.register("vehicle-fines", VehicleFineViewSet)
 router.register("sei-processes", SEIProcessViewSet)
 router.register("documents", DocumentViewSet)
+router.register("bdts", BDTViewSet, basename="bdt")
 
 urlpatterns = [
     path('sync/vehicles/', VehicleSyncAPIView.as_view(), name='sync-vehicles'),
