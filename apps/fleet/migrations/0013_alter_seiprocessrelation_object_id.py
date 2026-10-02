@@ -10,6 +10,7 @@ class Migration(migrations.Migration):
     operations = [
         migrations.RunSQL(
             sql="""
+                ALTER TABLE fleet_seiprocessrelation DROP CONSTRAINT IF EXISTS fleet_seiprocessrelation_object_id_check;
                 ALTER TABLE fleet_seiprocessrelation
                 ALTER COLUMN object_id TYPE uuid
                 USING (
