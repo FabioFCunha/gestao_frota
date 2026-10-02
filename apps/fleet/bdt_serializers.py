@@ -7,6 +7,7 @@ class BDTSerializer(serializers.ModelSerializer):
     vehicle_plate = serializers.SerializerMethodField()
     driver_name = serializers.SerializerMethodField()
     km_status_display = serializers.SerializerMethodField()
+    source_status = serializers.SerializerMethodField()
     total_km = serializers.ReadOnlyField()
 
     class Meta:
@@ -36,6 +37,7 @@ class BDTSerializer(serializers.ModelSerializer):
             "longitude_retreat",
             "note",
             "horus_active",
+            "source_status",
             "source_created_at",
             "source_updated_at",
             "last_synced_at",
@@ -68,3 +70,11 @@ class BDTSerializer(serializers.ModelSerializer):
         }
 
         return labels.get(obj.km_status, obj.km_status)
+
+    def get_source_status(self, obj):
+        """Operational status based on the fields supplied by Hórus."""
+        if obj.horus_active is True and obj.ended_at is None:
+            return "ABERTO"
+        if obj.ended_at is not None or obj.horus_active is False:
+            return "ENCERRADO"
+        return "NAO_INFORMADO"
