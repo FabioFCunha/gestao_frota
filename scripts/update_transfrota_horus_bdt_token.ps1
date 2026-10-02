@@ -1,8 +1,9 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param()
 
 $ErrorActionPreference = 'Stop'
-$ConfigPath = 'C:\Users\fferreira\AppData\Local\Transfrota\horus-bdts.config.clixml'
+$DataRoot = 'C:\ProgramData\Transfrota'
+$ConfigPath = Join-Path $DataRoot 'horus-bdts.config.clixml'
 $TemporaryConfigPath = "$ConfigPath.tmp"
 
 if (!(Test-Path -LiteralPath $ConfigPath)) {

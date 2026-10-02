@@ -1,17 +1,21 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [switch]$DryRun,
     [int]$Limit = 100
 )
 
 $ErrorActionPreference = 'Stop'
+$OutputEncoding = New-Object System.Text.UTF8Encoding($false)
+[Console]::OutputEncoding = $OutputEncoding
+$env:PYTHONIOENCODING = 'utf-8'
 $ProjectRoot = 'D:\gestao_frotas'
 $PythonExe = 'D:\gestao_frotas\.venv\Scripts\python.exe'
-$DataRoot = 'C:\Users\fferreira\AppData\Local\Transfrota'
+$DataRoot = 'C:\ProgramData\Transfrota'
 $ConfigPath = Join-Path $DataRoot 'horus-bdts.config.clixml'
 $StatePath = Join-Path $DataRoot 'horus-bdts-state.json'
 $LogDirectory = Join-Path $DataRoot 'logs'
 $LogPath = Join-Path $LogDirectory 'horus-bdts-sync.log'
+$BootstrapLogPath = Join-Path $LogDirectory 'horus-bdts-bootstrap.log'
 
 function Write-SyncLog([string]$Message) {
     $line = "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ssK') $Message"
@@ -30,6 +34,8 @@ function Rotate-Logs {
 }
 
 try {
+    New-Item -ItemType Directory -Force -Path $LogDirectory | Out-Null
+    Add-Content -LiteralPath $BootstrapLogPath -Value "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ssK') runner iniciado." -Encoding utf8
     if ($Limit -lt 1) { throw 'O limite do lote deve ser maior que zero.' }
     if (!(Test-Path -LiteralPath $PythonExe)) { throw "Python não encontrado: $PythonExe" }
     if (!(Test-Path -LiteralPath $ConfigPath)) { throw "Configuração DPAPI não encontrada: $ConfigPath" }
@@ -55,13 +61,19 @@ try {
         $arguments = @('manage.py', 'sync_horus_bdt', '--limit', $Limit)
         if ($DryRun) { $arguments += '--dry-run' }
         Write-SyncLog "Início (limite=$Limit; dry-run=$($DryRun.IsPresent))."
-        & $PythonExe @arguments *>> $LogPath
-        if ($LASTEXITCODE -ne 0) { throw "Agente encerrou com código $LASTEXITCODE." }
+        & $PythonExe @arguments 2>&1 | ForEach-Object {
+            Add-Content -LiteralPath $LogPath -Value $_ -Encoding utf8
+        }
+        $agentExitCode = $LASTEXITCODE
+        if ($agentExitCode -ne 0) { throw "Agente encerrou com código $agentExitCode." }
         Write-SyncLog 'Conclusão com sucesso.'
     } finally { Pop-Location }
     exit 0
 } catch {
-    if (!(Test-Path -LiteralPath $LogDirectory)) { New-Item -ItemType Directory -Force -Path $LogDirectory | Out-Null }
-    Write-SyncLog "FALHA: $($_.Exception.Message)"
+    try {
+        if (!(Test-Path -LiteralPath $LogDirectory)) { New-Item -ItemType Directory -Force -Path $LogDirectory | Out-Null }
+        Add-Content -LiteralPath $BootstrapLogPath -Value "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ssK') FALHA: $($_.Exception.Message)" -Encoding utf8
+        Write-SyncLog "FALHA: $($_.Exception.Message)"
+    } catch { }
     exit 1
 }

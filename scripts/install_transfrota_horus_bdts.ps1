@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [string]$HorusDbHost = '10.11.89.202',
     [int]$HorusDbPort = 5432,
@@ -14,7 +14,7 @@ $ErrorActionPreference = 'Stop'
 $TaskName = 'Transfrota - Sincronizar Horus BDTS'
 $ProjectRoot = 'D:\gestao_frotas'
 $RunnerPath = Join-Path $ProjectRoot 'scripts\run_transfrota_horus_bdts.ps1'
-$ConfigDirectory = Join-Path $env:LOCALAPPDATA 'Transfrota'
+$ConfigDirectory = 'C:\ProgramData\Transfrota'
 $ConfigPath = Join-Path $ConfigDirectory 'horus-bdts.config.clixml'
 $StatePath = Join-Path $ConfigDirectory 'horus-bdts-state.json'
 $LegacyStatePath = Join-Path $ProjectRoot '.bdt_horus_sync_state.json'
