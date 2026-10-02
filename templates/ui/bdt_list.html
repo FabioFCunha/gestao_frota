@@ -1,6 +1,6 @@
 {% extends "ui/base.html" %}
 
-{% block content %}
+{% block content %}<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <style>
   .bdt-page {
@@ -599,11 +599,100 @@ document.addEventListener("DOMContentLoaded", function () {
         addSection("Observações", [
             ["Observações do motorista", valueOrMissing(bdt.note), true]
         ]);
+
+        addMapSection(bdt);
+
         addSection("Registro na origem", [
             ["Registrado em", formatDate(bdt.source_created_at)],
             ["Atualizado em", formatDate(bdt.source_updated_at)]
         ]);
     }
+
+    function addMapSection(bdt) {
+        const section = document.createElement("section");
+        section.className = "bdt-detail-section";
+        const heading = document.createElement("h3");
+        heading.textContent = "Trajeto no Mapa";
+        section.appendChild(heading);
+
+        const latMatch = parseFloat(bdt.latitude_match);
+        const lngMatch = parseFloat(bdt.longitude_match);
+        const latRetreat = parseFloat(bdt.latitude_retreat);
+        const lngRetreat = parseFloat(bdt.longitude_retreat);
+
+        if (isNaN(latMatch) || isNaN(lngMatch) || isNaN(latRetreat) || isNaN(lngRetreat)) {
+            const noData = document.createElement("p");
+            noData.textContent = "Coordenadas não informadas";
+            noData.style.color = "#64748b";
+            section.appendChild(noData);
+            modalBody.appendChild(section);
+            return;
+        }
+
+        const mapContainer = document.createElement("div");
+        mapContainer.id = "bdt-map";
+        mapContainer.style.height = "300px";
+        mapContainer.style.width = "100%";
+        mapContainer.style.borderRadius = "8px";
+        mapContainer.style.zIndex = "1";
+        section.appendChild(mapContainer);
+
+        const infoText = document.createElement("p");
+        infoText.style.marginTop = "8px";
+        infoText.style.fontSize = "13px";
+        infoText.style.color = "#334155";
+        section.appendChild(infoText);
+
+        modalBody.appendChild(section);
+
+        // Initialize map
+        const map = L.map(mapContainer).setView([latMatch, lngMatch], 13);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors',
+            maxZoom: 19
+        }).addTo(map);
+
+        const startIcon = L.icon({
+            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png',
+            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+            iconSize: [25, 41],
+            iconAnchor: [12, 41],
+            popupAnchor: [1, -34],
+            shadowSize: [41, 41]
+        });
+
+        const endIcon = L.icon({
+            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
+            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+            iconSize: [25, 41],
+            iconAnchor: [12, 41],
+            popupAnchor: [1, -34],
+            shadowSize: [41, 41]
+        });
+
+        const pt1 = L.latLng(latMatch, lngMatch);
+        const pt2 = L.latLng(latRetreat, lngRetreat);
+
+        L.marker(pt1, {icon: startIcon}).addTo(map).bindPopup("Saída");
+        L.marker(pt2, {icon: endIcon}).addTo(map).bindPopup("Retorno");
+
+        const line = L.polyline([pt1, pt2], {color: 'blue', weight: 3, dashArray: '5, 5'}).addTo(map);
+        line.bindTooltip("Trajeto aproximado", {permanent: false, direction: "center"});
+
+        const distMeters = pt1.distanceTo(pt2);
+        const distKm = (distMeters / 1000).toFixed(2);
+        infoText.innerHTML = "<strong>Distância estimada:</strong> " + distKm + " km (trajeto aproximado)";
+
+        if (pt1.equals(pt2)) {
+            map.setView(pt1, 15);
+        } else {
+            map.fitBounds(L.latLngBounds(pt1, pt2), {padding: [30, 30]});
+        }
+
+        // Fix leaflet sizing issue in modals
+        setTimeout(function() { map.invalidateSize(); }, 100);
+    }
+
 
     function openDetails(bdt) {
         modalSubtitle.textContent = "Carregando detalhes…";
