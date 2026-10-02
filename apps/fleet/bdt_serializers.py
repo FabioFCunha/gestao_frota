@@ -36,6 +36,8 @@ class BDTSerializer(serializers.ModelSerializer):
             "total_km",
             "km_status",
             "km_status_display",
+            "departure_address",
+            "return_address",
             "latitude_match",
             "longitude_match",
             "latitude_retreat",

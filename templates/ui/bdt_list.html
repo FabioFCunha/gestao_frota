@@ -568,9 +568,10 @@ document.addEventListener("DOMContentLoaded", function () {
         section.appendChild(heading);
         section.appendChild(grid);
         modalBody.appendChild(section);
+        return section;
     }
 
-    function renderDetails(bdt) {
+        function renderDetails(bdt) {
         modalBody.replaceChildren();
         modalSubtitle.textContent = "Consulta somente leitura";
 
@@ -583,14 +584,30 @@ document.addEventListener("DOMContentLoaded", function () {
             ["Placa da viatura", valueOrMissing(bdt.vehicle_plate)],
             ["Motorista", valueOrMissing(bdt.driver_name)]
         ]);
-        addSection("Saída e retorno", [
+        
+        const needsDepartureGeocode = bdt.latitude_match !== null && bdt.latitude_match !== undefined && !bdt.departure_address;
+        const needsReturnGeocode = bdt.latitude_retreat !== null && bdt.latitude_retreat !== undefined && !bdt.return_address;
+        
+        let departureAddrText = bdt.departure_address || (bdt.latitude_match ? "Localizando endereço..." : "Coordenadas não informadas");
+        let returnAddrText = bdt.return_address || (bdt.latitude_retreat ? "Localizando endereço..." : "Coordenadas não informadas");
+        
+        const departureSection = addSection("Saída", [
             ["Saída", formatDate(bdt.started_at)],
+            ["Quilometragem inicial", formatKm(bdt.started_km_display)],
+            ["Endereço de saída", departureAddrText, true]
+        ]);
+        
+        const returnSection = addSection("Retorno", [
             ["Retorno", formatDate(bdt.ended_at)],
-            ["Quilometragem de saída", formatKm(bdt.started_km_display)],
-            ["Quilometragem de retorno", formatKm(bdt.ended_km_display)],
+            ["Quilometragem final", formatKm(bdt.ended_km_display)],
+            ["Endereço de retorno", returnAddrText, true]
+        ]);
+
+        addSection("Resumo do trajeto", [
             ["Quilometragem total", bdt.total_km === null || bdt.total_km === undefined ? "Não informado" : String(bdt.total_km) + " km"]
         ]);
-        addSection("Localização", [
+
+        addSection("Localização (Coordenadas)", [
             ["Latitude de saída", formatCoordinate(bdt.latitude_match)],
             ["Longitude de saída", formatCoordinate(bdt.longitude_match)],
             ["Latitude de retorno", formatCoordinate(bdt.latitude_retreat)],
@@ -606,6 +623,37 @@ document.addEventListener("DOMContentLoaded", function () {
             ["Registrado em", formatDate(bdt.source_created_at)],
             ["Atualizado em", formatDate(bdt.source_updated_at)]
         ]);
+        
+        if (needsDepartureGeocode || needsReturnGeocode) {
+            const csrfToken = document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1] || '';
+            fetch(`/api/bdts/${bdt.id}/geocode/`, {
+                method: "POST",
+                headers: {
+                    "Accept": "application/json",
+                    "X-CSRFToken": csrfToken
+                }
+            }).then(r => r.json()).then(data => {
+                if(data.departure_address) {
+                    bdt.departure_address = data.departure_address;
+                } else {
+                    bdt.departure_address = "Endereço não localizado";
+                }
+                
+                if(data.return_address) {
+                    bdt.return_address = data.return_address;
+                } else {
+                    bdt.return_address = "Endereço não localizado";
+                }
+                
+                // Re-render
+                renderDetails(bdt);
+            }).catch(e => {
+                console.error("Geocode falhou:", e);
+                bdt.departure_address = "Endereço não localizado (falha)";
+                bdt.return_address = "Endereço não localizado (falha)";
+                renderDetails(bdt);
+            });
+        }
     }
 
     function addMapSection(bdt) {
@@ -673,8 +721,12 @@ document.addEventListener("DOMContentLoaded", function () {
         const pt1 = L.latLng(latMatch, lngMatch);
         const pt2 = L.latLng(latRetreat, lngRetreat);
 
-        L.marker(pt1, {icon: startIcon}).addTo(map).bindPopup("Saída");
-        L.marker(pt2, {icon: endIcon}).addTo(map).bindPopup("Retorno");
+        
+        const depAddr = bdt.departure_address || "Não informado";
+        const retAddr = bdt.return_address || "Não informado";
+        L.marker(pt1, {icon: startIcon}).addTo(map).bindPopup("<b>Saída</b><br>" + depAddr);
+        L.marker(pt2, {icon: endIcon}).addTo(map).bindPopup("<b>Retorno</b><br>" + retAddr);
+
 
         const line = L.polyline([pt1, pt2], {color: 'blue', weight: 3, dashArray: '5, 5'}).addTo(map);
         line.bindTooltip("Trajeto aproximado", {permanent: false, direction: "center"});
