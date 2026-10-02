@@ -41,21 +41,6 @@ class VehicleSyncAPIView(APIView):
         horus_fleet_id = data["external_id"]
         plate = (data.get("plate") or "").strip().upper()
 
-        # Precisamos do status "Ativo"
-        vehicle_status = VehicleStatus.objects.filter(
-            name="Ativo",
-            active=True,
-        ).first()
-
-        if vehicle_status is None:
-            return Response(
-                {
-                    "result": "error",
-                    "detail": "Status 'Ativo' não encontrado no sistema."
-                },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
-
         with transaction.atomic():
             # ==========================================================
             # 1. TENTA BUSCAR POR HORUS_FLEET_ID
@@ -108,6 +93,9 @@ class VehicleSyncAPIView(APIView):
             # 5. CRIAR VIATURA SOMENTE SE NAO EXISTIR POR ID NEM PLACA
             # ==========================================================
             if vehicle is None:
+                vehicle_status = VehicleStatus.objects.filter(name="Ativo", active=True).first()
+                if vehicle_status is None:
+                    return Response({"result": "error", "detail": "Status 'Ativo' não encontrado no sistema."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
                 vehicle = Vehicle.objects.create(
                     horus_fleet_id=horus_fleet_id,
                     color=data.get("color", ""),
@@ -119,28 +107,25 @@ class VehicleSyncAPIView(APIView):
                 )
                 result = "created"
             else:
-                # 3. ATUALIZAR VIATURA EXISTENTE
-                vehicle.color = data.get("color", "")
-                vehicle.status = vehicle_status
-
+                # Preserve local status, colour and notes unless the source
+                # explicitly sent that field.  Hórus does not own custody.
+                update_fields = ["updated_at"]
                 if vehicle.horus_fleet_id != horus_fleet_id:
                     vehicle.horus_fleet_id = horus_fleet_id
+                    update_fields.append("horus_fleet_id")
 
-                if data.get("management_name"):
+                if "color" in data:
+                    vehicle.color = data["color"]
+                    update_fields.append("color")
+
+                if "management_name" in data:
                     vehicle.notes = (
                         "Sincronizado do Horus. "
                         f"Gestao: {data['management_name']}"
                     )
+                    update_fields.append("notes")
 
-                vehicle.save(
-                    update_fields=[
-                        "horus_fleet_id",
-                        "color",
-                        "status",
-                        "notes",
-                        "updated_at",
-                    ]
-                )
+                vehicle.save(update_fields=update_fields)
                 result = "updated"
 
             # ==========================================================

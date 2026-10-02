@@ -80,6 +80,28 @@ class BDTSyncWorker:
         vehicles_map = {v.horus_fleet_id: v for v in Vehicle.objects.filter(horus_fleet_id__in=list(fleet_ids))}
         drivers_map = {d.horus_user_id: d for d in Driver.objects.filter(horus_user_id__in=list(user_ids))}
         existing_bdts = BDT.objects.filter(external_id__in=list(external_ids)).in_bulk(field_name='external_id')
+
+        # A source that explicitly supplied an ID must be linked.  A genuinely
+        # absent ID remains valid and is intentionally stored as NULL.
+        for row in valid_rows:
+            fleet_id = row['_fleet_id_uuid']
+            user_id = row['_user_id_uuid']
+            missing = []
+            if fleet_id is not None and fleet_id not in vehicles_map:
+                missing.append("fleet_id")
+            if user_id is not None and user_id not in drivers_map:
+                missing.append("user_id")
+            if missing:
+                resumo["falhas"] += 1
+                resumo["erros"].append({
+                    "external_id": str(row['_ext_id_uuid']),
+                    "tipo": "ReferenceNotSynced",
+                    "mensagem": f"Não foi possível vincular: {', '.join(missing)}",
+                })
+
+        if resumo["falhas"]:
+            # Do not persist a partially linked batch; the agent will retain its cursor.
+            return resumo
         
         to_create = []
         to_update = []

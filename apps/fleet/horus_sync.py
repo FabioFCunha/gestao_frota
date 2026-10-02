@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import tempfile
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -34,19 +35,23 @@ class HorusBDTSyncer:
     e envia via HTTPS POST para a VPS do Gestão de Frotas.
     """
 
-    STATE_FILE = Path(".bdt_horus_sync_state.json")
-
     def __init__(self, dry_run=False, limit=None):
         self.dry_run = dry_run
         self.limit = limit
+        self.state_file = Path(os.getenv("HORUS_SYNC_STATE_FILE", ".bdt_horus_sync_state.json"))
 
         # Horus Configs
         self.management_id = int(os.getenv("HORUS_LEI_SECA_MANAGEMENT_ID", "49"))
         self.lookback_days = int(os.getenv("HORUS_BDT_LOOKBACK_DAYS", "90"))
 
         # API Configs
-        self.api_url = self._required_env("VPS_API_URL").rstrip("/")
-        self.api_token = self._required_env("VPS_SYNC_TOKEN")
+        # A read-only dry run must remain possible when the outbound secret is
+        # intentionally unavailable in an interactive support session.
+        self.api_url = os.getenv("VPS_API_URL", "").rstrip("/")
+        self.api_token = os.getenv("VPS_SYNC_TOKEN", "")
+        if not self.dry_run and (not self.api_url or not self.api_token):
+            missing = "VPS_API_URL" if not self.api_url else "VPS_SYNC_TOKEN"
+            raise RuntimeError(f"Variável de ambiente obrigatória não configurada: {missing}")
 
         self.stats = SyncStats()
 
@@ -70,9 +75,9 @@ class HorusBDTSyncer:
         return conn
 
     def _load_cursor(self):
-        if self.STATE_FILE.exists():
+        if self.state_file.exists():
             try:
-                with open(self.STATE_FILE, "r") as f:
+                with open(self.state_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
                     dt = datetime.fromisoformat(data["last_sync_updated_at"])
                     last_id = data.get("last_sync_id", "00000000-0000-0000-0000-000000000000")
@@ -85,11 +90,53 @@ class HorusBDTSyncer:
 
     def _save_cursor(self, max_updated_at, max_id):
         if max_updated_at and max_id and not self.dry_run:
-            with open(self.STATE_FILE, "w") as f:
+            self.state_file.parent.mkdir(parents=True, exist_ok=True)
+            state = {
+                "last_sync_updated_at": max_updated_at.isoformat(),
+                "last_sync_id": str(max_id),
+            }
+            # Never leave a truncated watermark after a power loss or task kill.
+            with tempfile.NamedTemporaryFile(
+                mode="w", encoding="utf-8", dir=self.state_file.parent,
+                prefix=f"{self.state_file.name}.", suffix=".tmp", delete=False,
+            ) as f:
                 json.dump({
                     "last_sync_updated_at": max_updated_at.isoformat(),
-                    "last_sync_id": str(max_id)
+                    "last_sync_id": str(max_id),
                 }, f)
+                f.flush()
+                os.fsync(f.fileno())
+                temporary_name = f.name
+            os.replace(temporary_name, self.state_file)
+
+    @staticmethod
+    def _require_response(response, endpoint, expected_processed, *, vehicle_id=None):
+        """Reject success HTTP responses that do not prove full acceptance."""
+        if not isinstance(response, dict):
+            raise RuntimeError(f"Resposta inválida de {endpoint}: JSON objeto esperado.")
+        if vehicle_id is not None:
+            if response.get("result") not in {"created", "updated"}:
+                raise RuntimeError(f"Veículo {vehicle_id} não foi confirmado pela API: {response!r}")
+            if str(response.get("external_id")) != str(vehicle_id):
+                raise RuntimeError(f"API confirmou veículo externo divergente: {response!r}")
+            return
+
+        required = {"processados", "criados", "atualizados"}
+        missing = required.difference(response)
+        if missing:
+            raise RuntimeError(f"Resposta incompleta de {endpoint}; faltam: {sorted(missing)}")
+        try:
+            processed = int(response["processados"])
+            created = int(response["criados"])
+            updated = int(response["atualizados"])
+            failures = int(response.get("falhas", 0))
+            unchanged = int(response.get("inalterados", 0))
+        except (TypeError, ValueError) as exc:
+            raise RuntimeError(f"Contadores inválidos de {endpoint}: {response!r}") from exc
+        if processed != expected_processed or failures or created + updated + unchanged != expected_processed:
+            raise RuntimeError(
+                f"Confirmação parcial de {endpoint}: esperado={expected_processed}, recebido={response!r}"
+            )
 
     def _fetch_bdts(self, conn, last_updated_at, last_id):
         # A janela de segurança atua no LIMITE SUPERIOR para ignorar commits em andamento.
@@ -189,7 +236,7 @@ class HorusBDTSyncer:
                 logger.warning(f"Falha transitória ao enviar {endpoint} ({e}). Retentando em 5s...")
                 time.sleep(5)
 
-        return None
+        raise RuntimeError(f"API não retornou confirmação para {endpoint}.")
 
     def run(self):
         conn = self._connect()
@@ -215,6 +262,14 @@ class HorusBDTSyncer:
 
             print(f"Encontrados: {len(bdts)} BDTs, {len(fleets)} Veículos, {len(users)} Motoristas")
 
+            missing_fleets = fleet_ids - {row["id"] for row in fleets}
+            missing_users = user_ids - {row["id"] for row in users}
+            if missing_fleets or missing_users:
+                raise RuntimeError(
+                    "O Hórus referenciou IDs sem cadastro recuperável: "
+                    f"veículos={len(missing_fleets)}, motoristas={len(missing_users)}. Cursor preservado."
+                )
+
             if self.dry_run:
                 print("Dry Run finalizado. Nenhum dado enviado para a VPS.")
                 return self.stats
@@ -229,11 +284,11 @@ class HorusBDTSyncer:
                     "management_name": "Lei Seca"
                 }
                 resp = self._post_data("vehicles", v_payload)
-                if resp:
-                    if resp.get("result") == "created":
-                        self.stats.fleets_created += 1
-                    elif resp.get("result") == "updated":
-                        self.stats.fleets_updated += 1
+                self._require_response(resp, "vehicles", 1, vehicle_id=f["id"])
+                if resp["result"] == "created":
+                    self.stats.fleets_created += 1
+                else:
+                    self.stats.fleets_updated += 1
 
             # 2. Sincronizar Motoristas
             print("Enviando Motoristas...")
@@ -247,22 +302,17 @@ class HorusBDTSyncer:
                     for u in users
                 ]
                 resp = self._post_data("drivers", drivers_payload)
-                if resp:
-                    self.stats.drivers_created += resp.get("criados", 0)
-                    self.stats.drivers_updated += resp.get("atualizados", 0)
+                self._require_response(resp, "drivers", len(users))
+                self.stats.drivers_created += int(resp["criados"])
+                self.stats.drivers_updated += int(resp["atualizados"])
 
             # 3. Sincronizar BDTs
             print("Enviando BDTs...")
             bdt_resp = self._post_data("bdts", bdts)
-            if bdt_resp:
-                self.stats.bdts_created += bdt_resp.get("criados", 0)
-                self.stats.bdts_updated += bdt_resp.get("atualizados", 0)
-                self.stats.bdts_skipped += bdt_resp.get("falhas", 0)
-                print(f"Resultado BDTs: {bdt_resp}")
-
-                if bdt_resp.get("falhas", 0) > 0:
-                    erros = bdt_resp.get("erros", [])
-                    raise RuntimeError(f"O lote apresentou {bdt_resp['falhas']} falhas na API. O cursor não será avançado. Erros: {erros}")
+            self._require_response(bdt_resp, "bdts", len(bdts))
+            self.stats.bdts_created += int(bdt_resp["criados"])
+            self.stats.bdts_updated += int(bdt_resp["atualizados"])
+            print(f"Resultado BDTs: {bdt_resp}")
 
             # 4. Atualizar cursor state (determinístico da última row)
             last_bdt = bdts[-1]

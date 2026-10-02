@@ -21,7 +21,7 @@ class DriverSyncAPIView(APIView):
         serializer = DriverSyncSerializer(data=data, many=True)
         serializer.is_valid(raise_exception=True)
 
-        resumo = {"processados": len(serializer.validated_data), "criados": 0, "atualizados": 0}
+        resumo = {"processados": len(serializer.validated_data), "criados": 0, "atualizados": 0, "inalterados": 0}
 
         with transaction.atomic():
             for item in serializer.validated_data:
@@ -46,6 +46,8 @@ class DriverSyncAPIView(APIView):
                     if changed:
                         driver.save(update_fields=["name", "registration", "updated_at"])
                         resumo["atualizados"] += 1
+                    else:
+                        resumo["inalterados"] += 1
                 else:
                     resumo["criados"] += 1
 
