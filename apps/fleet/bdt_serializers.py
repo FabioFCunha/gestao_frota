@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
 from .models import BDT
+from .utils import normalize_km
 
 
 class BDTSerializer(serializers.ModelSerializer):
@@ -8,7 +9,9 @@ class BDTSerializer(serializers.ModelSerializer):
     driver_name = serializers.SerializerMethodField()
     km_status_display = serializers.SerializerMethodField()
     source_status = serializers.SerializerMethodField()
-    total_km = serializers.ReadOnlyField()
+    started_km_display = serializers.SerializerMethodField()
+    ended_km_display = serializers.SerializerMethodField()
+    total_km = serializers.SerializerMethodField()
 
     class Meta:
         model = BDT
@@ -28,6 +31,8 @@ class BDTSerializer(serializers.ModelSerializer):
             "ended_at",
             "started_km",
             "ended_km",
+            "started_km_display",
+            "ended_km_display",
             "total_km",
             "km_status",
             "km_status_display",
@@ -78,3 +83,24 @@ class BDTSerializer(serializers.ModelSerializer):
         if obj.ended_at is not None or obj.horus_active is False:
             return "ENCERRADO"
         return "NAO_INFORMADO"
+
+    def get_started_km_display(self, obj):
+        """Return normalized started_km as string, or None."""
+        val = normalize_km(obj.started_km)
+        if val is None:
+            return None
+        return str(val)
+
+    def get_ended_km_display(self, obj):
+        """Return normalized ended_km as string, or None."""
+        val = normalize_km(obj.ended_km)
+        if val is None:
+            return None
+        return str(val)
+
+    def get_total_km(self, obj):
+        """Return total_km as string to preserve decimal precision."""
+        val = obj.total_km
+        if val is None:
+            return None
+        return str(val)

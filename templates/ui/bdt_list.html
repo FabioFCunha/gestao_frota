@@ -586,8 +586,8 @@ document.addEventListener("DOMContentLoaded", function () {
         addSection("Saída e retorno", [
             ["Saída", formatDate(bdt.started_at)],
             ["Retorno", formatDate(bdt.ended_at)],
-            ["Quilometragem de saída", formatKm(bdt.started_km)],
-            ["Quilometragem de retorno", formatKm(bdt.ended_km)],
+            ["Quilometragem de saída", formatKm(bdt.started_km_display)],
+            ["Quilometragem de retorno", formatKm(bdt.ended_km_display)],
             ["Quilometragem total", bdt.total_km === null || bdt.total_km === undefined ? "Não informado" : String(bdt.total_km) + " km"]
         ]);
         addSection("Localização", [
@@ -895,11 +895,11 @@ document.addEventListener("DOMContentLoaded", function () {
             );
 
             tr.appendChild(
-                createCell(formatKm(bdt.started_km))
+                createCell(formatKm(bdt.started_km_display))
             );
 
             tr.appendChild(
-                createCell(formatKm(bdt.ended_km))
+                createCell(formatKm(bdt.ended_km_display))
             );
 
             const totalCell = createCell(
