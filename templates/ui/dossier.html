@@ -163,7 +163,7 @@
                     <td>{% if bdt.started_km is not None %}{{ bdt.started_km }} km{% else %}Não informado{% endif %}</td>
                     <td>{% if bdt.ended_km is not None %}{{ bdt.ended_km }} km{% else %}Não informado{% endif %}</td>
                     <td>{{ bdt.note|default:"Não informado"|truncatechars:80 }}</td>
-                    <td><a class="secondary-action" href="{% url 'bdt_list' %}?vehicle={{ vehicle.id }}&search={{ bdt.external_id }}">Abrir detalhes</a></td>
+                    <td><a class="secondary-action" href="{% url 'bdt_list' %}?vehicle={{ vehicle.id }}&bdt={{ bdt.id }}">Abrir detalhes</a></td>
                 </tr>
             {% endfor %}
             </tbody>

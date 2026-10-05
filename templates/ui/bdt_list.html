@@ -489,6 +489,8 @@ document.addEventListener("DOMContentLoaded", function () {
     let currentPage = 1;
     let nextUrl = null;
     let previousUrl = null;
+    const requestedBdtId = new URLSearchParams(window.location.search).get("bdt");
+    let requestedBdtOpened = false;
 
     function formatDate(value) {
         if (!value) {
@@ -1045,6 +1047,11 @@ document.addEventListener("DOMContentLoaded", function () {
             currentPage = pageNumber;
 
             renderRows(bdts);
+
+            if (requestedBdtId && !requestedBdtOpened) {
+                requestedBdtOpened = true;
+                openDetails({id: requestedBdtId});
+            }
 
             tableContainer.style.display = "block";
 
