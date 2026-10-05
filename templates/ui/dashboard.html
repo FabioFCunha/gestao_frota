@@ -230,19 +230,22 @@
             <div class="vc-details">
                 <div class="vc-detail-item" title="Quilometragem Atual">
                     <span class="vc-detail-icon">⏱</span>
-                    <span>{% if v.mileage %}{{ v.mileage }} km{% else %}Sem reg. km{% endif %}</span>
+                    <span>{% if v.mileage is not None %}{{ v.mileage }} km{% else %}Sem quilometragem registrada{% endif %}</span>
                 </div>
                 {% if v.revision_info %}
                     {% if v.revision_info.status == "SEM_HISTORICO" %}
-                    <div class="vc-detail-item" title="Nenhuma revisão concluída e sem meta no cadastro">
+                    <div class="vc-detail-item" title="Nenhuma revisão concluída e referência inicial ainda não definida">
                         <span class="vc-detail-icon">⚠️</span>
                         <span style="color: #b45309;">Sem histórico de revisão</span>
                     </div>
-                    {% else %}
+                    {% elif v.revision_info.status != "SEM_QUILOMETRAGEM" %}
+                    {% if v.revision_info.km_prox_revisao is not None %}
                     <div class="vc-detail-item" title="Próxima Revisão">
                         <span class="vc-detail-icon">🔧</span>
                         <span>Rev. {{ v.revision_info.km_prox_revisao }} km</span>
                     </div>
+                    {% endif %}
+                    {% if v.revision_info.km_faltando is not None %}
                     <div class="vc-detail-item">
                         <span class="vc-detail-icon">
                             {% if v.revision_info.status == "DEVIDA" %}🚨{% else %}⏳{% endif %}
@@ -255,6 +258,7 @@
                             {% endif %}
                         </span>
                     </div>
+                    {% endif %}
                     {% endif %}
                 {% endif %}
                 {% if v.driver_name %}
