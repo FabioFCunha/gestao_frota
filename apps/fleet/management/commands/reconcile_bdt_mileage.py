@@ -28,12 +28,12 @@ class Command(BaseCommand):
                 self.stderr.write("--since deve ser uma data ISO válida")
                 return
             qs = qs.filter(ended_at__gte=since)
-        if opts["only_missing"]:
-            qs = qs.exclude(
-                external_id__in=VehicleMileage.objects.filter(
-                    origin=VehicleMileage.INTEGRACAO
-                ).values("external_id")
-            )
+        existing_ids = set(
+            VehicleMileage.objects
+            .filter(origin=VehicleMileage.INTEGRACAO)
+            .exclude(external_id="")
+            .values_list("external_id", flat=True)
+        )
         if opts["limit"]:
             qs = qs[:opts["limit"]]
 
@@ -41,11 +41,19 @@ class Command(BaseCommand):
         dry_run = opts["dry_run"]
         for bdt in qs:
             result["selecionados"] += 1
+            bdt_external_id = str(bdt.external_id)
+            if opts["only_missing"] and bdt_external_id in existing_ids:
+                result["ignorados"] += 1
+                continue
             start, end = normalize_km(bdt.started_km), normalize_km(bdt.ended_km)
             if not bdt.vehicle_id or start is None or end is None or start < 0 or end < 0 or end < start or end != int(end):
                 result["inconsistentes"] += 1
                 continue
-            existing = VehicleMileage.objects.filter(origin=VehicleMileage.INTEGRACAO, external_id=str(bdt.external_id)).first()
+            existing = VehicleMileage.objects.filter(
+                vehicle=bdt.vehicle,
+                origin=VehicleMileage.INTEGRACAO,
+                external_id=bdt_external_id,
+            ).first()
             if dry_run:
                 if existing:
                     result["atualizados"] += 1
