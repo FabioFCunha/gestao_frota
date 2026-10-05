@@ -194,7 +194,7 @@
 <!-- MULTAS E VISTORIAS -->
 <section class="grid">
     <article class="panel">
-        <div class="panel-title"><div><h3>⚑ Multas</h3></div></div>
+        <div class="panel-title"><div><h3>⚑ Multas</h3></div><a class="primary-action" href="{% url 'fine_create' %}?vehicle={{ vehicle.id }}">Nova multa</a></div>
         {% if fines %}
         <table>
             <thead><tr><th>AUTO</th><th>SITUAÇÃO</th><th>DATA</th></tr></thead>
