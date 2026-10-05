@@ -829,6 +829,11 @@ document.addEventListener("DOMContentLoaded", function () {
 
     function buildInitialUrl() {
         const params = new URLSearchParams();
+        const vehicleId = new URLSearchParams(window.location.search).get("vehicle");
+
+        if (vehicleId) {
+            params.set("vehicle", vehicleId);
+        }
 
         const search = filters.search.value.trim();
         const dateFrom = filters.dateFrom.value;
@@ -1101,7 +1106,7 @@ document.addEventListener("DOMContentLoaded", function () {
             currentPage = 1;
 
             loadPage(
-                "/api/bdts/",
+                buildInitialUrl(),
                 1
             );
         });
@@ -1138,7 +1143,7 @@ document.addEventListener("DOMContentLoaded", function () {
     modal.addEventListener("click", function (event) { if (event.target === modal) modal.close(); });
 
     loadPage(
-        "/api/bdts/",
+        buildInitialUrl(),
         1
     );
 

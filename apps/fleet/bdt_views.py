@@ -1,6 +1,7 @@
 from django.db.models import Q
 from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated
+from uuid import UUID
 
 from .bdt_serializers import BDTSerializer
 from .models import BDT
@@ -34,7 +35,11 @@ class BDTViewSet(viewsets.ReadOnlyModelViewSet):
         status_filter = self.request.query_params.get("status")
 
         if vehicle:
-            qs = qs.filter(vehicle_id=vehicle)
+            try:
+                vehicle_id = UUID(str(vehicle))
+            except (ValueError, TypeError, AttributeError):
+                return qs.none()
+            qs = qs.filter(vehicle_id=vehicle_id)
 
         if driver:
             qs = qs.filter(driver_id=driver)
