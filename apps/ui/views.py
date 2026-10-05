@@ -279,6 +279,12 @@ def vehicle_dossier(request, pk):
         'latest': bdt_qs.first(),
         'total_km': bdt_total_km if bdt_total_valid else None,
     }
+    bdt_inconsistencies = sum(
+        1 for bdt in bdt_qs
+        if normalize_km(bdt.started_km) is None
+        or normalize_km(bdt.ended_km) is None
+        or normalize_km(bdt.ended_km) < normalize_km(bdt.started_km)
+    )
     bdt_latest_operational = next(
         (bdt for bdt in bdt_qs if normalize_km(bdt.started_km) is not None
          and normalize_km(bdt.ended_km) is not None
@@ -414,6 +420,12 @@ def vehicle_dossier(request, pk):
         'bdt_latest_operational': bdt_latest_operational,
         'bdt_latest_distance': bdt_latest_distance,
         'bdt_revision_due': bdt_revision_due,
+        'bdt_operational_km': normalize_km(bdt_latest_operational.ended_km) if bdt_latest_operational else None,
+        'bdt_latest_date': bdt_latest_operational.ended_at if bdt_latest_operational else None,
+        'bdt_latest_external_id': bdt_latest_operational.external_id if bdt_latest_operational else None,
+        'bdt_latest_started_km': normalize_km(bdt_latest_operational.started_km) if bdt_latest_operational else None,
+        'bdt_latest_ended_km': normalize_km(bdt_latest_operational.ended_km) if bdt_latest_operational else None,
+        'bdt_inconsistencies': bdt_inconsistencies,
     }
     return render(request, "ui/dossier.html", context)
 
