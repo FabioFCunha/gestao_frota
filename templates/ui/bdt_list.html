@@ -591,16 +591,18 @@ document.addEventListener("DOMContentLoaded", function () {
         let departureAddrText = bdt.departure_address || (bdt.latitude_match ? "Localizando endereço..." : "Coordenadas não informadas");
         let returnAddrText = bdt.return_address || (bdt.latitude_retreat ? "Localizando endereço..." : "Coordenadas não informadas");
         
-        const departureSection = addSection("Saída", [
-            ["Saída", formatDate(bdt.started_at)],
-            ["Quilometragem inicial", formatKm(bdt.started_km_display)],
-            ["Endereço de saída", departureAddrText, true]
+        const departureSection = addSection("Ponto GPS 1 — match", [
+            ["Momento associado ao início", formatDate(bdt.started_at)],
+            ["Hodômetro inicial", formatKm(bdt.started_km_display)],
+            ["Endereço aproximado", departureAddrText, true],
+            ["Observação do endereço", "Endereço aproximado obtido pelas coordenadas armazenadas no Hórus.", true]
         ]);
         
-        const returnSection = addSection("Retorno", [
-            ["Retorno", formatDate(bdt.ended_at)],
-            ["Quilometragem final", formatKm(bdt.ended_km_display)],
-            ["Endereço de retorno", returnAddrText, true]
+        const returnSection = addSection("Ponto GPS 2 — retreat", [
+            ["Momento associado ao encerramento", formatDate(bdt.ended_at)],
+            ["Hodômetro final", formatKm(bdt.ended_km_display)],
+            ["Endereço aproximado", returnAddrText, true],
+            ["Observação do endereço", "Endereço aproximado obtido pelas coordenadas armazenadas no Hórus.", true]
         ]);
 
         addSection("Resumo do trajeto", [
@@ -608,10 +610,10 @@ document.addEventListener("DOMContentLoaded", function () {
         ]);
 
         addSection("Localização (Coordenadas)", [
-            ["Latitude de saída", formatCoordinate(bdt.latitude_match)],
-            ["Longitude de saída", formatCoordinate(bdt.longitude_match)],
-            ["Latitude de retorno", formatCoordinate(bdt.latitude_retreat)],
-            ["Longitude de retorno", formatCoordinate(bdt.longitude_retreat)]
+            ["Latitude — match", formatCoordinate(bdt.latitude_match)],
+            ["Longitude — match", formatCoordinate(bdt.longitude_match)],
+            ["Latitude — retreat", formatCoordinate(bdt.latitude_retreat)],
+            ["Longitude — retreat", formatCoordinate(bdt.longitude_retreat)]
         ]);
         addSection("Observações", [
             ["Observações do motorista", valueOrMissing(bdt.note), true]
@@ -724,16 +726,13 @@ document.addEventListener("DOMContentLoaded", function () {
         
         const depAddr = bdt.departure_address || "Não informado";
         const retAddr = bdt.return_address || "Não informado";
-        L.marker(pt1, {icon: startIcon}).addTo(map).bindPopup("<b>Saída</b><br>" + depAddr);
-        L.marker(pt2, {icon: endIcon}).addTo(map).bindPopup("<b>Retorno</b><br>" + retAddr);
+        L.marker(pt1, {icon: startIcon}).addTo(map).bindPopup("<b>Ponto GPS 1 — match</b><br>" + depAddr);
+        L.marker(pt2, {icon: endIcon}).addTo(map).bindPopup("<b>Ponto GPS 2 — retreat</b><br>" + retAddr);
 
 
         const line = L.polyline([pt1, pt2], {color: 'blue', weight: 3, dashArray: '5, 5'}).addTo(map);
-        line.bindTooltip("Trajeto aproximado", {permanent: false, direction: "center"});
-
-        const distMeters = pt1.distanceTo(pt2);
-        const distKm = (distMeters / 1000).toFixed(2);
-        infoText.innerHTML = "<strong>Distância estimada:</strong> " + distKm + " km (trajeto aproximado)";
+        line.bindTooltip("Ligação aproximada entre os dois pontos.", {permanent: false, direction: "center"});
+        infoText.textContent = "Ligação aproximada entre os dois pontos.";
 
         if (pt1.equals(pt2)) {
             map.setView(pt1, 15);
