@@ -9,6 +9,7 @@ from apps.ui import views
 urlpatterns = [
     path("", dashboard, name="dashboard"),
     path("veiculos/", vehicle_list, name="vehicle_list"),
+    path("bdts/", views.bdt_list, name="bdt_list"),
     path("veiculos/<uuid:pk>/", vehicle_dossier, name="vehicle_dossier"),
     path("contratos/", contract_list, name="contract_list"),
     path("contratos/novo/", views.contract_create, name="contract_create"),

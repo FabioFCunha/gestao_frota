@@ -233,6 +233,17 @@ def vehicle_list(request):
     context = {"vehicles": qs[:50], "q": q}
     return render(request, "ui/vehicle_list.html", context)
 
+@login_required
+@module_permission("fleet.view_vehicle")
+def bdt_list(request):
+    """
+    Tela de consulta dos BDTs sincronizados do Horus.
+
+    Os dados sao carregados dinamicamente pelo frontend
+    atraves do endpoint /api/bdts/.
+    """
+    return render(request, "ui/bdt_list.html")
+
 
 @login_required
 @module_permission("fleet.view_vehicle")

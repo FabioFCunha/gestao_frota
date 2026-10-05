@@ -6,6 +6,7 @@ from django.db.models import Q
 from django.utils import timezone
 from django.contrib.contenttypes.fields import GenericForeignKey, GenericRelation
 from django.contrib.contenttypes.models import ContentType
+from apps.fleet.utils import normalize_km
 
 
 class SystemParameter(models.Model):
@@ -75,6 +76,7 @@ class VehicleModel(NamedModel):
 
 
 class Driver(NamedModel):
+    horus_user_id = models.UUIDField(null=True, blank=True, unique=True)
     registration = models.CharField(max_length=50, blank=True, null=True, unique=True)
     unit = models.ForeignKey(AdministrativeUnit, null=True, blank=True, on_delete=models.PROTECT)
     phone = models.CharField(max_length=30, blank=True)
@@ -113,6 +115,7 @@ class Contract(BaseModel):
 
 
 class Vehicle(BaseModel):
+    horus_fleet_id = models.UUIDField(null=True, blank=True, unique=True)
     brand = models.ForeignKey(Brand, null=True, blank=True, on_delete=models.PROTECT)
     model = models.ForeignKey(VehicleModel, null=True, blank=True, on_delete=models.PROTECT)
     color = models.CharField(max_length=50, blank=True)
@@ -188,6 +191,63 @@ class VehiclePlate(BaseModel):
             models.UniqueConstraint(fields=["plate"], condition=Q(ends_on__isnull=True, kind="CURRENT"), name="unique_active_current_plate"),
             models.UniqueConstraint(fields=["vehicle", "kind"], condition=Q(ends_on__isnull=True), name="unique_active_plate_per_vehicle_and_kind")
         ]
+
+
+class BDT(BaseModel):
+    """Registro operacional recebido do Hórus, identificado pela origem."""
+
+    external_id = models.UUIDField(unique=True, db_index=True)
+    vehicle = models.ForeignKey(
+        Vehicle, null=True, blank=True, on_delete=models.PROTECT, related_name="bdts"
+    )
+    driver = models.ForeignKey(
+        Driver, null=True, blank=True, on_delete=models.PROTECT, related_name="bdts"
+    )
+    horus_management_id = models.IntegerField(null=True, blank=True)
+    horus_adm_id = models.UUIDField(null=True, blank=True)
+    horus_service_id = models.UUIDField(null=True, blank=True)
+    horus_sector_id = models.IntegerField(null=True, blank=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    ended_at = models.DateTimeField(null=True, blank=True)
+    started_km = models.CharField(max_length=255, null=True, blank=True)
+    ended_km = models.CharField(max_length=255, null=True, blank=True)
+    latitude_match = models.DecimalField(max_digits=12, decimal_places=8, null=True, blank=True)
+    longitude_match = models.DecimalField(max_digits=12, decimal_places=8, null=True, blank=True)
+    latitude_retreat = models.DecimalField(max_digits=12, decimal_places=8, null=True, blank=True)
+    longitude_retreat = models.DecimalField(max_digits=12, decimal_places=8, null=True, blank=True)
+    note = models.TextField(blank=True)
+    horus_active = models.BooleanField(null=True, blank=True)
+    management_name = models.CharField(max_length=150, blank=True)
+    source_created_at = models.DateTimeField(null=True, blank=True)
+    source_updated_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    last_synced_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ["-started_at", "-created_at"]
+        indexes = [
+            models.Index(fields=["vehicle", "-started_at"]),
+            models.Index(fields=["driver", "-started_at"]),
+            models.Index(fields=["horus_management_id", "-started_at"]),
+            models.Index(fields=["source_updated_at"]),
+        ]
+
+    @property
+    def km_status(self):
+        if self.started_km is None or self.ended_km is None:
+            return "DADOS_INCOMPLETOS"
+        started_km = normalize_km(self.started_km)
+        ended_km = normalize_km(self.ended_km)
+        if started_km is None or ended_km is None:
+            return "FORMATO_INVALIDO"
+        if ended_km < started_km:
+            return "QUILOMETRAGEM_NEGATIVA"
+        return "CALCULADA"
+
+    @property
+    def total_km(self):
+        if self.km_status != "CALCULADA":
+            return None
+        return normalize_km(self.ended_km) - normalize_km(self.started_km)
 
 
 class VehicleMileage(BaseModel):
