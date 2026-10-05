@@ -1,10 +1,36 @@
 import logging
 from django.db import transaction
 from django.utils import timezone
-from apps.fleet.models import BDT, Vehicle, Driver
+from apps.fleet.models import BDT, Vehicle, Driver, VehicleMileage
+from apps.fleet.utils import normalize_km
 from uuid import UUID
 
 logger = logging.getLogger(__name__)
+
+
+def sync_bdt_mileage(bdt):
+    """Reconcile the operational mileage projection for one BDT.
+
+    Invalid or open BDTs never remove a previously confirmed projection.
+    Manual mileage records are intentionally outside this idempotency key.
+    """
+    started = normalize_km(bdt.started_km)
+    ended = normalize_km(bdt.ended_km)
+    if bdt.vehicle_id is None or started is None or ended is None or ended < started:
+        logger.warning("BDT %s com quilometragem inconsistente; projeção não atualizada", bdt.external_id)
+        return False
+    mileage_date = bdt.ended_at or bdt.started_at or bdt.source_updated_at or timezone.now()
+    notes = (
+        f"BDT Hórus {bdt.external_id} | KM inicial: {started} | "
+        f"KM final: {ended} | Percurso: {ended - started} km"
+    )
+    VehicleMileage.objects.update_or_create(
+        vehicle=bdt.vehicle,
+        origin=VehicleMileage.INTEGRACAO,
+        external_id=str(bdt.external_id),
+        defaults={"mileage": int(ended), "date": mileage_date, "notes": notes},
+    )
+    return True
 
 class BDTSyncWorker:
     """
@@ -34,6 +60,7 @@ class BDTSyncWorker:
             "criados": 0,
             "atualizados": 0,
             "falhas": 0,
+            "inconsistencias": 0,
             "erros": []
         }
         
@@ -169,5 +196,10 @@ class BDTSyncWorker:
                 ]
                 BDT.objects.bulk_update(to_update, fields=update_fields, batch_size=1000)
                 resumo["atualizados"] += len(to_update)
+
+            # Reconcile only after the BDT row is durable.  Invalid updates do
+            # not delete or overwrite a previously valid mileage projection.
+            persisted = BDT.objects.filter(external_id__in=list(external_ids)).select_related("vehicle")
+            resumo["inconsistencias"] = sum(1 for bdt in persisted if not sync_bdt_mileage(bdt))
             
         return resumo

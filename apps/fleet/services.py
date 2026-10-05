@@ -40,13 +40,11 @@ def get_vehicle_revision_status(*, vehicle):
         active=True,
     ).first()
 
-    current_mileage = (
-        VehicleMileage.objects
-        .filter(vehicle=vehicle)
-        .order_by("-date", "-created_at")
-        .values_list("mileage", flat=True)
-        .first()
-    ) or 0
+    latest_mileage = (
+        VehicleMileage.objects.filter(vehicle=vehicle)
+        .order_by("-date", "-created_at").first()
+    )
+    current_mileage = latest_mileage.mileage if latest_mileage else 0
 
     active_revision = None
 
