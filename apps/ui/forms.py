@@ -248,7 +248,7 @@ class FineForm(forms.ModelForm):
         self.fields['vehicle'].queryset = Vehicle.objects.select_related('brand','model').prefetch_related('plate_history').order_by('brand__name','model__name')
         self.fields['vehicle'].label_from_instance = self.label_from_instance
         self.fields['driver'].queryset = Driver.objects.order_by('name')
-        if self.instance and self.instance.pk:
+        if self.instance and self.instance.vehicle_id:
             assignment = self.instance.vehicle.driver_assignments.filter(is_active=True).select_related('driver').first()
             if assignment:
                 self.fields['driver'].initial = assignment.driver_id
