@@ -119,6 +119,10 @@ class VehicleViewSet(viewsets.ModelViewSet):
         ).select_related(
             'status', 'unit', 'base', 'renter', 'contract'
         ).get(pk=self.get_object().id)
+        bdt_qs = BDT.objects.filter(vehicle=vehicle).select_related("driver").order_by("-started_at", "-created_at")
+        valid_bdts = [b for b in bdt_qs if normalize_km(b.started_km) is not None and normalize_km(b.ended_km) is not None and normalize_km(b.ended_km) >= normalize_km(b.started_km)]
+        latest_bdt = valid_bdts[0] if valid_bdts else None
+        bdt_inconsistencies = sum(1 for b in bdt_qs if b not in valid_bdts)
         
         data = {
             "vehicle": VehicleSerializer(vehicle).data,
@@ -144,6 +148,17 @@ class VehicleViewSet(viewsets.ModelViewSet):
             "sei_processes": SEIProcessSerializer([r.process for r in vehicle.sei_processes.all()], many=True).data,
             "documents": DocumentSerializer([r.document for r in vehicle.documents.all()], many=True).data
         }
+        data.update({
+            "bdt_operational_km": normalize_km(latest_bdt.ended_km) if latest_bdt else None,
+            "bdt_latest_date": latest_bdt.ended_at if latest_bdt else None,
+            "bdt_latest_external_id": str(latest_bdt.external_id) if latest_bdt else None,
+            "bdt_latest_started_km": normalize_km(latest_bdt.started_km) if latest_bdt else None,
+            "bdt_latest_ended_km": normalize_km(latest_bdt.ended_km) if latest_bdt else None,
+            "bdt_latest_distance": normalize_km(latest_bdt.ended_km) - normalize_km(latest_bdt.started_km) if latest_bdt else None,
+            "bdt_inconsistencies": bdt_inconsistencies,
+            "bdt_summary": {"total": bdt_qs.count(), "open": bdt_qs.filter(ended_at__isnull=True, horus_active=True).count(), "closed": bdt_qs.filter(models.Q(ended_at__isnull=False) | models.Q(horus_active=False)).count()},
+            "bdt_latest_operational": BDTSerializer(latest_bdt).data if latest_bdt else None,
+        })
         return Response(data)
 
     @action(detail=True, methods=["post"])
