@@ -82,19 +82,21 @@ class VehicleViewSet(viewsets.ModelViewSet):
     @staticmethod
     def _bdt_summary(queryset):
         total_km = 0
-        valid_total = True
+        valid_pairs = 0
         for started, ended in queryset.values_list("started_km", "ended_km"):
             start_value, end_value = normalize_km(started), normalize_km(ended)
             if start_value is None or end_value is None or end_value < start_value:
-                valid_total = False
                 continue
             total_km += end_value - start_value
+            valid_pairs += 1
         return {
             "total": queryset.count(),
             "open": queryset.filter(ended_at__isnull=True, horus_active=True).count(),
             "closed": queryset.filter(models.Q(ended_at__isnull=False) | models.Q(horus_active=False)).count(),
             "latest": BDTSerializer(queryset.first()).data if queryset.exists() else None,
-            "total_km": str(total_km) if valid_total else None,
+            # BDTs abertos ou inconsistentes não invalidam deslocamentos
+            # confirmados de outros BDTs; zero continua sendo leitura válida.
+            "total_km": str(total_km) if valid_pairs else None,
         }
 
     @action(detail=True, methods=["get"])

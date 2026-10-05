@@ -34,3 +34,37 @@ class VehicleBDTEndpointTests(APITestCase):
         self.assertEqual(response.data["summary"]["total_km"], "100")
         self.assertEqual(response.data["count"], 2)
         self.assertLessEqual(len(response.data["results"]), response.data["count"])
+
+    def test_summary_uses_all_valid_pairs_before_pagination(self):
+        for _ in range(26):
+            BDT.objects.create(
+                external_id=uuid.uuid4(),
+                vehicle=self.vehicle,
+                started_at=timezone.now(),
+                started_km="0",
+                ended_km="1",
+                horus_active=False,
+            )
+        BDT.objects.create(
+            external_id=uuid.uuid4(), vehicle=self.vehicle,
+            started_km="0", ended_km="0", horus_active=False,
+        )
+        BDT.objects.create(
+            external_id=uuid.uuid4(), vehicle=self.vehicle,
+            started_km="50", ended_km="100", horus_active=False,
+        )
+        # Pares incompleto, inválido e regressivo não entram na soma.
+        BDT.objects.create(external_id=uuid.uuid4(), vehicle=self.vehicle, started_km="100")
+        BDT.objects.create(external_id=uuid.uuid4(), vehicle=self.vehicle, started_km="inválido", ended_km="200")
+        BDT.objects.create(external_id=uuid.uuid4(), vehicle=self.vehicle, started_km="300", ended_km="299")
+        BDT.objects.create(
+            external_id=uuid.uuid4(), vehicle=self.other,
+            started_km="0", ended_km="999", horus_active=False,
+        )
+
+        response = self.client.get(f"/api/vehicles/{self.vehicle.id}/bdts/?page=2")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["count"], 31)
+        self.assertEqual(len(response.data["results"]), 6)
+        self.assertEqual(response.data["summary"]["total_km"], "76")
