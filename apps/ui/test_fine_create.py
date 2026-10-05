@@ -55,3 +55,9 @@ class FineCreateRegressionTests(TestCase):
 
         self.assertEqual(self.client.get(reverse("fine_edit", args=[fine.id])).status_code, 200)
         self.assertEqual(self.client.get(reverse("fine_full_edit", args=[fine.id])).status_code, 200)
+        response = self.client.post(
+            reverse("fine_edit", args=[fine.id]), {"status": str(self.fine_status.id)}
+        )
+        self.assertRedirects(response, reverse("fine_list"))
+        fine.refresh_from_db()
+        self.assertEqual(fine.vehicle_id, self.vehicle.id)
