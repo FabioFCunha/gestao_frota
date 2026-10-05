@@ -6,7 +6,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.accounts.models import User
-from apps.fleet.models import Driver, Vehicle, VehicleExitOrder, VehicleStatus
+from apps.fleet.models import Driver, Vehicle, VehicleExitOrder, VehiclePlate, VehicleStatus
 
 
 class VehicleExitOrderTests(TestCase):
@@ -19,6 +19,7 @@ class VehicleExitOrderTests(TestCase):
         self.status = VehicleStatus.objects.create(name='Ativo')
         self.vehicle = Vehicle.objects.create(status=self.status)
         self.other_vehicle = Vehicle.objects.create(status=self.status)
+        VehiclePlate.objects.create(vehicle=self.vehicle, plate='ABC1D23', kind=VehiclePlate.CURRENT)
         self.driver = Driver.objects.create(name='Motorista OS')
         self.client.force_login(self.user)
 
@@ -41,6 +42,23 @@ class VehicleExitOrderTests(TestCase):
         response = self.client.post(linked, self.payload(vehicle=str(self.other_vehicle.id)))
         self.assertEqual(response.status_code, 302)
         self.assertEqual(VehicleExitOrder.objects.get().vehicle_id, self.vehicle.id)
+
+    def test_general_and_linked_get_render_vehicle_labels_and_return_pages(self):
+        general = self.client.get(reverse('exit_order_create'))
+        self.assertEqual(general.status_code, 200)
+        self.assertContains(general, 'ABC1D23')
+        self.assertContains(general, 'name="vehicle"')
+
+        linked_url = reverse('exit_order_create') + f'?vehicle={self.vehicle.id}'
+        linked = self.client.get(linked_url)
+        self.assertEqual(linked.status_code, 200)
+        self.assertContains(linked, 'Viatura vinculada:')
+        self.assertNotContains(linked, 'name="vehicle"')
+
+        self.client.post(reverse('exit_order_create'), self.payload())
+        order = VehicleExitOrder.objects.get()
+        self.assertEqual(self.client.get(reverse('exit_order_detail', args=[order.id])).status_code, 200)
+        self.assertEqual(self.client.get(reverse('exit_order_return', args=[order.id])).status_code, 200)
 
     def test_only_one_pending_order_and_only_author_can_close(self):
         self.client.post(reverse('exit_order_create'), self.payload())

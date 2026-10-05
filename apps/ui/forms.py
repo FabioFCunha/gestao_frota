@@ -171,8 +171,23 @@ class VehicleExitOrderForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["vehicle"].queryset = Vehicle.objects.select_related("brand", "model").prefetch_related("plate_history").order_by("brand__name", "model__name")
-        self.fields["vehicle"].label_from_instance = VehicleForm.label_vehicle
+        self.fields["vehicle"].label_from_instance = self.label_from_instance
         self.fields["driver"].queryset = Driver.objects.filter(active=True).order_by("name")
+
+    @staticmethod
+    def label_from_instance(vehicle):
+        plate = next(
+            (item.plate for item in vehicle.plate_history.all()
+             if item.kind == 'CURRENT' and item.ends_on is None),
+            'Sem placa',
+        )
+        description = ' '.join(
+            part for part in [
+                vehicle.brand.name if vehicle.brand else '',
+                vehicle.model.name if vehicle.model else '',
+            ] if part
+        )
+        return f'{plate} — {description or "Veículo sem modelo"}'
 
 
 class VehicleExitOrderReturnForm(forms.Form):
