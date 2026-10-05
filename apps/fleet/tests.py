@@ -328,6 +328,30 @@ class MaintenanceCompletionCancellationTests(TestCase):
         self.assertEqual(result["next_revision_km"], 50200)
         self.assertEqual(result["status"], "OK")
 
+    def test_concluded_revision_without_exit_date_is_not_open(self):
+        """Dados legados podem não ter exited_at; o status continua soberano."""
+        from .models import VehicleMileage
+        from .services import get_vehicle_revision_status
+
+        revision_type = MaintenanceType.objects.get(name="Revisão")
+        Maintenance.objects.create(
+            vehicle=self.vehicle,
+            type=revision_type,
+            status=self.concluded,
+            mileage=40_200,
+            exited_at=None,
+        )
+        VehicleMileage.objects.create(
+            vehicle=self.vehicle,
+            mileage=47_199,
+            recorded_by=self.user,
+        )
+
+        result = get_vehicle_revision_status(vehicle=self.vehicle)
+
+        self.assertEqual(result["status"], "OK")
+        self.assertIsNone(result["active_revision_id"])
+
     def test_revision_status_ok_at_47199(self):
         from .models import VehicleMileage
         from .services import get_vehicle_revision_status

@@ -12,6 +12,7 @@ from .serializers import (
     VehicleCustodySerializer, VehicleFineSerializer, VehicleHistorySerializer,
     VehicleInspectionSerializer, VehicleSerializer,
 )
+from .bdt_serializers import BDTSerializer
 
 class DashboardAPIView(APIView):
     def get(self, request):

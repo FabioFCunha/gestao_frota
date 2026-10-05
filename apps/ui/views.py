@@ -1240,9 +1240,13 @@ def fine_create(request):
             raise Http404('Viatura inválida.')
 
     if request.method == 'POST':
-        form = FineForm(request.POST)
+        form = FineForm(
+            request.POST,
+            initial={"vehicle": linked_vehicle} if linked_vehicle else None,
+        )
         if linked_vehicle:
             form.fields['vehicle'].disabled = True
+            form.fields['vehicle'].initial = linked_vehicle
             form.instance.vehicle = linked_vehicle
         if form.is_valid():
             if linked_vehicle:

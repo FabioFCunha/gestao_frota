@@ -55,6 +55,7 @@ def get_vehicle_revision_status(*, vehicle):
                 vehicle=vehicle,
                 type=revision_type,
                 exited_at__isnull=True,
+                status__name__in=["Aberta", "Em andamento"],
             )
             .order_by("-entered_at", "-created_at")
             .first()

@@ -7,6 +7,7 @@ from rest_framework.test import APIClient
 
 from apps.fleet.models import BDT, Vehicle, VehicleMileage, VehicleStatus
 from apps.fleet.sync_bdt import BDTSyncWorker
+from apps.accounts.models import User
 
 
 class SyncContractTests(TestCase):
@@ -15,6 +16,10 @@ class SyncContractTests(TestCase):
         settings.FLEET_SYNC_TOKEN = "test-token"
         self.client = APIClient()
         self.client.credentials(HTTP_AUTHORIZATION="Bearer test-token")
+        self.reader = APIClient()
+        self.reader.force_authenticate(
+            User.objects.create_user(username="bdt-reader", password="safe-password")
+        )
         self.active = VehicleStatus.objects.create(name="Ativo", active=True)
 
     def test_vehicle_omitted_fields_preserve_local_values(self):
@@ -85,13 +90,13 @@ class SyncContractTests(TestCase):
         vehicle_2 = Vehicle.objects.create(horus_fleet_id=uuid.uuid4(), status=self.active)
         bdt_1 = BDT.objects.create(external_id=uuid.uuid4(), vehicle=vehicle_1)
         BDT.objects.create(external_id=uuid.uuid4(), vehicle=vehicle_2)
-        response = self.client.get(f"/api/bdts/?vehicle={vehicle_1.id}")
+        response = self.reader.get(f"/api/bdts/?vehicle={vehicle_1.id}")
         self.assertEqual(response.status_code, 200)
         ids = [item["id"] for item in response.data["results"]]
         self.assertIn(str(bdt_1.id), ids)
         self.assertEqual(response.data["count"], 1)
 
     def test_bdt_api_invalid_vehicle_filter_is_empty(self):
-        response = self.client.get("/api/bdts/?vehicle=not-a-uuid")
+        response = self.reader.get("/api/bdts/?vehicle=not-a-uuid")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["count"], 0)
