@@ -215,6 +215,8 @@ class BDT(BaseModel):
     longitude_match = models.DecimalField(max_digits=12, decimal_places=8, null=True, blank=True)
     latitude_retreat = models.DecimalField(max_digits=12, decimal_places=8, null=True, blank=True)
     longitude_retreat = models.DecimalField(max_digits=12, decimal_places=8, null=True, blank=True)
+    departure_address = models.CharField(max_length=500, blank=True, default="")
+    return_address = models.CharField(max_length=500, blank=True, default="")
     note = models.TextField(blank=True)
     horus_active = models.BooleanField(null=True, blank=True)
     management_name = models.CharField(max_length=150, blank=True)

@@ -3,6 +3,7 @@ from .sync_views import BDTSyncAPIView
 from .bdt_views import BDTViewSet
 from .sync_vehicle_views import VehicleSyncAPIView
 from .sync_driver_views import DriverSyncAPIView
+from .geocoding import geocode_bdt
 from rest_framework.routers import DefaultRouter
 from .views import MaintenanceViewSet, VehicleViewSet, VehicleCustodyViewSet, VehicleInspectionViewSet, VehicleFineViewSet, SEIProcessViewSet, DocumentViewSet, DashboardAPIView
 
@@ -21,5 +22,6 @@ urlpatterns = [
     path('sync/drivers/', DriverSyncAPIView.as_view(), name='sync-drivers'),
     path('sync/bdts/', BDTSyncAPIView.as_view(), name='sync-bdts'),
     path('dashboard/', DashboardAPIView.as_view(), name='dashboard'),
+    path('bdts/<uuid:pk>/geocode/', geocode_bdt, name='bdt-geocode'),
     path('', include(router.urls)),
 ]

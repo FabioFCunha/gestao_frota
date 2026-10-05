@@ -1,6 +1,6 @@
 {% extends "ui/base.html" %}
 
-{% block content %}
+{% block content %}<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <style>
   .bdt-page {
@@ -133,6 +133,15 @@
     background: #f8fafc;
   }
 
+  .bdt-table tbody tr {
+    cursor: pointer;
+  }
+
+  .bdt-table tbody tr:focus {
+    outline: 3px solid #93c5fd;
+    outline-offset: -3px;
+  }
+
   .bdt-status {
     display: inline-flex;
     align-items: center;
@@ -226,6 +235,35 @@
     color: #64748b;
   }
 
+  .bdt-modal {
+    width: min(860px, calc(100vw - 24px));
+    max-height: min(88vh, 900px);
+    padding: 0;
+    border: 0;
+    border-radius: 16px;
+    box-shadow: 0 24px 64px rgba(15, 23, 42, .28);
+    color: #0f172a;
+  }
+
+  .bdt-modal::backdrop { background: rgba(15, 23, 42, .62); }
+  .bdt-modal__content { display: flex; flex-direction: column; max-height: inherit; }
+  .bdt-modal__header { display: flex; justify-content: space-between; gap: 16px; padding: 20px 22px; border-bottom: 1px solid #e2e8f0; }
+  .bdt-modal__title { margin: 0; font-size: 18px; }
+  .bdt-modal__subtitle { margin: 4px 0 0; color: #64748b; font-size: 13px; overflow-wrap: anywhere; }
+  .bdt-modal__close { width: 36px; height: 36px; flex: 0 0 auto; border: 0; border-radius: 8px; background: #f1f5f9; color: #334155; font-size: 24px; line-height: 1; cursor: pointer; }
+  .bdt-modal__body { overflow-y: auto; padding: 20px 22px 24px; }
+  .bdt-detail-section + .bdt-detail-section { margin-top: 22px; }
+  .bdt-detail-section h3 { margin: 0 0 10px; font-size: 14px; color: #334155; }
+  .bdt-detail-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .bdt-detail { padding: 11px 12px; border: 1px solid #e2e8f0; border-radius: 9px; background: #f8fafc; min-width: 0; }
+  .bdt-detail--wide { grid-column: 1 / -1; }
+  .bdt-detail dt { margin: 0 0 4px; color: #64748b; font-size: 12px; font-weight: 600; }
+  .bdt-detail dd { margin: 0; color: #0f172a; font-size: 14px; overflow-wrap: anywhere; white-space: pre-wrap; }
+  .bdt-source-status { display: inline-flex; padding: 3px 8px; border-radius: 999px; background: #dcfce7; color: #166534; font-size: 12px; font-weight: 700; }
+  .bdt-source-status--closed { background: #e2e8f0; color: #334155; }
+  .bdt-modal__loading, .bdt-modal__error { padding: 32px; text-align: center; color: #64748b; }
+  .bdt-modal__error { color: #b91c1c; }
+
   @media (max-width: 1100px) {
     .bdt-filters {
       grid-template-columns: repeat(2, minmax(180px, 1fr));
@@ -246,6 +284,12 @@
       align-items: flex-start;
       flex-direction: column;
     }
+
+    .bdt-modal { width: 100vw; max-height: 100dvh; height: 100dvh; border-radius: 0; }
+    .bdt-modal__header { padding: 16px; }
+    .bdt-modal__body { padding: 16px; }
+    .bdt-detail-grid { grid-template-columns: 1fr; }
+    .bdt-detail--wide { grid-column: auto; }
   }
 </style>
 
@@ -404,6 +448,19 @@
 
 </div>
 
+<dialog id="bdt-modal" class="bdt-modal" aria-labelledby="bdt-modal-title">
+  <div class="bdt-modal__content">
+    <div class="bdt-modal__header">
+      <div>
+        <h2 id="bdt-modal-title" class="bdt-modal__title">Detalhes do BDT</h2>
+        <p id="bdt-modal-subtitle" class="bdt-modal__subtitle"></p>
+      </div>
+      <button id="bdt-modal-close" class="bdt-modal__close" type="button" aria-label="Fechar detalhes">×</button>
+    </div>
+    <div id="bdt-modal-body" class="bdt-modal__body"></div>
+  </div>
+</dialog>
+
 <script>
 document.addEventListener("DOMContentLoaded", function () {
 
@@ -417,6 +474,9 @@ document.addEventListener("DOMContentLoaded", function () {
     const pageInfo = document.getElementById("bdt-page-info");
     const previousButton = document.getElementById("bdt-prev");
     const nextButton = document.getElementById("bdt-next");
+    const modal = document.getElementById("bdt-modal");
+    const modalBody = document.getElementById("bdt-modal-body");
+    const modalSubtitle = document.getElementById("bdt-modal-subtitle");
 
     const filters = {
         search: document.getElementById("bdt-search"),
@@ -432,13 +492,13 @@ document.addEventListener("DOMContentLoaded", function () {
 
     function formatDate(value) {
         if (!value) {
-            return "-";
+            return "Não informado";
         }
 
         const date = new Date(value);
 
         if (Number.isNaN(date.getTime())) {
-            return "-";
+            return "Não informado";
         }
 
         return date.toLocaleString("pt-BR", {
@@ -452,17 +512,261 @@ document.addEventListener("DOMContentLoaded", function () {
 
     function formatKm(value) {
         if (value === null || value === undefined || value === "") {
-            return "-";
+            return "Não informado";
         }
 
-        return String(value);
+        return String(value) + " km";
     }
 
     function createCell(value, className = "bdt-td") {
         const td = document.createElement("td");
         td.className = className;
-        td.textContent = value ?? "-";
+        td.textContent = value ?? "Não informado";
         return td;
+    }
+
+    function valueOrMissing(value) {
+        return value === null || value === undefined || value === ""
+            ? "Não informado"
+            : String(value);
+    }
+
+    function formatCoordinate(value) {
+        return value === null || value === undefined || value === ""
+            ? "Não informado"
+            : String(value);
+    }
+
+    function sourceStatusLabel(bdt) {
+        if (bdt.source_status === "ABERTO") return "Em aberto";
+        if (bdt.source_status === "ENCERRADO") return "Encerrado";
+        return "Não informado";
+    }
+
+    function detail(label, value, wide) {
+        const item = document.createElement("div");
+        item.className = "bdt-detail" + (wide ? " bdt-detail--wide" : "");
+        const term = document.createElement("dt");
+        term.textContent = label;
+        const description = document.createElement("dd");
+        description.textContent = value;
+        item.appendChild(term);
+        item.appendChild(description);
+        return item;
+    }
+
+    function addSection(title, entries) {
+        const section = document.createElement("section");
+        section.className = "bdt-detail-section";
+        const heading = document.createElement("h3");
+        heading.textContent = title;
+        const grid = document.createElement("dl");
+        grid.className = "bdt-detail-grid";
+        entries.forEach(function (entry) {
+            grid.appendChild(detail(entry[0], entry[1], entry[2]));
+        });
+        section.appendChild(heading);
+        section.appendChild(grid);
+        modalBody.appendChild(section);
+        return section;
+    }
+
+        function renderDetails(bdt) {
+        modalBody.replaceChildren();
+        modalSubtitle.textContent = "Consulta somente leitura";
+
+        addSection("Identificação", [
+            ["Identificação do BDT", valueOrMissing(bdt.external_id), true],
+            ["Situação", sourceStatusLabel(bdt)],
+            ["Gestão", valueOrMissing(bdt.management_name)]
+        ]);
+        addSection("Viatura e motorista", [
+            ["Placa da viatura", valueOrMissing(bdt.vehicle_plate)],
+            ["Motorista", valueOrMissing(bdt.driver_name)]
+        ]);
+        
+        const needsDepartureGeocode = bdt.latitude_match !== null && bdt.latitude_match !== undefined && !bdt.departure_address;
+        const needsReturnGeocode = bdt.latitude_retreat !== null && bdt.latitude_retreat !== undefined && !bdt.return_address;
+        
+        let departureAddrText = bdt.departure_address || (bdt.latitude_match ? "Localizando endereço..." : "Coordenadas não informadas");
+        let returnAddrText = bdt.return_address || (bdt.latitude_retreat ? "Localizando endereço..." : "Coordenadas não informadas");
+        
+        const departureSection = addSection("Saída", [
+            ["Saída", formatDate(bdt.started_at)],
+            ["Quilometragem inicial", formatKm(bdt.started_km_display)],
+            ["Endereço de saída", departureAddrText, true]
+        ]);
+        
+        const returnSection = addSection("Retorno", [
+            ["Retorno", formatDate(bdt.ended_at)],
+            ["Quilometragem final", formatKm(bdt.ended_km_display)],
+            ["Endereço de retorno", returnAddrText, true]
+        ]);
+
+        addSection("Resumo do trajeto", [
+            ["Quilometragem total", bdt.total_km === null || bdt.total_km === undefined ? "Não informado" : String(bdt.total_km) + " km"]
+        ]);
+
+        addSection("Localização (Coordenadas)", [
+            ["Latitude de saída", formatCoordinate(bdt.latitude_match)],
+            ["Longitude de saída", formatCoordinate(bdt.longitude_match)],
+            ["Latitude de retorno", formatCoordinate(bdt.latitude_retreat)],
+            ["Longitude de retorno", formatCoordinate(bdt.longitude_retreat)]
+        ]);
+        addSection("Observações", [
+            ["Observações do motorista", valueOrMissing(bdt.note), true]
+        ]);
+
+        addMapSection(bdt);
+
+        addSection("Registro na origem", [
+            ["Registrado em", formatDate(bdt.source_created_at)],
+            ["Atualizado em", formatDate(bdt.source_updated_at)]
+        ]);
+        
+        if (needsDepartureGeocode || needsReturnGeocode) {
+            const csrfToken = document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1] || '';
+            fetch(`/api/bdts/${bdt.id}/geocode/`, {
+                method: "POST",
+                headers: {
+                    "Accept": "application/json",
+                    "X-CSRFToken": csrfToken
+                }
+            }).then(r => r.json()).then(data => {
+                if(data.departure_address) {
+                    bdt.departure_address = data.departure_address;
+                } else {
+                    bdt.departure_address = "Endereço não localizado";
+                }
+                
+                if(data.return_address) {
+                    bdt.return_address = data.return_address;
+                } else {
+                    bdt.return_address = "Endereço não localizado";
+                }
+                
+                // Re-render
+                renderDetails(bdt);
+            }).catch(e => {
+                console.error("Geocode falhou:", e);
+                bdt.departure_address = "Endereço não localizado (falha)";
+                bdt.return_address = "Endereço não localizado (falha)";
+                renderDetails(bdt);
+            });
+        }
+    }
+
+    function addMapSection(bdt) {
+        const section = document.createElement("section");
+        section.className = "bdt-detail-section";
+        const heading = document.createElement("h3");
+        heading.textContent = "Trajeto no Mapa";
+        section.appendChild(heading);
+
+        const latMatch = parseFloat(bdt.latitude_match);
+        const lngMatch = parseFloat(bdt.longitude_match);
+        const latRetreat = parseFloat(bdt.latitude_retreat);
+        const lngRetreat = parseFloat(bdt.longitude_retreat);
+
+        if (isNaN(latMatch) || isNaN(lngMatch) || isNaN(latRetreat) || isNaN(lngRetreat)) {
+            const noData = document.createElement("p");
+            noData.textContent = "Coordenadas não informadas";
+            noData.style.color = "#64748b";
+            section.appendChild(noData);
+            modalBody.appendChild(section);
+            return;
+        }
+
+        const mapContainer = document.createElement("div");
+        mapContainer.id = "bdt-map";
+        mapContainer.style.height = "300px";
+        mapContainer.style.width = "100%";
+        mapContainer.style.borderRadius = "8px";
+        mapContainer.style.zIndex = "1";
+        section.appendChild(mapContainer);
+
+        const infoText = document.createElement("p");
+        infoText.style.marginTop = "8px";
+        infoText.style.fontSize = "13px";
+        infoText.style.color = "#334155";
+        section.appendChild(infoText);
+
+        modalBody.appendChild(section);
+
+        // Initialize map
+        const map = L.map(mapContainer).setView([latMatch, lngMatch], 13);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors',
+            maxZoom: 19
+        }).addTo(map);
+
+        const startIcon = L.icon({
+            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png',
+            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+            iconSize: [25, 41],
+            iconAnchor: [12, 41],
+            popupAnchor: [1, -34],
+            shadowSize: [41, 41]
+        });
+
+        const endIcon = L.icon({
+            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
+            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+            iconSize: [25, 41],
+            iconAnchor: [12, 41],
+            popupAnchor: [1, -34],
+            shadowSize: [41, 41]
+        });
+
+        const pt1 = L.latLng(latMatch, lngMatch);
+        const pt2 = L.latLng(latRetreat, lngRetreat);
+
+        
+        const depAddr = bdt.departure_address || "Não informado";
+        const retAddr = bdt.return_address || "Não informado";
+        L.marker(pt1, {icon: startIcon}).addTo(map).bindPopup("<b>Saída</b><br>" + depAddr);
+        L.marker(pt2, {icon: endIcon}).addTo(map).bindPopup("<b>Retorno</b><br>" + retAddr);
+
+
+        const line = L.polyline([pt1, pt2], {color: 'blue', weight: 3, dashArray: '5, 5'}).addTo(map);
+        line.bindTooltip("Trajeto aproximado", {permanent: false, direction: "center"});
+
+        const distMeters = pt1.distanceTo(pt2);
+        const distKm = (distMeters / 1000).toFixed(2);
+        infoText.innerHTML = "<strong>Distância estimada:</strong> " + distKm + " km (trajeto aproximado)";
+
+        if (pt1.equals(pt2)) {
+            map.setView(pt1, 15);
+        } else {
+            map.fitBounds(L.latLngBounds(pt1, pt2), {padding: [30, 30]});
+        }
+
+        // Fix leaflet sizing issue in modals
+        setTimeout(function() { map.invalidateSize(); }, 100);
+    }
+
+
+    function openDetails(bdt) {
+        modalSubtitle.textContent = "Carregando detalhes…";
+        modalBody.replaceChildren();
+        const loadingMessage = document.createElement("p");
+        loadingMessage.className = "bdt-modal__loading";
+        loadingMessage.textContent = "Carregando detalhes do BDT…";
+        modalBody.appendChild(loadingMessage);
+        modal.showModal();
+        fetch("/api/bdts/" + encodeURIComponent(bdt.id) + "/", {headers: {"Accept": "application/json"}})
+            .then(function (response) {
+                if (!response.ok) throw new Error("Não foi possível carregar os detalhes.");
+                return response.json();
+            })
+            .then(renderDetails)
+            .catch(function () {
+                modalBody.replaceChildren();
+                const message = document.createElement("p");
+                message.className = "bdt-modal__error";
+                message.textContent = "Não foi possível carregar os detalhes do BDT.";
+                modalBody.appendChild(message);
+            });
     }
 
     function createStatus(bdt) {
@@ -611,6 +915,16 @@ document.addEventListener("DOMContentLoaded", function () {
         bdts.forEach(function (bdt) {
 
             const tr = document.createElement("tr");
+            tr.tabIndex = 0;
+            tr.setAttribute("role", "button");
+            tr.setAttribute("aria-label", "Abrir detalhes do BDT");
+            tr.addEventListener("click", function () { openDetails(bdt); });
+            tr.addEventListener("keydown", function (event) {
+                if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    openDetails(bdt);
+                }
+            });
 
             tr.appendChild(
                 createCell(formatDate(bdt.started_at))
@@ -633,18 +947,18 @@ document.addEventListener("DOMContentLoaded", function () {
             );
 
             tr.appendChild(
-                createCell(formatKm(bdt.started_km))
+                createCell(formatKm(bdt.started_km_display))
             );
 
             tr.appendChild(
-                createCell(formatKm(bdt.ended_km))
+                createCell(formatKm(bdt.ended_km_display))
             );
 
             const totalCell = createCell(
                 bdt.total_km !== null &&
                 bdt.total_km !== undefined
-                    ? bdt.total_km
-                    : "-"
+                    ? String(bdt.total_km) + " km"
+                    : "Não informado"
             );
 
             totalCell.style.fontWeight = "600";
@@ -820,6 +1134,9 @@ document.addEventListener("DOMContentLoaded", function () {
             currentPage
         );
     });
+
+    document.getElementById("bdt-modal-close").addEventListener("click", function () { modal.close(); });
+    modal.addEventListener("click", function (event) { if (event.target === modal) modal.close(); });
 
     loadPage(
         "/api/bdts/",
