@@ -161,6 +161,44 @@
     </article>
 </section>
 
+<!-- BDTS / UTILIZAÇÃO -->
+<section class="grid">
+    <article class="panel" style="grid-column:1/-1;">
+        <div class="panel-title"><div><h3>BDTs / Utilização</h3></div><a class="secondary-action" href="{% url 'bdt_list' %}?vehicle={{ vehicle.id }}">Ver todos</a></div>
+        <div style="display:flex;gap:24px;flex-wrap:wrap;margin-bottom:14px;">
+            <span><strong>{{ bdt_summary.total }}</strong> total</span>
+            <span><strong>{{ bdt_summary.open }}</strong> abertos</span>
+            <span><strong>{{ bdt_summary.closed }}</strong> encerrados</span>
+            <span><strong>{% if bdt_summary.total_km is not None %}{{ bdt_summary.total_km }} km{% else %}Não informado{% endif %}</strong> KM total válido</span>
+        </div>
+        {% if bdt_page.object_list %}
+        <table>
+            <thead><tr><th>INÍCIO</th><th>ENCERRAMENTO</th><th>MOTORISTA</th><th>KM INICIAL</th><th>KM FINAL</th><th>OBSERVAÇÃO</th><th></th></tr></thead>
+            <tbody>
+            {% for bdt in bdt_page.object_list %}
+                <tr>
+                    <td>{{ bdt.started_at|date:"d/m/Y H:i"|default:"Não informado" }}</td>
+                    <td>{{ bdt.ended_at|date:"d/m/Y H:i"|default:"Não informado" }}</td>
+                    <td>{{ bdt.driver.name|default:"Não informado" }}</td>
+                    <td>{% if bdt.started_km is not None %}{{ bdt.started_km }} km{% else %}Não informado{% endif %}</td>
+                    <td>{% if bdt.ended_km is not None %}{{ bdt.ended_km }} km{% else %}Não informado{% endif %}</td>
+                    <td>{{ bdt.note|default:"Não informado"|truncatechars:80 }}</td>
+                    <td><a class="secondary-action" href="{% url 'bdt_list' %}?vehicle={{ vehicle.id }}&search={{ bdt.external_id }}">Abrir detalhes</a></td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% else %}<div class="empty">Nenhum BDT vinculado a esta viatura.</div>{% endif %}
+        {% if bdt_page.has_other_pages %}
+        <div style="display:flex;gap:12px;align-items:center;margin-top:14px;">
+            {% if bdt_page.has_previous %}<a class="secondary-action" href="?bdt_page={{ bdt_page.previous_page_number }}">Anterior</a>{% endif %}
+            <span>Página {{ bdt_page.number }} de {{ bdt_page.paginator.num_pages }}</span>
+            {% if bdt_page.has_next %}<a class="secondary-action" href="?bdt_page={{ bdt_page.next_page_number }}">Próxima</a>{% endif %}
+        </div>
+        {% endif %}
+    </article>
+</section>
+
 
 
 <!-- MANUTENÇÕES -->
