@@ -544,6 +544,31 @@ class MaintenanceCompletionCancellationTests(TestCase):
         self.assertEqual(result["current_km"], 45000)
         self.assertEqual(result["status"], "SEM_HISTORICO")
 
+    def test_fixed_initial_reference_does_not_move_with_new_reading(self):
+        from .models import VehicleMileage
+        from .services import get_vehicle_revision_status
+
+        self.vehicle.revision_reference_km = 10_000
+        self.vehicle.revision_reference_source = "MANUAL:initial"
+        self.vehicle.save(update_fields=["revision_reference_km", "revision_reference_source"])
+        VehicleMileage.objects.create(vehicle=self.vehicle, mileage=15_000, recorded_by=self.user)
+        first = get_vehicle_revision_status(vehicle=self.vehicle)
+        VehicleMileage.objects.create(vehicle=self.vehicle, mileage=18_500, recorded_by=self.user)
+        second = get_vehicle_revision_status(vehicle=self.vehicle)
+
+        self.assertEqual(first["next_revision_km"], 20_000)
+        self.assertEqual(first["km_remaining"], 5_000)
+        self.assertEqual(second["next_revision_km"], 20_000)
+        self.assertEqual(second["km_remaining"], 1_500)
+
+    def test_no_mileage_is_not_treated_as_zero(self):
+        from .services import get_vehicle_revision_status
+
+        result = get_vehicle_revision_status(vehicle=self.vehicle)
+
+        self.assertIsNone(result["current_km"])
+        self.assertEqual(result["status"], "SEM_QUILOMETRAGEM")
+
 
 class InfraMigrationTests(TestCase):
     def test_migration_creates_default_statuses(self):

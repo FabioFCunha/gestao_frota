@@ -116,6 +116,11 @@ class Contract(BaseModel):
 
 class Vehicle(BaseModel):
     horus_fleet_id = models.UUIDField(null=True, blank=True, unique=True)
+    # Snapshot explicitamente inicializado fora das views.  Impede que a meta
+    # de primeira revisão se mova a cada nova leitura de quilometragem.
+    revision_reference_km = models.PositiveIntegerField(null=True, blank=True)
+    revision_reference_at = models.DateTimeField(null=True, blank=True)
+    revision_reference_source = models.CharField(max_length=100, blank=True)
     brand = models.ForeignKey(Brand, null=True, blank=True, on_delete=models.PROTECT)
     model = models.ForeignKey(VehicleModel, null=True, blank=True, on_delete=models.PROTECT)
     color = models.CharField(max_length=50, blank=True)

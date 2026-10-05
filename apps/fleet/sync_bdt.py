@@ -30,6 +30,17 @@ def sync_bdt_mileage(bdt):
         external_id=str(bdt.external_id),
         defaults={"mileage": int(ended), "date": mileage_date, "notes": notes},
     )
+    # A referência é criada no fluxo de gravação, nunca em uma consulta de
+    # dashboard/prontuário. Leituras posteriores não deslocam a meta.
+    if bdt.vehicle.revision_reference_km is None:
+        Vehicle.objects.filter(
+            pk=bdt.vehicle_id,
+            revision_reference_km__isnull=True,
+        ).update(
+            revision_reference_km=int(ended),
+            revision_reference_at=timezone.now(),
+            revision_reference_source=f"BDT_HORUS:{bdt.external_id}",
+        )
     return True
 
 class BDTSyncWorker:
@@ -200,6 +211,14 @@ class BDTSyncWorker:
             # Reconcile only after the BDT row is durable.  Invalid updates do
             # not delete or overwrite a previously valid mileage projection.
             persisted = BDT.objects.filter(external_id__in=list(external_ids)).select_related("vehicle")
-            resumo["inconsistencias"] = sum(1 for bdt in persisted if not sync_bdt_mileage(bdt))
+            for bdt in persisted:
+                try:
+                    if not sync_bdt_mileage(bdt):
+                        resumo["inconsistencias"] += 1
+                except Exception:
+                    # A projeção é derivada: a persistência idempotente do BDT
+                    # continua válida mesmo que ela precise ser reconciliada.
+                    logger.exception("Falha ao projetar quilometragem do BDT %s", bdt.external_id)
+                    resumo["inconsistencias"] += 1
             
         return resumo

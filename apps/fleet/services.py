@@ -44,7 +44,7 @@ def get_vehicle_revision_status(*, vehicle):
         VehicleMileage.objects.filter(vehicle=vehicle)
         .order_by("-date", "-created_at").first()
     )
-    current_mileage = latest_mileage.mileage if latest_mileage else 0
+    current_mileage = latest_mileage.mileage if latest_mileage else None
 
     active_revision = None
 
@@ -96,7 +96,35 @@ def get_vehicle_revision_status(*, vehicle):
             r"\[KM_PROX_REVISAO\]\s*(\d+)",
             vehicle.notes or "",
         )
-        if not legacy_reference:
+        if legacy_reference:
+            last_revision_km = None
+            next_revision_km = int(legacy_reference.group(1))
+            has_history = False
+        elif vehicle.revision_reference_km is not None:
+            last_revision_km = vehicle.revision_reference_km
+            next_revision_km = last_revision_km + REVISION_INTERVAL_KM
+            has_history = False
+        elif current_mileage is None:
+            return {
+                "last_revision_id": None,
+                "last_revision_km": None,
+                "last_revision_entered_at": None,
+                "last_revision_exited_at": None,
+                "last_revision_workshop": "",
+                "last_revision_workshop_name": "",
+                "last_revision_service": "",
+                "last_revision_completion_mileage": None,
+                "next_revision_km": None,
+                "current_km": current_mileage,
+                "km_remaining": None,
+                "status": "SEM_QUILOMETRAGEM",
+                "has_history": False,
+            }
+
+        else:
+            # A primeira referência deve ser criada explicitamente pelo
+            # comando de inicialização ou no fluxo que grava a leitura; a
+            # consulta jamais grava e nunca usa "KM atual + intervalo".
             return {
                 "last_revision_id": None,
                 "last_revision_km": None,
@@ -111,10 +139,8 @@ def get_vehicle_revision_status(*, vehicle):
                 "km_remaining": None,
                 "status": "SEM_HISTORICO",
                 "has_history": False,
+                "reference_initialization_required": True,
             }
-        last_revision_km = None
-        next_revision_km = int(legacy_reference.group(1))
-        has_history = False
 
     km_remaining = next_revision_km - current_mileage
 
@@ -556,7 +582,7 @@ def record_vehicle_mileage(*, vehicle: Vehicle, mileage: int, user, origin: str 
     if int(mileage) < current_mileage and not is_correction:
         raise ValueError(f"Quilometragem inválida. O valor informado ({mileage}) é menor que a última quilometragem registrada ({current_mileage}). Marque como correção se for o caso.")
         
-    VehicleMileage.objects.create(
+    mileage_record = VehicleMileage.objects.create(
         vehicle=vehicle,
         mileage=int(mileage),
         origin=origin,
@@ -565,6 +591,17 @@ def record_vehicle_mileage(*, vehicle: Vehicle, mileage: int, user, origin: str 
         is_correction=is_correction,
         external_id=external_id
     )
+
+    if vehicle.revision_reference_km is None:
+        vehicle.revision_reference_km = int(mileage)
+        vehicle.revision_reference_at = mileage_record.date
+        vehicle.revision_reference_source = f"{origin}:{mileage_record.id}"
+        vehicle.save(update_fields=[
+            "revision_reference_km",
+            "revision_reference_at",
+            "revision_reference_source",
+            "updated_at",
+        ])
     
     if origin == VehicleMileage.MANUAL:
         AuditLog.objects.create(
