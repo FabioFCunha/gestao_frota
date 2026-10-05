@@ -214,6 +214,86 @@ def change_vehicle_status(*, vehicle: Vehicle, status_name: str, user, reason: s
     return vehicle
 
 
+def _next_exit_order_number():
+    """Returns the next OS number while holding the single counter row lock."""
+    from django.db import IntegrityError
+    from .models import VehicleExitOrderNumberSequence
+
+    try:
+        sequence = VehicleExitOrderNumberSequence.objects.select_for_update().get(pk=1)
+    except VehicleExitOrderNumberSequence.DoesNotExist:
+        try:
+            # A savepoint keeps the outer opening transaction usable if another
+            # request creates the singleton counter first.
+            with transaction.atomic():
+                VehicleExitOrderNumberSequence.objects.create(pk=1, value=0)
+        except IntegrityError:
+            pass
+        sequence = VehicleExitOrderNumberSequence.objects.select_for_update().get(pk=1)
+    sequence.value += 1
+    sequence.save(update_fields=["value"])
+    return f"OS-{sequence.value:06d}"
+
+
+@transaction.atomic
+def open_vehicle_exit_order(*, vehicle_id, driver, departed_at, destination, reason, notes, user):
+    from django.db import IntegrityError
+    from .models import VehicleExitOrder
+
+    vehicle = Vehicle.objects.select_for_update().get(pk=vehicle_id)
+    if VehicleExitOrder.objects.filter(vehicle=vehicle, state=VehicleExitOrder.State.PENDING).exists():
+        raise ValueError("Esta viatura já possui uma OS pendente de retorno.")
+
+    try:
+        # The partial unique constraint is the final authority when two
+        # requests pass the pre-check concurrently.
+        with transaction.atomic():
+            order = VehicleExitOrder.objects.create(
+                number=_next_exit_order_number(), vehicle=vehicle, driver=driver,
+                departed_at=departed_at, destination=destination, reason=reason,
+                notes=notes, opened_by=user,
+            )
+    except IntegrityError as exc:
+        raise ValueError("Esta viatura já possui uma OS pendente de retorno.") from exc
+    AuditLog.objects.create(
+        user=user, module="ordens de saída", action="ABERTURA OS SAÍDA",
+        entity_type="vehicle_exit_order", entity_id=order.id,
+        new_values={"number": order.number, "vehicle_id": str(vehicle.id), "state": order.state},
+        reason=f"Abertura da {order.number}.",
+    )
+    return order
+
+
+@transaction.atomic
+def close_vehicle_exit_order(*, order_id, returned_at, return_notes, user):
+    from django.core.exceptions import PermissionDenied
+    from .models import VehicleExitOrder
+
+    order = VehicleExitOrder.objects.select_for_update().get(pk=order_id)
+    if order.opened_by_id != user.id:
+        raise PermissionDenied("Somente o usuário que abriu a OS pode registrar o retorno.")
+    if order.state == VehicleExitOrder.State.CLOSED:
+        raise ValueError("Esta OS já foi encerrada.")
+    if returned_at < order.departed_at:
+        raise ValueError("O retorno não pode ser anterior à saída.")
+
+    order.state = VehicleExitOrder.State.CLOSED
+    order.returned_at = returned_at
+    order.return_notes = return_notes
+    order.closed_by = user
+    from django.utils import timezone
+    order.closed_at = timezone.now()
+    order.save(update_fields=["state", "returned_at", "return_notes", "closed_by", "closed_at", "updated_at"])
+    AuditLog.objects.create(
+        user=user, module="ordens de saída", action="ENCERRAMENTO OS SAÍDA",
+        entity_type="vehicle_exit_order", entity_id=order.id,
+        old_values={"state": VehicleExitOrder.State.PENDING},
+        new_values={"state": order.state, "returned_at": order.returned_at.isoformat()},
+        reason=f"Encerramento da {order.number}.",
+    )
+    return order
+
+
 @transaction.atomic
 def open_maintenance(*, maintenance: Maintenance, user):
     """Applies the mandatory backend transition caused by opening maintenance."""

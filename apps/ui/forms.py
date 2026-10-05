@@ -3,7 +3,7 @@ from apps.fleet.models import (
     Driver, Vehicle, VehicleFine, VehicleFineStatus,
     VehicleStatus, Brand, VehicleModel, Contract, Renter,
     AdministrativeUnit, Base, Workshop, VehicleStatus, SEIProcess,
-    SEIProcessStatus
+    SEIProcessStatus, VehicleExitOrder
 )
 
 INPUT = {'class': 'form-input'}
@@ -150,6 +150,40 @@ class VehicleForm(forms.ModelForm):
             'custody_info': forms.TextInput(attrs={**INPUT, 'placeholder': 'SEI-420001/...'}),
             'notes': forms.Textarea(attrs={**INPUT, 'rows': 3}),
         }
+
+
+class VehicleExitOrderForm(forms.ModelForm):
+    class Meta:
+        model = VehicleExitOrder
+        fields = ["vehicle", "driver", "departed_at", "destination", "reason", "notes"]
+        labels = {
+            "vehicle": "Viatura", "driver": "Motorista", "departed_at": "Data e hora efetivas da saída",
+            "destination": "Destino", "reason": "Motivo da retirada", "notes": "Observações",
+        }
+        widgets = {
+            "vehicle": forms.Select(attrs=SELECT), "driver": forms.Select(attrs=SELECT),
+            "departed_at": forms.DateTimeInput(format="%Y-%m-%dT%H:%M", attrs={**INPUT, "type": "datetime-local"}),
+            "destination": forms.TextInput(attrs={**INPUT, "maxlength": 255}),
+            "reason": forms.Textarea(attrs={**INPUT, "rows": 3}),
+            "notes": forms.Textarea(attrs={**INPUT, "rows": 3}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["vehicle"].queryset = Vehicle.objects.select_related("brand", "model").prefetch_related("plate_history").order_by("brand__name", "model__name")
+        self.fields["vehicle"].label_from_instance = VehicleForm.label_vehicle
+        self.fields["driver"].queryset = Driver.objects.filter(active=True).order_by("name")
+
+
+class VehicleExitOrderReturnForm(forms.Form):
+    returned_at = forms.DateTimeField(
+        label="Data e hora efetivas do retorno",
+        widget=forms.DateTimeInput(format="%Y-%m-%dT%H:%M", attrs={**INPUT, "type": "datetime-local"}),
+    )
+    return_notes = forms.CharField(
+        label="Observações do retorno", required=False,
+        widget=forms.Textarea(attrs={**INPUT, "rows": 3}),
+    )
 
 
 class ContractForm(forms.ModelForm):

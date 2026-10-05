@@ -1,0 +1,6 @@
+{% extends 'ui/base.html' %}
+{% block title %}Registrar retorno{% endblock %}
+{% block content %}
+<div class="page-header"><div><h1>Registrar retorno — {{ order.number }}</h1><p class="subtitle">Viatura {{ plate }}</p></div></div>
+<div class="card form-card"><form method="post">{% csrf_token %}{{ form.non_field_errors }}{% for field in form %}<div class="form-group"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{{ field.errors }}</div>{% endfor %}<div class="form-actions"><button class="btn btn-primary" type="submit">Encerrar OS</button><a class="btn btn-secondary" href="{% url 'exit_order_detail' order.id %}">Cancelar</a></div></form></div>
+{% endblock %}

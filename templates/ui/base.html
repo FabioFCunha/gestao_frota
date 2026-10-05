@@ -52,6 +52,10 @@
         <i data-lucide="flag" class="sb-icon"></i>
         <span>Multas</span>
       </a>
+      <a class="sb-link {% if '/ordens-saida/' in request.path %}active{% endif %}" href="{% url 'exit_order_list' %}">
+        <i data-lucide="clipboard-list" class="sb-icon"></i>
+        <span>Ordens de saída</span>
+      </a>
       {% if request.user.is_system_creator %}
       <a class="sb-link {% if '/usuarios/' in request.path or '/perfis/' in request.path %}active{% endif %}" href="{% url 'user_list' %}">
         <i data-lucide="shield-check" class="sb-icon"></i>

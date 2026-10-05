@@ -147,6 +147,43 @@ class Vehicle(BaseModel):
         indexes = [models.Index(fields=["status"]), models.Index(fields=["unit", "base"])]
 
 
+class VehicleExitOrderNumberSequence(models.Model):
+    """Serializador da numeração humana das ordens de saída."""
+
+    id = models.PositiveSmallIntegerField(primary_key=True, default=1, editable=False)
+    value = models.PositiveBigIntegerField(default=0)
+
+
+class VehicleExitOrder(BaseModel):
+    class State(models.TextChoices):
+        PENDING = "PENDING", "Pendente de retorno"
+        CLOSED = "CLOSED", "Encerrada"
+
+    number = models.CharField(max_length=32, unique=True, editable=False, db_index=True)
+    vehicle = models.ForeignKey(Vehicle, on_delete=models.PROTECT, related_name="exit_orders")
+    driver = models.ForeignKey(Driver, on_delete=models.PROTECT, related_name="exit_orders")
+    departed_at = models.DateTimeField()
+    destination = models.CharField(max_length=255)
+    reason = models.TextField()
+    notes = models.TextField(blank=True)
+    state = models.CharField(max_length=16, choices=State.choices, default=State.PENDING, db_index=True)
+    opened_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="exit_orders_opened")
+    returned_at = models.DateTimeField(null=True, blank=True)
+    return_notes = models.TextField(blank=True)
+    closed_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT, related_name="exit_orders_closed")
+    closed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-departed_at", "-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["vehicle"],
+                condition=Q(state="PENDING"),
+                name="unique_pending_exit_order_per_vehicle",
+            ),
+        ]
+
+
 class VehicleDriverAssignment(BaseModel):
     vehicle = models.ForeignKey(Vehicle, on_delete=models.PROTECT, related_name="driver_assignments")
     driver = models.ForeignKey(Driver, on_delete=models.PROTECT, related_name="vehicle_assignments")

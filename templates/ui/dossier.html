@@ -202,6 +202,15 @@
 
 
 
+<!-- ORDENS DE SAÍDA -->
+<section class="grid">
+    <article class="panel" style="grid-column:1/-1;">
+        <div class="panel-title"><div><h3>🚗 Ordens de saída</h3></div><a class="secondary-action" href="{% url 'exit_order_create' %}?vehicle={{ vehicle.id }}">Nova OS de saída</a></div>
+        {% if pending_exit_order %}<div class="alert alert-warning"><strong>Pendente de retorno:</strong> {{ pending_exit_order.number }} — {{ pending_exit_order.driver.name }}, saída em {{ pending_exit_order.departed_at|date:"d/m/Y H:i" }}, destino {{ pending_exit_order.destination }}. Aberta por {{ pending_exit_order.opened_by.get_full_name|default:pending_exit_order.opened_by.username }}. {% if pending_exit_order.id|stringformat:"s" in can_close_exit_order_ids %}<a href="{% url 'exit_order_return' pending_exit_order.id %}">Registrar retorno</a>{% endif %}</div>{% endif %}
+        {% if exit_orders %}<table><thead><tr><th>OS</th><th>Estado</th><th>Motorista</th><th>Saída</th><th>Destino</th><th></th></tr></thead><tbody>{% for order in exit_orders %}<tr><td>{{ order.number }}</td><td><span class="tag">{{ order.get_state_display }}</span></td><td>{{ order.driver.name }}</td><td>{{ order.departed_at|date:"d/m/Y H:i" }}</td><td>{{ order.destination }}</td><td><a href="{% url 'exit_order_detail' order.id %}">Detalhes</a></td></tr>{% endfor %}</tbody></table><p style="margin-top:12px"><a href="{% url 'exit_order_list' %}?vehicle={{ vehicle.id }}">Ver todas as ordens desta viatura</a></p>{% else %}<div class="empty">Nenhuma ordem de saída registrada.</div>{% endif %}
+    </article>
+</section>
+
 <!-- MANUTENÇÕES -->
 <section class="grid">
     <article class="panel" style="grid-column:1/-1;">

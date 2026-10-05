@@ -1,12 +1,16 @@
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import LoginView
 from django.db.models import Count, Q, Prefetch
+from django.core.paginator import Paginator
+from django.core.exceptions import PermissionDenied
+from django.utils.dateparse import parse_date
+import uuid
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse
-from django.http import JsonResponse
+from django.http import JsonResponse, Http404
 from django.contrib import messages
 from django.utils import timezone
-from .forms import DriverForm, DriverVehicleAssignmentForm, VehicleForm, VehicleContractForm, FineForm, RevisionActionForm
+from .forms import DriverForm, DriverVehicleAssignmentForm, VehicleForm, VehicleContractForm, FineForm, RevisionActionForm, VehicleExitOrderForm, VehicleExitOrderReturnForm
 from apps.accounts.forms import FleetAuthenticationForm
 from apps.accounts.decorators import module_permission
 from apps.fleet.models import VehiclePlate, Renter
@@ -270,7 +274,7 @@ def bdt_list(request):
 @module_permission("fleet.view_vehicle")
 def vehicle_dossier(request, pk):
     import re
-    from apps.fleet.models import Vehicle, VehiclePlate, VehicleMileage, VehicleCustody
+    from apps.fleet.models import Vehicle, VehiclePlate, VehicleMileage, VehicleCustody, VehicleExitOrder
     from django.shortcuts import get_object_or_404
 
     vehicle = get_object_or_404(
@@ -323,6 +327,8 @@ def vehicle_dossier(request, pk):
     maintenances = vehicle.maintenances.select_related('status', 'type', 'workshop').order_by('-entered_at')[:10]
     fines = vehicle.fines.select_related('status').order_by('-date')[:10]
     inspections = vehicle.inspections.select_related('type', 'status').order_by('-date')[:10]
+    exit_orders = vehicle.exit_orders.select_related('driver', 'opened_by', 'closed_by').order_by('-departed_at')[:10]
+    pending_exit_order = next((order for order in exit_orders if order.state == VehicleExitOrder.State.PENDING), None)
     active_assignment = (
         vehicle.driver_assignments
         .filter(is_active=True)
@@ -425,6 +431,9 @@ def vehicle_dossier(request, pk):
         'maintenances': maintenances,
         'fines': fines,
         'inspections': inspections,
+        'exit_orders': exit_orders,
+        'pending_exit_order': pending_exit_order,
+        'can_close_exit_order_ids': {str(order.id) for order in exit_orders if order.state == VehicleExitOrder.State.PENDING and order.opened_by_id == request.user.id},
         'active_driver': active_driver,
         'active_assignment': active_assignment,
         'active_custody': active_custody,
@@ -1435,3 +1444,108 @@ def km_import(request):
     else:
         form = KMImportForm()
     return render(request, 'ui/form.html', {'form': form, 'title': 'Importar KM (Prime)', 'back_url': 'maintenance_list', 'enctype': 'multipart/form-data'})
+
+
+def _exit_order_plate(vehicle):
+    if vehicle is None:
+        return None
+    record = vehicle.plate_history.filter(kind='CURRENT', ends_on__isnull=True).first()
+    return record.plate if record else 'Sem placa'
+
+
+@login_required
+@module_permission("fleet.view_vehicleexitorder")
+def exit_order_list(request):
+    from apps.fleet.models import VehicleExitOrder, Vehicle, Driver
+
+    qs = VehicleExitOrder.objects.select_related('vehicle__brand', 'vehicle__model', 'driver', 'opened_by', 'closed_by').prefetch_related('vehicle__plate_history')
+    state = request.GET.get('state', '')
+    vehicle_id = request.GET.get('vehicle', '')
+    driver_id = request.GET.get('driver', '')
+    if state in {VehicleExitOrder.State.PENDING, VehicleExitOrder.State.CLOSED}:
+        qs = qs.filter(state=state)
+    for field, raw in (("vehicle_id", vehicle_id), ("driver_id", driver_id)):
+        if raw:
+            try:
+                uuid.UUID(raw)
+            except (ValueError, TypeError):
+                qs = qs.none()
+            else:
+                qs = qs.filter(**{field: raw})
+    for lookup, raw in (("departed_at__date__gte", request.GET.get("from", "")), ("departed_at__date__lte", request.GET.get("to", ""))):
+        if raw and parse_date(raw):
+            qs = qs.filter(**{lookup: parse_date(raw)})
+    page_obj = Paginator(qs.order_by('-departed_at', '-created_at'), 25).get_page(request.GET.get('page'))
+    query = request.GET.copy()
+    query.pop('page', None)
+    return render(request, 'ui/exit_order_list.html', {
+        'page_obj': page_obj, 'order_rows': [(item, _exit_order_plate(item.vehicle)) for item in page_obj],
+        'states': VehicleExitOrder.State.choices, 'vehicles': Vehicle.objects.prefetch_related('plate_history').order_by('id'),
+        'drivers': Driver.objects.filter(active=True).order_by('name'), 'selected_state': state,
+        'selected_vehicle': vehicle_id, 'selected_driver': driver_id, 'querystring': query.urlencode(),
+    })
+
+
+@login_required
+@module_permission("fleet.add_vehicleexitorder")
+def exit_order_create(request):
+    from apps.fleet.models import Vehicle
+    from apps.fleet.services import open_vehicle_exit_order
+
+    linked_vehicle = None
+    raw_vehicle = request.GET.get('vehicle')
+    if raw_vehicle:
+        try:
+            uuid.UUID(raw_vehicle)
+        except ValueError:
+            raise Http404("Viatura inválida.")
+        linked_vehicle = get_object_or_404(Vehicle.objects.select_related('brand', 'model').prefetch_related('plate_history'), pk=raw_vehicle)
+    if request.method == 'POST':
+        form = VehicleExitOrderForm(request.POST, initial={'vehicle': linked_vehicle} if linked_vehicle else None)
+        if linked_vehicle:
+            form.fields['vehicle'].disabled = True
+        if form.is_valid():
+            vehicle = linked_vehicle or form.cleaned_data['vehicle']
+            try:
+                order = open_vehicle_exit_order(vehicle_id=vehicle.id, driver=form.cleaned_data['driver'], departed_at=form.cleaned_data['departed_at'], destination=form.cleaned_data['destination'], reason=form.cleaned_data['reason'], notes=form.cleaned_data['notes'], user=request.user)
+            except ValueError as exc:
+                form.add_error(None, str(exc))
+            else:
+                messages.success(request, f'{order.number} aberta com sucesso.')
+                return redirect('exit_order_detail', pk=order.pk)
+    else:
+        form = VehicleExitOrderForm(initial={'vehicle': linked_vehicle} if linked_vehicle else None)
+        if linked_vehicle:
+            form.fields['vehicle'].disabled = True
+    return render(request, 'ui/exit_order_form.html', {'form': form, 'linked_vehicle': linked_vehicle, 'linked_vehicle_plate': _exit_order_plate(linked_vehicle) if linked_vehicle else None})
+
+
+@login_required
+@module_permission("fleet.view_vehicleexitorder")
+def exit_order_detail(request, pk):
+    from apps.fleet.models import VehicleExitOrder
+    order = get_object_or_404(VehicleExitOrder.objects.select_related('vehicle__brand', 'vehicle__model', 'driver', 'opened_by', 'closed_by').prefetch_related('vehicle__plate_history'), pk=pk)
+    return render(request, 'ui/exit_order_detail.html', {'order': order, 'plate': _exit_order_plate(order.vehicle), 'can_close': order.state == VehicleExitOrder.State.PENDING and order.opened_by_id == request.user.id and (request.user.is_system_creator or request.user.has_perm('fleet.change_vehicleexitorder'))})
+
+
+@login_required
+@module_permission("fleet.change_vehicleexitorder")
+def exit_order_return(request, pk):
+    from apps.fleet.models import VehicleExitOrder
+    from apps.fleet.services import close_vehicle_exit_order
+    order = get_object_or_404(VehicleExitOrder.objects.select_related('vehicle', 'opened_by'), pk=pk)
+    if order.opened_by_id != request.user.id:
+        raise PermissionDenied('Somente o usuário que abriu a OS pode registrar o retorno.')
+    if request.method == 'POST':
+        form = VehicleExitOrderReturnForm(request.POST)
+        if form.is_valid():
+            try:
+                close_vehicle_exit_order(order_id=order.id, returned_at=form.cleaned_data['returned_at'], return_notes=form.cleaned_data['return_notes'], user=request.user)
+            except ValueError as exc:
+                form.add_error(None, str(exc))
+            else:
+                messages.success(request, 'Retorno registrado e OS encerrada.')
+                return redirect('exit_order_detail', pk=order.pk)
+    else:
+        form = VehicleExitOrderReturnForm()
+    return render(request, 'ui/exit_order_return_form.html', {'form': form, 'order': order, 'plate': _exit_order_plate(order.vehicle)})
