@@ -44,7 +44,7 @@ def get_vehicle_revision_status(*, vehicle):
         VehicleMileage.objects.filter(vehicle=vehicle)
         .order_by("-date", "-created_at").first()
     )
-    current_mileage = latest_mileage.mileage if latest_mileage else 0
+    current_mileage = latest_mileage.mileage if latest_mileage else None
 
     active_revision = None
 
@@ -97,6 +97,19 @@ def get_vehicle_revision_status(*, vehicle):
             vehicle.notes or "",
         )
         if not legacy_reference:
+            if current_mileage is None:
+                return {
+                    "last_revision_id": None,
+                    "last_revision_km": None,
+                    "next_revision_km": None,
+                    "current_km": None,
+                    "km_remaining": None,
+                    "status": "SEM_QUILOMETRAGEM",
+                    "has_history": False,
+                }
+            next_revision_km = current_mileage + REVISION_INTERVAL_KM
+            km_remaining = next_revision_km - current_mileage
+            status = "PROXIMA" if km_remaining <= REVISION_ALERT_KM else "OK"
             return {
                 "last_revision_id": None,
                 "last_revision_km": None,
@@ -106,11 +119,12 @@ def get_vehicle_revision_status(*, vehicle):
                 "last_revision_workshop_name": "",
                 "last_revision_service": "",
                 "last_revision_completion_mileage": None,
-                "next_revision_km": None,
+                "next_revision_km": next_revision_km,
                 "current_km": current_mileage,
-                "km_remaining": None,
-                "status": "SEM_HISTORICO",
+                "km_remaining": km_remaining,
+                "status": status,
                 "has_history": False,
+                "first_revision_based_on_current": True,
             }
         last_revision_km = None
         next_revision_km = int(legacy_reference.group(1))

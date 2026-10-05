@@ -108,19 +108,9 @@
             <div class="revision-card"><small>Próxima revisão</small><strong>{% if km_prox_revisao %}{{ km_prox_revisao }} km{% else %}Não definida{% endif %}</strong></div>
             <div class="revision-card"><small>Faltam</small><strong>{% if km_faltando is not None %}{% if km_faltando < 0 %}Ultrapassou em {{ km_faltando|stringformat:"d"|cut:"-" }} km{% else %}{{ km_faltando }} km{% endif %}{% else %}Não definido{% endif %}</strong></div>
         </div>
-        {% if revisao_status == 'OK' %}<span class="revision-badge revision-ok">EM DIA</span>{% elif revisao_status == 'PROXIMA' %}<span class="revision-badge revision-proxima">REVISÃO PRÓXIMA</span>{% elif revisao_status == 'DEVIDA' or revisao_status == 'VENCIDA' %}<span class="revision-badge revision-vencida">REVISÃO VENCIDA</span>{% elif revisao_status == 'EM_REVISAO' %}<span class="revision-badge revision-em">EM REVISÃO</span>{% else %}<span class="revision-badge revision-sem">SEM HISTÓRICO DE REVISÃO</span>{% endif %}
+        {% if revisao_status == 'OK' %}<span class="revision-badge revision-ok">EM DIA</span>{% elif revisao_status == 'PROXIMA' %}<span class="revision-badge revision-proxima">REVISÃO PRÓXIMA</span>{% elif revisao_status == 'DEVIDA' or revisao_status == 'VENCIDA' %}<span class="revision-badge revision-vencida">REVISÃO VENCIDA</span>{% elif revisao_status == 'EM_REVISAO' %}<span class="revision-badge revision-em">EM REVISÃO</span>{% elif revisao_status == 'SEM_QUILOMETRAGEM' %}<span class="revision-badge revision-sem">SEM QUILOMETRAGEM</span>{% else %}<span class="revision-badge revision-sem">SEM HISTÓRICO DE REVISÃO</span>{% endif %}
         <p style="color:#64748b;font-size:.9rem;margin:10px 0;">A revisão é programada a cada 10.000 km após a última revisão concluída.</p>
-        {% if revisao_status == 'SEM_HISTORICO' %}<p style="color:#64748b;">Cadastre a primeira revisão concluída para iniciar o ciclo de 10.000 km.</p>{% endif %}
-        {% if km_history %}
-        <table style="margin-top:10px;">
-            <thead><tr><th>KM</th><th>DATA</th><th>ORIGEM</th></tr></thead>
-            <tbody>
-                {% for km in km_history %}
-                <tr><td>{{ km.mileage }}</td><td>{{ km.date|date:"d/m/Y H:i" }}</td><td>{{ km.get_origin_display }}</td></tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        {% endif %}
+        {% if revisao_status == 'SEM_HISTORICO' %}<p style="color:#64748b;">Cadastre a primeira revisão concluída para iniciar o ciclo de 10.000 km.</p>{% elif revisao_status == 'SEM_QUILOMETRAGEM' %}<p style="color:#64748b;">Informe a quilometragem para calcular a próxima revisão.</p>{% elif not ultima_revisao_km %}<p style="color:#64748b;">Primeira revisão prevista com base no KM atual.</p>{% endif %}
     </article>
 
     <!-- OPERACIONAL -->
@@ -154,7 +144,7 @@
 <!-- BDTS / UTILIZAÇÃO -->
 <section class="grid">
     <article class="panel" style="grid-column:1/-1;">
-        <div class="panel-title"><div><h3>BDTs / Utilização</h3></div><a class="secondary-action" href="{% url 'bdt_list' %}?vehicle={{ vehicle.id }}">Ver todos</a></div>
+        <div class="panel-title"><div><h3>BDTs / Utilização</h3></div><a class="secondary-action" href="{% url 'bdt_list' %}?vehicle={{ vehicle.id }}">Ver todos os BDTs</a></div>
         <div style="display:flex;gap:24px;flex-wrap:wrap;margin-bottom:14px;">
             <span><strong>{{ bdt_summary.total }}</strong> total</span>
             <span><strong>{{ bdt_summary.open }}</strong> abertos</span>
