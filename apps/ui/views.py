@@ -279,6 +279,15 @@ def vehicle_dossier(request, pk):
         'latest': bdt_qs.first(),
         'total_km': bdt_total_km if bdt_total_valid else None,
     }
+    bdt_latest_operational = next(
+        (bdt for bdt in bdt_qs if normalize_km(bdt.started_km) is not None
+         and normalize_km(bdt.ended_km) is not None
+         and normalize_km(bdt.ended_km) >= normalize_km(bdt.started_km)),
+        None,
+    )
+    bdt_latest_distance = None
+    if bdt_latest_operational:
+        bdt_latest_distance = normalize_km(bdt_latest_operational.ended_km) - normalize_km(bdt_latest_operational.started_km)
     plates = VehiclePlate.objects.filter(vehicle=vehicle).order_by('-starts_on')
     current_plates = plates.filter(ends_on__isnull=True, kind='CURRENT')
     reserved_plates = plates.filter(ends_on__isnull=True, kind='RESERVED')
@@ -342,6 +351,10 @@ def vehicle_dossier(request, pk):
     km_prox_revisao = revision["next_revision_km"]
     km_faltando = revision["km_remaining"]
     revisao_status = revision["status"]
+    bdt_revision_due = bool(
+        bdt_latest_operational and km_prox_revisao is not None
+        and normalize_km(bdt_latest_operational.ended_km) >= km_prox_revisao
+    )
 
     if request.method == 'POST' and request.POST.get('action') == 'add_custody':
         from datetime import datetime
@@ -398,6 +411,9 @@ def vehicle_dossier(request, pk):
         'obs_list': obs_list,
         'bdt_page': bdt_page,
         'bdt_summary': bdt_summary,
+        'bdt_latest_operational': bdt_latest_operational,
+        'bdt_latest_distance': bdt_latest_distance,
+        'bdt_revision_due': bdt_revision_due,
     }
     return render(request, "ui/dossier.html", context)
 

@@ -196,6 +196,16 @@
             {% if bdt_page.has_next %}<a class="secondary-action" href="?bdt_page={{ bdt_page.next_page_number }}">Próxima</a>{% endif %}
         </div>
         {% endif %}
+        {% if bdt_latest_operational %}
+        <div style="margin-top:14px;padding:10px;background:#eef6ff;border-radius:4px;">
+            <strong>BDT Hórus — KM inicial → KM final</strong><br>
+            {{ bdt_latest_operational.started_km }} km → {{ bdt_latest_operational.ended_km }} km
+            ({{ bdt_latest_distance }} km percorridos)
+            — {{ bdt_latest_operational.ended_at|date:"d/m/Y H:i"|default:"Não informado" }}
+            — {{ bdt_latest_operational.external_id }}
+            — {{ bdt_latest_operational.driver.name|default:"Não informado" }}
+        </div>
+        {% endif %}
     </article>
 </section>
 
@@ -225,7 +235,12 @@
         </table>
         {% else %}
         <div class="empty">Nenhuma manutenção registrada para este veículo.</div>
-        {% endif %}
+            {% endif %}
+            {% if bdt_latest_operational %}
+            <li><strong>KM operacional BDT mais recente:</strong> {{ bdt_latest_operational.ended_km }} km</li>
+            <li><strong>Último BDT encerrado:</strong> {{ bdt_latest_operational.ended_at|date:"d/m/Y H:i"|default:"Não informado" }} ({{ bdt_latest_operational.external_id }})</li>
+            {% if bdt_revision_due %}<li style="color:#c0392b;"><strong>Alerta:</strong> KM operacional atingiu/superou o intervalo da revisão.</li>{% endif %}
+            {% endif %}
     </article>
 </section>
 
