@@ -76,7 +76,10 @@ class VehicleModel(NamedModel):
 
 
 class Driver(NamedModel):
-    horus_user_id = models.UUIDField(null=True, blank=True, unique=True)
+    horus_user_id = models.UUIDField(
+        null=True, blank=True, unique=True,
+        help_text="ID do usuario na tabela users do Horus.",
+    )
     registration = models.CharField(max_length=50, blank=True, null=True, unique=True)
     unit = models.ForeignKey(AdministrativeUnit, null=True, blank=True, on_delete=models.PROTECT)
     phone = models.CharField(max_length=30, blank=True)
@@ -100,8 +103,8 @@ class DriverCNHHistory(BaseModel):
 class Contract(BaseModel):
     number = models.CharField(max_length=80, unique=True)
     renter = models.ForeignKey(Renter, on_delete=models.PROTECT, related_name="contracts")
-    starts_on = models.DateField()
-    ends_on = models.DateField(db_index=True)
+    starts_on = models.DateField(null=True, blank=True)
+    ends_on = models.DateField(null=True, blank=True, db_index=True)
     administrative_status = models.CharField(max_length=30, default="VIGENTE")
     notes = models.TextField(blank=True)
     sei_processes = GenericRelation('SEIProcessRelation')
@@ -111,11 +114,15 @@ class Contract(BaseModel):
         return f"{self.number} ({self.renter.name})"
 
     def clean(self):
-        if self.ends_on < self.starts_on: raise ValidationError("O término não pode anteceder o início.")
+        if self.starts_on and self.ends_on and self.ends_on < self.starts_on:
+            raise ValidationError("O término não pode anteceder o início.")
 
 
 class Vehicle(BaseModel):
-    horus_fleet_id = models.UUIDField(null=True, blank=True, unique=True)
+    horus_fleet_id = models.UUIDField(
+        null=True, blank=True, unique=True,
+        help_text="ID do veiculo na tabela fleets do Horus.",
+    )
     # Snapshot explicitamente inicializado fora das views.  Impede que a meta
     # de primeira revisão se mova a cada nova leitura de quilometragem.
     revision_reference_km = models.PositiveIntegerField(null=True, blank=True)
