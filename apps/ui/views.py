@@ -154,6 +154,7 @@ def dashboard(request):
                 "km_prox_revisao": revision["next_revision_km"],
                 "km_faltando": revision["km_remaining"],
                 "ultrapassado": max(0, -revision["km_remaining"]) if revision["km_remaining"] is not None else 0
+                ,"ultima_revisao_data": revision.get("last_revision_exited_at") or revision.get("last_revision_entered_at")
             }
         else:
             rev_dict = None
@@ -166,6 +167,7 @@ def dashboard(request):
             "priority_label": priority_label,
             "alerts": " ".join(attention),
             "mileage": current_mileage,
+            "mileage_origin": vehicle.recent_mileage[0].get_origin_display() if vehicle.recent_mileage else None,
             "driver_name": active_driver.name if active_driver else None,
             "cnh_expiration": active_driver.cnh_expiration if active_driver else None,
             "revision_info": rev_dict,
@@ -401,6 +403,10 @@ def vehicle_dossier(request, pk):
         'all_plates': plates,
         'latest_km': latest_km,
         'km_history': km_history,
+        'km_atual_registro': latest_km,
+        'km_atual_origem': latest_km.get_origin_display() if latest_km else None,
+        'ultima_revisao_data': revision.get('last_revision_exited_at') or revision.get('last_revision_entered_at'),
+        'ultima_revisao_km': revision.get('last_revision_km'),
         'maintenances': maintenances,
         'fines': fines,
         'inspections': inspections,

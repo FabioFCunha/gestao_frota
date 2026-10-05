@@ -230,7 +230,7 @@
             <div class="vc-details">
                 <div class="vc-detail-item" title="Quilometragem Atual">
                     <span class="vc-detail-icon">⏱</span>
-                    <span>{% if v.mileage %}{{ v.mileage }} km{% else %}Sem reg. km{% endif %}</span>
+                    <span>{% if v.mileage is not None %}{{ v.mileage }} km{% else %}Sem quilometragem registrada{% endif %}<small style="display:block;color:#64748b;">{% if v.mileage_origin == 'Integração' %}KM operacional alimentado por BDT Hórus{% elif v.mileage_origin %}KM informado manualmente{% endif %}</small></span>
                 </div>
                 {% if v.revision_info %}
                     {% if v.revision_info.status == "SEM_HISTORICO" %}
@@ -241,7 +241,7 @@
                     {% else %}
                     <div class="vc-detail-item" title="Próxima Revisão">
                         <span class="vc-detail-icon">🔧</span>
-                        <span>Rev. {{ v.revision_info.km_prox_revisao }} km</span>
+                        <span>Próxima revisão: {{ v.revision_info.km_prox_revisao }} km</span>
                     </div>
                     <div class="vc-detail-item">
                         <span class="vc-detail-icon">
