@@ -3,8 +3,10 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.db import models
+from django.core.paginator import Paginator
 from django.utils import timezone
-from .models import Maintenance, Vehicle, VehicleCustody, VehicleDriverAssignment
+from .models import BDT, Maintenance, Vehicle, VehicleCustody, VehicleDriverAssignment
+from .utils import normalize_km
 from .serializers import (
     DocumentSerializer, MaintenanceSerializer, SEIProcessSerializer,
     VehicleCustodySerializer, VehicleFineSerializer, VehicleHistorySerializer,
@@ -63,6 +65,36 @@ class VehicleViewSet(viewsets.ModelViewSet):
         vehicle = self.get_object()
         data = vehicle.mileage_history.values("id", "mileage", "date", "origin", "recorded_by__username", "notes", "is_correction")
         return Response(list(data))
+
+    @action(detail=True, methods=["get"])
+    def bdts(self, request, pk=None):
+        vehicle = self.get_object()
+        queryset = BDT.objects.filter(vehicle=vehicle).select_related("driver").order_by("-started_at", "-created_at")
+        page = self.paginate_queryset(queryset)
+        serializer = BDTSerializer(page if page is not None else queryset, many=True)
+        if page is not None:
+            response = self.get_paginated_response(serializer.data)
+            response.data["summary"] = self._bdt_summary(queryset)
+            return response
+        return Response({"results": serializer.data, "summary": self._bdt_summary(queryset)})
+
+    @staticmethod
+    def _bdt_summary(queryset):
+        total_km = 0
+        valid_total = True
+        for started, ended in queryset.values_list("started_km", "ended_km"):
+            start_value, end_value = normalize_km(started), normalize_km(ended)
+            if start_value is None or end_value is None or end_value < start_value:
+                valid_total = False
+                continue
+            total_km += end_value - start_value
+        return {
+            "total": queryset.count(),
+            "open": queryset.filter(ended_at__isnull=True, horus_active=True).count(),
+            "closed": queryset.filter(models.Q(ended_at__isnull=False) | models.Q(horus_active=False)).count(),
+            "latest": BDTSerializer(queryset.first()).data if queryset.exists() else None,
+            "total_km": str(total_km) if valid_total else None,
+        }
 
     @action(detail=True, methods=["get"])
     def dossier(self, request, pk=None):

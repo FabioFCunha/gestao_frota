@@ -258,6 +258,27 @@ def vehicle_dossier(request, pk):
         ),
         pk=pk
     )
+    from apps.fleet.models import BDT
+    from apps.fleet.utils import normalize_km
+    from django.core.paginator import Paginator
+
+    bdt_qs = BDT.objects.filter(vehicle=vehicle).select_related('driver').order_by('-started_at', '-created_at')
+    bdt_page = Paginator(bdt_qs, 20).get_page(request.GET.get('bdt_page', 1))
+    bdt_total_km = 0
+    bdt_total_valid = True
+    for started, ended in bdt_qs.values_list('started_km', 'ended_km'):
+        start_value, end_value = normalize_km(started), normalize_km(ended)
+        if start_value is None or end_value is None or end_value < start_value:
+            bdt_total_valid = False
+            continue
+        bdt_total_km += end_value - start_value
+    bdt_summary = {
+        'total': bdt_qs.count(),
+        'open': bdt_qs.filter(ended_at__isnull=True, horus_active=True).count(),
+        'closed': bdt_qs.filter(Q(ended_at__isnull=False) | Q(horus_active=False)).count(),
+        'latest': bdt_qs.first(),
+        'total_km': bdt_total_km if bdt_total_valid else None,
+    }
     plates = VehiclePlate.objects.filter(vehicle=vehicle).order_by('-starts_on')
     current_plates = plates.filter(ends_on__isnull=True, kind='CURRENT')
     reserved_plates = plates.filter(ends_on__isnull=True, kind='RESERVED')
@@ -375,6 +396,8 @@ def vehicle_dossier(request, pk):
         'km_faltando': km_faltando,
         'revisao_status': revisao_status,
         'obs_list': obs_list,
+        'bdt_page': bdt_page,
+        'bdt_summary': bdt_summary,
     }
     return render(request, "ui/dossier.html", context)
 

@@ -53,6 +53,7 @@ class BDTViewSet(viewsets.ReadOnlyModelViewSet):
                 Q(vehicle__plate_history__plate__icontains=search)
                 | Q(driver__name__icontains=search)
                 | Q(note__icontains=search)
+                | Q(external_id__icontains=search)
             ).distinct()
 
         if status_filter == "ABERTO":
