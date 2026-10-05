@@ -1221,17 +1221,47 @@ def fine_create(request):
     from django.contrib.messages import get_messages
     list(get_messages(request))
 
+    from apps.fleet.models import Vehicle
+    from uuid import UUID
+
+    # Only the signed-in flow URL establishes a locked vehicle.  A normal
+    # POST may contain a selectable vehicle and remains the general flow.
+    vehicle_param = request.GET.get('vehicle')
+    linked_vehicle = None
+    if vehicle_param:
+        try:
+            linked_vehicle = get_object_or_404(Vehicle.objects.select_related('brand', 'model'), pk=UUID(str(vehicle_param)))
+        except (ValueError, TypeError, AttributeError):
+            from django.http import Http404
+            raise Http404('Viatura inválida.')
+
     if request.method == 'POST':
         form = FineForm(request.POST)
+        if linked_vehicle:
+            form.fields['vehicle'].disabled = True
+            form.instance.vehicle = linked_vehicle
         if form.is_valid():
+            if linked_vehicle:
+                form.instance.vehicle = linked_vehicle
             fine = form.save(commit=False)
+            if linked_vehicle:
+                fine.vehicle = linked_vehicle
             fine.created_by = request.user
             fine.save()
             messages.success(request, 'Multa cadastrada com sucesso!')
-            return redirect('fine_list')
+            return redirect('vehicle_dossier', pk=linked_vehicle.pk) if linked_vehicle else redirect('fine_list')
     else:
-        form = FineForm()
-    return render(request, 'ui/form.html', {'form': form, 'title': 'Cadastrar Multa', 'back_url': 'fine_list'})
+        form = FineForm(initial={'vehicle': linked_vehicle} if linked_vehicle else None)
+        if linked_vehicle:
+            form.fields['vehicle'].disabled = True
+    return render(request, 'ui/form.html', {
+        'form': form,
+        'title': f'Nova multa para a viatura' if linked_vehicle else 'Cadastrar Multa',
+        'linked_vehicle': linked_vehicle,
+        'back_url': 'vehicle_dossier' if linked_vehicle else 'fine_list',
+        'back_url_url': reverse('vehicle_dossier', kwargs={'pk': linked_vehicle.pk}) if linked_vehicle else None,
+        'form_action': f"{reverse('fine_create')}?vehicle={linked_vehicle.pk}" if linked_vehicle else None,
+    })
 
 
 @login_required

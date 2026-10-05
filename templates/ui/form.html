@@ -20,8 +20,16 @@
 
 <section class="grid">
     <article class="panel" style="grid-column:1/-1; max-width:1000px; margin:0 auto; width: 100%;">
-        <form method="post" {% if enctype %}enctype="{{ enctype }}"{% endif %}>
+        <form method="post"{% if form_action %} action="{{ form_action }}"{% endif %} {% if enctype %}enctype="{{ enctype }}"{% endif %}>
             {% csrf_token %}
+            {% if linked_vehicle %}<input type="hidden" name="vehicle" value="{{ linked_vehicle.id }}">{% endif %}
+            {% if linked_vehicle %}
+            <div style="margin-bottom:16px;padding:12px;border-radius:8px;background:#eff6ff;color:#1e3a8a;">
+                <strong>Nova multa para a viatura</strong><br>
+                {% for plate in linked_vehicle.plate_history.all %}{% if plate.kind == 'CURRENT' and not plate.ends_on %}{{ plate.plate }}{% endif %}{% endfor %}
+                — {{ linked_vehicle.brand.name|default:"" }} {{ linked_vehicle.model.name|default:"" }}
+            </div>
+            {% endif %}
             <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
             {% for field in form %}
                 <div style="display:flex; flex-direction:column; {% if field.name == 'notes' or field.name == 'vehicles' %}grid-column: 1/-1;{% endif %}">
