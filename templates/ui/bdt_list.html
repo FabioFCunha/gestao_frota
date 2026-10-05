@@ -297,7 +297,7 @@
 
   <div class="bdt-header">
     <div>
-      <h1 class="bdt-title">BDTs</h1>
+      <h1 class="bdt-title">{% if filtered_vehicle_plate %}BDTs da viatura {{ filtered_vehicle_plate }}{% else %}BDTs{% endif %}</h1>
       <p class="bdt-subtitle">
         Boletins de Deslocamento de Viaturas sincronizados do Hórus.
       </p>

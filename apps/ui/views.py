@@ -242,7 +242,28 @@ def bdt_list(request):
     Os dados sao carregados dinamicamente pelo frontend
     atraves do endpoint /api/bdts/.
     """
-    return render(request, "ui/bdt_list.html")
+    from apps.fleet.models import Vehicle, VehiclePlate
+
+    vehicle_filter = request.GET.get("vehicle")
+    filtered_vehicle = None
+    if vehicle_filter:
+        try:
+            filtered_vehicle = Vehicle.objects.get(pk=vehicle_filter)
+        except (Vehicle.DoesNotExist, ValueError):
+            filtered_vehicle = None
+    current_plate = None
+    if filtered_vehicle:
+        current_plate = (
+            VehiclePlate.objects.filter(
+                vehicle=filtered_vehicle,
+                kind="CURRENT",
+                ends_on__isnull=True,
+            ).values_list("plate", flat=True).first()
+        )
+    return render(request, "ui/bdt_list.html", {
+        "filtered_vehicle_plate": current_plate,
+        "filtered_vehicle_id": vehicle_filter,
+    })
 
 
 @login_required
@@ -263,7 +284,7 @@ def vehicle_dossier(request, pk):
     from django.core.paginator import Paginator
 
     bdt_qs = BDT.objects.filter(vehicle=vehicle).select_related('driver').order_by('-started_at', '-created_at')
-    bdt_page = Paginator(bdt_qs, 20).get_page(request.GET.get('bdt_page', 1))
+    bdt_page = Paginator(bdt_qs, 3).get_page(request.GET.get('bdt_page', 1))
     bdt_total_km = 0
     bdt_total_valid = True
     for started, ended in bdt_qs.values_list('started_km', 'ended_km'):

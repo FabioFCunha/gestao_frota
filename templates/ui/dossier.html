@@ -121,16 +121,7 @@
             </div>
             {% endif %}
         </div>
-        {% if km_history %}
-        <table style="margin-top:10px;">
-            <thead><tr><th>KM</th><th>DATA</th><th>ORIGEM</th></tr></thead>
-            <tbody>
-                {% for km in km_history %}
-                <tr><td>{{ km.mileage }}</td><td>{{ km.date|date:"d/m/Y H:i" }}</td><td>{{ km.get_origin_display }}</td></tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        {% endif %}
+        {% if revisao_status == 'SEM_QUILOMETRAGEM' %}<p>Informe a quilometragem para calcular a próxima revisão.</p>{% elif revisao_status == 'SEM_HISTORICO' %}<p>Inicialize a referência da primeira revisão para iniciar o ciclo de 10.000 km.</p>{% endif %}
     </article>
 
     <!-- OPERACIONAL -->
@@ -164,7 +155,7 @@
 <!-- BDTS / UTILIZAÇÃO -->
 <section class="grid">
     <article class="panel" style="grid-column:1/-1;">
-        <div class="panel-title"><div><h3>BDTs / Utilização</h3></div><a class="secondary-action" href="{% url 'bdt_list' %}?vehicle={{ vehicle.id }}">Ver todos</a></div>
+        <div class="panel-title"><div><h3>BDTs / Utilização</h3></div><a class="secondary-action" href="{% url 'bdt_list' %}?vehicle={{ vehicle.id }}">Ver todos os BDTs</a></div>
         <div style="display:flex;gap:24px;flex-wrap:wrap;margin-bottom:14px;">
             <span><strong>{{ bdt_summary.total }}</strong> total</span>
             <span><strong>{{ bdt_summary.open }}</strong> abertos</span>
