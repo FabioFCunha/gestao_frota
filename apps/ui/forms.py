@@ -273,7 +273,11 @@ class FineForm(forms.ModelForm):
         self.fields['vehicle'].queryset = Vehicle.objects.select_related('brand','model').prefetch_related('plate_history').order_by('brand__name','model__name')
         self.fields['vehicle'].label_from_instance = self.label_from_instance
         self.fields['driver'].queryset = Driver.objects.order_by('name')
-        if self.instance and self.instance.pk:
+        # BaseModel assigns a UUID before the object is saved, so ``pk`` is
+        # not evidence that a new VehicleFine has a vehicle relation.
+        # Accessing ``instance.vehicle`` without a FK raises
+        # RelatedObjectDoesNotExist.
+        if not self.instance._state.adding and self.instance.vehicle_id:
             assignment = self.instance.vehicle.driver_assignments.filter(is_active=True).select_related('driver').first()
             if assignment:
                 self.fields['driver'].initial = assignment.driver_id
