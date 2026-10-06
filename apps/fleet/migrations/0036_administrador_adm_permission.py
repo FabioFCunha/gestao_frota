@@ -6,7 +6,10 @@ def create_adm_manager_role(apps, schema_editor):
     Permission = apps.get_model("auth", "Permission")
     ContentType = apps.get_model("contenttypes", "ContentType")
 
-    content_type = ContentType.objects.get(app_label="fleet", model="vehicle")
+    content_type, _ = ContentType.objects.get_or_create(
+        app_label="fleet",
+        model="vehicle",
+    )
     permission, _ = Permission.objects.get_or_create(
         content_type=content_type,
         codename="manage_vehicle_status",
