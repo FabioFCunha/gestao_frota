@@ -238,9 +238,11 @@ def _next_exit_order_number():
 @transaction.atomic
 def open_vehicle_exit_order(*, vehicle_id, driver, departed_at, destination, reason, notes, user):
     from django.db import IntegrityError
+    from .sector_scope import validate_vehicle_scope
     from .models import VehicleExitOrder
 
     vehicle = Vehicle.objects.select_for_update().get(pk=vehicle_id)
+    validate_vehicle_scope(user, vehicle)
     ensure_vehicle_active(vehicle)
     if VehicleExitOrder.objects.filter(vehicle=vehicle, state=VehicleExitOrder.State.PENDING).exists():
         raise ValueError("Esta viatura já possui uma OS pendente de retorno.")
@@ -470,6 +472,9 @@ def assign_driver_to_vehicle(
     custody_ended_on=None,
 ):
     from django.utils import timezone
+    from .sector_scope import validate_vehicle_scope
+
+    validate_vehicle_scope(user, vehicle)
 
     sei_number = (sei_number or "").strip()
     ensure_vehicle_active(vehicle)
@@ -655,6 +660,8 @@ def change_vehicle_plate(*, vehicle: Vehicle, plate: str, kind: str, user, reaso
 @transaction.atomic
 def record_vehicle_mileage(*, vehicle: Vehicle, mileage: int, user, origin: str = "MANUAL", notes: str = "", is_correction: bool = False, external_id: str = ""):
     from .models import VehicleMileage
+    from .sector_scope import validate_vehicle_scope
+    validate_vehicle_scope(user, vehicle)
     from .models import AuditLog
     
     if mileage is None or int(mileage) < 0:
@@ -704,6 +711,8 @@ def record_vehicle_mileage(*, vehicle: Vehicle, mileage: int, user, origin: str 
 @transaction.atomic
 def record_vehicle_inspection(*, vehicle: Vehicle, type, status, user, inspector_name: str = "", mileage: int = None, notes: str = "", date=None):
     from .models import VehicleInspection, AuditLog
+    from .sector_scope import validate_vehicle_scope
+    validate_vehicle_scope(user, vehicle)
     from django.utils import timezone
     
     ensure_vehicle_active(vehicle)
@@ -743,6 +752,8 @@ def record_vehicle_inspection(*, vehicle: Vehicle, type, status, user, inspector
 @transaction.atomic
 def create_vehicle_fine(*, vehicle: Vehicle, auto_number: str, agency: str, status, date, user, process_number: str = "", amount=None, due_date=None, notes: str = ""):
     from .models import VehicleFine, AuditLog, SEIProcessStatus
+    from .sector_scope import validate_vehicle_scope
+    validate_vehicle_scope(user, vehicle)
     
     ensure_vehicle_active(vehicle)
     fine = VehicleFine.objects.create(
