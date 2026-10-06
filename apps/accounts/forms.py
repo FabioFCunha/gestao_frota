@@ -112,7 +112,7 @@ class UserForm(forms.ModelForm):
         self.fields["functional_id"].required = True
         self.fields["whatsapp"].required = True
         self.fields["groups"].help_text = "O perfil define as permissões deste usuário."
-        if self.instance and self.instance.pk:
+        if not self.instance._state.adding:
             self.fields["initial_password"].help_text = (
                 "Preencha somente se quiser definir uma nova senha inicial e exigir troca no próximo acesso."
             )
@@ -146,7 +146,7 @@ class UserForm(forms.ModelForm):
         password = cleaned.get("initial_password", "")
         confirmation = cleaned.get("initial_password_confirmation", "")
 
-        if not self.instance.pk and not password:
+        if self.instance._state.adding and not password:
             self.add_error("initial_password", "Informe a senha inicial.")
 
         if password:
