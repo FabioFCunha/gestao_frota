@@ -358,6 +358,18 @@ class SEIProcessViewSet(viewsets.ModelViewSet):
     serializer_class = SEIProcessSerializer
     filterset_fields = {"status": ["exact"], "sei_number": ["exact", "icontains"], "title": ["icontains"], "opening_date": ["exact", "gte", "lte"]}
 
+    def get_queryset(self):
+        from django.contrib.contenttypes.models import ContentType
+        qs = super().get_queryset()
+        vehicle_ct = ContentType.objects.get_for_model(Vehicle)
+        allowed_vehicle_ids = apply_sector_scope(
+            Vehicle.objects.all(), self.request.user, self.request.query_params.get("sector")
+        ).values_list("id", flat=True)
+        return qs.filter(
+            relations__content_type=vehicle_ct,
+            relations__object_id__in=allowed_vehicle_ids,
+        ).distinct()
+
     def perform_create(self, serializer):
         if not self.request.user.has_perm("fleet.add_seiprocess"):
             from rest_framework.exceptions import PermissionDenied
@@ -410,13 +422,21 @@ class DocumentViewSet(viewsets.ModelViewSet):
     filterset_fields = {"document_type": ["exact"], "status": ["exact"], "document_date": ["exact", "gte", "lte"]}
 
     def get_queryset(self):
+        from django.contrib.contenttypes.models import ContentType
         qs = super().get_queryset()
+        vehicle_ct = ContentType.objects.get_for_model(Vehicle)
+        allowed_vehicle_ids = apply_sector_scope(
+            Vehicle.objects.all(), self.request.user, self.request.query_params.get("sector")
+        ).values_list("id", flat=True)
+        qs = qs.filter(
+            relations__content_type=vehicle_ct,
+            relations__object_id__in=allowed_vehicle_ids,
+        ).distinct()
         status_name = self.request.query_params.get("status_name")
         if status_name:
             qs = qs.filter(status__name=status_name)
-        else:
-            if self.action == "list":
-                qs = qs.exclude(status__name="Arquivado")
+        elif self.action == "list":
+            qs = qs.exclude(status__name="Arquivado")
         return qs
 
     def perform_create(self, serializer):
