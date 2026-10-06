@@ -1399,7 +1399,7 @@ def change_vehicle_position(*, vehicle: Vehicle, sector, active: bool, user, rea
 
     old_sector = vehicle.sector
     old_active = vehicle.active
-    sector_changed = old_sector_id = vehicle.sector_id
+    old_sector_id = vehicle.sector_id
     new_sector_id = sector.id
     active_changed = old_active != active
 
