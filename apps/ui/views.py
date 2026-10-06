@@ -10,7 +10,7 @@ from django.urls import reverse
 from django.http import JsonResponse, Http404
 from django.contrib import messages
 from django.utils import timezone
-from .forms import DriverForm, DriverVehicleAssignmentForm, VehicleForm, VehicleContractForm, FineForm, RevisionActionForm, VehicleExitOrderForm, VehicleExitOrderReturnForm
+from .forms import DriverForm, DriverVehicleAssignmentForm, VehicleForm, VehicleContractForm, FineForm, RevisionActionForm, VehicleExitOrderForm, VehicleExitOrderReturnForm, VehiclePositionForm
 from apps.accounts.forms import FleetAuthenticationForm
 from apps.accounts.decorators import module_permission
 from apps.fleet.models import VehiclePlate, Renter
@@ -26,9 +26,14 @@ def dashboard(request):
     from datetime import timedelta
     from apps.fleet.models import Vehicle, VehiclePlate, Maintenance, VehicleFine
     from apps.fleet.services import get_dashboard_metrics, get_operational_alerts
+    from apps.fleet.sector_scope import apply_sector_scope
 
-    metrics = get_dashboard_metrics({})
-    alerts = get_operational_alerts({})
+    requested_sector = request.GET.get("sector")
+    scoped_vehicles = apply_sector_scope(Vehicle.objects.all(), request.user, requested_sector)
+    scoped_vehicle_ids = scoped_vehicles.values_list("id", flat=True)
+
+    metrics = get_dashboard_metrics({"vehicle__in": scoped_vehicle_ids})
+    alerts = get_operational_alerts({"vehicle__in": scoped_vehicle_ids})
 
     today = timezone.now().date()
     fine_warning_date = today + timedelta(days=30)
@@ -37,13 +42,14 @@ def dashboard(request):
 
     active_maintenance_ids = set(
         Maintenance.objects
-        .filter(status__name__in=["Aberta", "Em andamento"])
+        .filter(status__name__in=["Aberta", "Em andamento"], vehicle_id__in=scoped_vehicle_ids)
         .values_list("vehicle_id", flat=True)
     )
 
     fine_due_ids = set(
         VehicleFine.objects
         .filter(
+            vehicle_id__in=scoped_vehicle_ids,
             due_date__isnull=False,
             due_date__gte=today,
             due_date__lte=fine_warning_date,
@@ -55,6 +61,7 @@ def dashboard(request):
     contract_attention_ids = set(
         Vehicle.objects
         .filter(
+            id__in=scoped_vehicle_ids,
             contract__isnull=False,
             contract__ends_on__lte=fine_warning_date,
             contract__ends_on__gte=today,
@@ -78,7 +85,7 @@ def dashboard(request):
     from apps.fleet.models import VehicleDriverAssignment, VehicleMileage
 
     vehicles = (
-        Vehicle.objects
+        scoped_vehicles
         .select_related("status", "contract", "brand", "model")
         .prefetch_related(
             "plate_history",
@@ -203,7 +210,6 @@ def dashboard(request):
 @login_required
 @module_permission("fleet.view_vehicle")
 def vehicle_list(request):
-    from apps.fleet.models import Vehicle
     from apps.fleet.models import Vehicle, VehicleDriverAssignment, VehicleCustody
 
     active_assignments = (
@@ -227,6 +233,8 @@ def vehicle_list(request):
         )
         .all()
     )
+    from apps.fleet.sector_scope import apply_sector_scope
+    qs = apply_sector_scope(qs, request.user, request.GET.get("sector"))
     active_filter = request.GET.get('active', 'active')
     if active_filter == 'inactive':
         qs = qs.filter(active=False)
@@ -240,18 +248,41 @@ def vehicle_list(request):
             Q(renavam__icontains=q) |
             Q(contract__number__icontains=q)
         ).distinct()
-    context = {"vehicles": qs[:50], "q": q, "active_filter": active_filter}
+    from apps.fleet.sector_scope import (
+        allowed_sector_slugs,
+        can_manage_vehicle_status,
+    )
+
+    allowed_sectors = allowed_sector_slugs(request.user)
+    requested_sector = request.GET.get("sector")
+    show_sector_filter = allowed_sectors is None or len(allowed_sectors) > 1
+
+    context = {
+        "vehicles": qs[:50],
+        "q": q,
+        "active_filter": active_filter,
+        "can_manage_vehicle_status": can_manage_vehicle_status(request.user),
+        "allowed_sectors": allowed_sectors,
+        "requested_sector": requested_sector,
+        "show_sector_filter": show_sector_filter,
+    }
     return render(request, "ui/vehicle_list.html", context)
 
 
 @login_required
-@module_permission("fleet.change_vehicle")
+@module_permission("fleet.manage_vehicle_status")
 def vehicle_set_active(request, pk):
     from apps.fleet.models import Vehicle
     from apps.fleet.services import set_vehicle_active
+    from apps.fleet.sector_scope import can_manage_vehicle_status
+    if not can_manage_vehicle_status(request.user):
+        raise PermissionDenied("Somente o Administrador ADM pode alterar a situação da viatura.")
     if request.method != "POST":
         raise Http404
-    vehicle = get_object_or_404(Vehicle, pk=pk)
+    vehicle = get_object_or_404(Vehicle.objects.select_related("sector"), pk=pk)
+    validate_vehicle_scope(request.user, vehicle, request.GET.get("sector"))
+    if not request.user.is_system_creator and not request.user.is_superuser and (not vehicle.sector or vehicle.sector.slug != "adm"):
+        raise PermissionDenied("O Administrador ADM só pode administrar viaturas atualmente alocadas à ADM.")
     active = request.POST.get("active") == "true"
     try:
         set_vehicle_active(vehicle=vehicle, active=active, user=request.user, reason=request.POST.get("reason", "").strip())
@@ -261,6 +292,52 @@ def vehicle_set_active(request, pk):
         messages.success(request, f"Viatura {'ativada' if active else 'inativada'} com sucesso.")
     return redirect(request.POST.get("next") or "vehicle_list")
 
+
+@login_required
+@module_permission("fleet.manage_vehicle_status")
+def vehicle_position_edit(request, pk):
+    from apps.fleet.models import Vehicle
+    from apps.fleet.sector_scope import can_manage_vehicle_status
+    from apps.fleet.services import change_vehicle_position
+
+    if not can_manage_vehicle_status(request.user):
+        raise PermissionDenied("Somente o Administrador ADM pode alterar a situação ou a posição da viatura.")
+
+    vehicle = get_object_or_404(
+        Vehicle.objects.select_related("sector", "brand", "model"),
+        pk=pk,
+    )
+    validate_vehicle_scope(request.user, vehicle, request.GET.get("sector"))
+    if not request.user.is_system_creator and not request.user.is_superuser and (not vehicle.sector or vehicle.sector.slug != "adm"):
+        raise PermissionDenied("O Administrador ADM só pode administrar viaturas atualmente alocadas à ADM.")
+
+    initial = {"sector": vehicle.sector, "active": "true" if vehicle.active else "false"}
+    if request.method == "POST":
+        form = VehiclePositionForm(request.POST, initial=initial)
+        if form.is_valid():
+            try:
+                change_vehicle_position(
+                    vehicle=vehicle,
+                    sector=form.cleaned_data["sector"],
+                    active=form.cleaned_data["active"] == "true",
+                    user=request.user,
+                    reason=form.cleaned_data["reason"],
+                )
+            except ValueError as exc:
+                form.add_error(None, str(exc))
+            else:
+                messages.success(request, "Posição da viatura atualizada com sucesso.")
+                return redirect("vehicle_dossier", pk=vehicle.pk)
+    else:
+        form = VehiclePositionForm(initial=initial)
+
+    return render(request, "ui/form.html", {
+        "form": form,
+        "title": "Alterar posição da viatura",
+        "subtitle": f"Placa: {vehicle.plate_history.filter(kind='CURRENT', ends_on__isnull=True).values_list('plate', flat=True).first() or 'Sem placa'}",
+        "back_url": "vehicle_dossier",
+        "back_url_url": reverse("vehicle_dossier", kwargs={"pk": vehicle.pk}),
+    })
 @login_required
 @module_permission("fleet.view_vehicle")
 def bdt_list(request):
@@ -276,7 +353,8 @@ def bdt_list(request):
     filtered_vehicle = None
     if vehicle_filter:
         try:
-            filtered_vehicle = Vehicle.objects.get(pk=vehicle_filter)
+            from apps.fleet.sector_scope import apply_sector_scope
+            filtered_vehicle = apply_sector_scope(Vehicle.objects.all(), request.user, request.GET.get("sector")).get(pk=vehicle_filter)
         except (Vehicle.DoesNotExist, ValueError):
             filtered_vehicle = None
     current_plate = None
@@ -301,12 +379,14 @@ def vehicle_dossier(request, pk):
     from apps.fleet.models import Vehicle, VehiclePlate, VehicleMileage, VehicleCustody, VehicleExitOrder
     from django.shortcuts import get_object_or_404
 
+    from apps.fleet.sector_scope import validate_vehicle_scope
     vehicle = get_object_or_404(
         Vehicle.objects.select_related(
-            'status', 'brand', 'model', 'unit', 'base', 'renter', 'contract'
+            'status', 'brand', 'model', 'unit', 'base', 'renter', 'contract', 'sector'
         ),
         pk=pk
     )
+    validate_vehicle_scope(request.user, vehicle, request.GET.get("sector"))
     from apps.fleet.models import BDT
     from apps.fleet.utils import normalize_km
     from django.core.paginator import Paginator
@@ -547,8 +627,10 @@ def contract_edit(request, pk):
 def contract_detail(request, pk):
     from apps.fleet.models import Contract, Vehicle, VehicleDriverAssignment, VehicleCustody, VehiclePlate
 
+    from apps.fleet.sector_scope import apply_sector_scope
+    scoped_vehicle_ids = apply_sector_scope(Vehicle.objects.all(), request.user, request.GET.get("sector")).values_list("id", flat=True)
     contract = get_object_or_404(
-        Contract.objects.select_related('renter'),
+        Contract.objects.select_related('renter').filter(vehicles__in=scoped_vehicle_ids).distinct(),
         pk=pk,
     )
 
@@ -754,6 +836,7 @@ def revision_action(request, pk):
     )
 
     vehicle = get_object_or_404(Vehicle, pk=pk)
+    validate_vehicle_scope(request.user, vehicle, request.GET.get("sector"))
 
     if request.method != 'POST':
         return redirect('maintenance_list')
@@ -1101,6 +1184,7 @@ def driver_assign_vehicle(request, pk):
 
         if form.is_valid():
             try:
+                validate_vehicle_scope(request.user, form.cleaned_data['vehicle'], request.GET.get("sector"))
                 assign_driver_to_vehicle(
                     vehicle=form.cleaned_data['vehicle'],
                     driver=driver,
@@ -1231,6 +1315,7 @@ def vehicle_contract_edit(request, pk):
     from apps.fleet.models import Vehicle
 
     vehicle = get_object_or_404(Vehicle, pk=pk)
+    validate_vehicle_scope(request.user, vehicle, request.GET.get("sector"))
     if request.method == 'POST':
         form = VehicleContractForm(request.POST, instance=vehicle)
         if form.is_valid():
@@ -1267,7 +1352,10 @@ def fine_create(request):
     linked_vehicle = None
     if vehicle_param:
         try:
-            linked_vehicle = get_object_or_404(Vehicle.objects.select_related('brand', 'model'), pk=UUID(str(vehicle_param)))
+            linked_vehicle = get_object_or_404(
+                apply_sector_scope(Vehicle.objects.select_related('brand', 'model'), request.user, request.GET.get("sector")),
+                pk=UUID(str(vehicle_param)),
+            )
         except (ValueError, TypeError, AttributeError):
             from django.http import Http404
             raise Http404('Viatura inválida.')
@@ -1314,7 +1402,8 @@ def fine_edit(request, pk):
 
     from apps.fleet.models import VehicleFine
     from .forms import FineStatusForm
-    fine = get_object_or_404(VehicleFine, pk=pk)
+    fine = get_object_or_404(VehicleFine.objects.select_related("vehicle"), pk=pk)
+    validate_vehicle_scope(request.user, fine.vehicle, request.GET.get("sector"))
     if request.method == 'POST':
         form = FineStatusForm(request.POST, instance=fine)
         if form.is_valid():
@@ -1330,7 +1419,8 @@ def fine_edit(request, pk):
 def fine_full_edit(request, pk):
     from apps.fleet.models import VehicleFine
 
-    fine = get_object_or_404(VehicleFine, pk=pk)
+    fine = get_object_or_404(VehicleFine.objects.select_related("vehicle"), pk=pk)
+    validate_vehicle_scope(request.user, fine.vehicle, request.GET.get("sector"))
     if request.method == 'POST':
         form = FineForm(request.POST, instance=fine)
         if form.is_valid():
@@ -1482,7 +1572,9 @@ def _exit_order_plate(vehicle):
 def exit_order_list(request):
     from apps.fleet.models import VehicleExitOrder, Vehicle, Driver
 
+    from apps.fleet.sector_scope import apply_sector_scope
     qs = VehicleExitOrder.objects.select_related('vehicle__brand', 'vehicle__model', 'driver', 'opened_by', 'closed_by').prefetch_related('vehicle__plate_history')
+    qs = qs.filter(vehicle_id__in=apply_sector_scope(Vehicle.objects.all(), request.user, request.GET.get("sector")).values_list("id", flat=True))
     search = request.GET.get('q', '').strip()
     state = request.GET.get('state', '')
     vehicle_id = request.GET.get('vehicle', '')
@@ -1552,7 +1644,10 @@ def exit_order_create(request):
             uuid.UUID(raw_vehicle)
         except ValueError:
             raise Http404("Viatura inválida.")
-        linked_vehicle = get_object_or_404(Vehicle.objects.select_related('brand', 'model').prefetch_related('plate_history'), pk=raw_vehicle)
+        linked_vehicle = get_object_or_404(
+            apply_sector_scope(Vehicle.objects.select_related('brand', 'model').prefetch_related('plate_history'), request.user, request.GET.get("sector")),
+            pk=raw_vehicle,
+        )
     if request.method == 'POST':
         form = VehicleExitOrderForm(request.POST, initial={'vehicle': linked_vehicle} if linked_vehicle else None)
         if linked_vehicle:
@@ -1578,6 +1673,7 @@ def exit_order_create(request):
 def exit_order_detail(request, pk):
     from apps.fleet.models import AuditLog, VehicleExitOrder
     order = get_object_or_404(VehicleExitOrder.objects.select_related('vehicle__brand', 'vehicle__model', 'driver', 'opened_by', 'closed_by').prefetch_related('vehicle__plate_history'), pk=pk)
+    validate_vehicle_scope(request.user, order.vehicle, request.GET.get("sector"))
     audits = AuditLog.objects.filter(
         entity_type='vehicle_exit_order', entity_id=order.id
     ).select_related('user').order_by('created_at')
@@ -1595,6 +1691,7 @@ def exit_order_return(request, pk):
     from apps.fleet.models import VehicleExitOrder
     from apps.fleet.services import close_vehicle_exit_order
     order = get_object_or_404(VehicleExitOrder.objects.select_related('vehicle', 'opened_by'), pk=pk)
+    validate_vehicle_scope(request.user, order.vehicle, request.GET.get("sector"))
     if order.opened_by_id != request.user.id:
         raise PermissionDenied('Somente o usuário que abriu a OS pode registrar o retorno.')
     if request.method == 'POST':

@@ -238,9 +238,11 @@ def _next_exit_order_number():
 @transaction.atomic
 def open_vehicle_exit_order(*, vehicle_id, driver, departed_at, destination, reason, notes, user):
     from django.db import IntegrityError
+    from .sector_scope import validate_vehicle_scope
     from .models import VehicleExitOrder
 
     vehicle = Vehicle.objects.select_for_update().get(pk=vehicle_id)
+    validate_vehicle_scope(user, vehicle)
     ensure_vehicle_active(vehicle)
     if VehicleExitOrder.objects.filter(vehicle=vehicle, state=VehicleExitOrder.State.PENDING).exists():
         raise ValueError("Esta viatura já possui uma OS pendente de retorno.")
@@ -470,6 +472,9 @@ def assign_driver_to_vehicle(
     custody_ended_on=None,
 ):
     from django.utils import timezone
+    from .sector_scope import validate_vehicle_scope
+
+    validate_vehicle_scope(user, vehicle)
 
     sei_number = (sei_number or "").strip()
     ensure_vehicle_active(vehicle)
@@ -655,6 +660,8 @@ def change_vehicle_plate(*, vehicle: Vehicle, plate: str, kind: str, user, reaso
 @transaction.atomic
 def record_vehicle_mileage(*, vehicle: Vehicle, mileage: int, user, origin: str = "MANUAL", notes: str = "", is_correction: bool = False, external_id: str = ""):
     from .models import VehicleMileage
+    from .sector_scope import validate_vehicle_scope
+    validate_vehicle_scope(user, vehicle)
     from .models import AuditLog
     
     if mileage is None or int(mileage) < 0:
@@ -704,6 +711,8 @@ def record_vehicle_mileage(*, vehicle: Vehicle, mileage: int, user, origin: str 
 @transaction.atomic
 def record_vehicle_inspection(*, vehicle: Vehicle, type, status, user, inspector_name: str = "", mileage: int = None, notes: str = "", date=None):
     from .models import VehicleInspection, AuditLog
+    from .sector_scope import validate_vehicle_scope
+    validate_vehicle_scope(user, vehicle)
     from django.utils import timezone
     
     ensure_vehicle_active(vehicle)
@@ -743,6 +752,8 @@ def record_vehicle_inspection(*, vehicle: Vehicle, type, status, user, inspector
 @transaction.atomic
 def create_vehicle_fine(*, vehicle: Vehicle, auto_number: str, agency: str, status, date, user, process_number: str = "", amount=None, due_date=None, notes: str = ""):
     from .models import VehicleFine, AuditLog, SEIProcessStatus
+    from .sector_scope import validate_vehicle_scope
+    validate_vehicle_scope(user, vehicle)
     
     ensure_vehicle_active(vehicle)
     fine = VehicleFine.objects.create(
@@ -1114,7 +1125,9 @@ def get_dashboard_metrics(filters: dict) -> dict:
     base = filters.get("base")
     renter = filters.get("renter")
     status = filters.get("status")
+    vehicle_ids = filters.get("vehicle__in")
     
+    if vehicle_ids is not None: v_qs = v_qs.filter(id__in=vehicle_ids)
     if unit: v_qs = v_qs.filter(unit_id=unit)
     if base: v_qs = v_qs.filter(base_id=base)
     if renter: v_qs = v_qs.filter(renter_id=renter)
@@ -1217,6 +1230,7 @@ def get_operational_alerts(filters: dict) -> dict:
     from datetime import timedelta
     
     today = timezone.now().date()
+    vehicle_ids = filters.get("vehicle__in")
     
     # Fetch threshold from DB
     try:
@@ -1231,17 +1245,25 @@ def get_operational_alerts(filters: dict) -> dict:
         administrative_status__iexact="VIGENTE",
         ends_on__lte=warning_date,
         ends_on__gte=today
-    ).values("id", "number", "ends_on")
+    )
+    if vehicle_ids is not None:
+        expiring_contracts = expiring_contracts.filter(vehicles__in=vehicle_ids).distinct()
+    expiring_contracts = expiring_contracts.values("id", "number", "ends_on")
     
     expired_contracts = Contract.objects.filter(
         administrative_status__iexact="VIGENTE",
         ends_on__lt=today
-    ).values("id", "number", "ends_on")
+    )
+    if vehicle_ids is not None:
+        expired_contracts = expired_contracts.filter(vehicles__in=vehicle_ids).distinct()
+    expired_contracts = expired_contracts.values("id", "number", "ends_on")
     
     # 2. Open Maintenances
     open_maintenances = Maintenance.objects.filter(
         status__name__in=["Aberta", "Em andamento"]
-    ).select_related('vehicle').values("id", "vehicle__plate_history__plate", "status__name", "entered_at")
+    )
+    if vehicle_ids is not None:
+        open_maintenances = open_maintenances.filter(vehicle_id__in=vehicle_ids).select_related('vehicle').values("id", "vehicle__plate_history__plate", "status__name", "entered_at")
     
     # 3. Pending Fines
     from django.db.models import Prefetch
@@ -1249,7 +1271,9 @@ def get_operational_alerts(filters: dict) -> dict:
 
     pending_fines_qs = VehicleFine.objects.filter(
         status__name__in=["Pendente", "Em análise", "Em recurso"]
-    ).select_related('vehicle', 'status').prefetch_related(
+    )
+    if vehicle_ids is not None:
+        pending_fines_qs = pending_fines_qs.filter(vehicle_id__in=vehicle_ids).select_related('vehicle', 'status').prefetch_related(
         Prefetch(
             'vehicle__driver_assignments',
             queryset=VehicleDriverAssignment.objects.filter(is_active=True).select_related('driver'),
@@ -1282,7 +1306,9 @@ def get_operational_alerts(filters: dict) -> dict:
     # 5. Pending Inspections (Reprovadas ou Com ressalvas)
     pending_inspections = VehicleInspection.objects.filter(
         status__name__in=["Reprovada", "Com ressalvas"]
-    ).select_related('vehicle').values("id", "vehicle__plate_history__plate", "status__name", "date")
+    )
+    if vehicle_ids is not None:
+        pending_inspections = pending_inspections.filter(vehicle_id__in=vehicle_ids).select_related('vehicle').values("id", "vehicle__plate_history__plate", "status__name", "date")
 
     # 6. Revisoes preventivas
     # Regra oficial WW Trans:
@@ -1294,6 +1320,8 @@ def get_operational_alerts(filters: dict) -> dict:
     revisoes_vencidas = []
 
     qs_vehicles = Vehicle.objects.prefetch_related('plate_history')
+    if vehicle_ids is not None:
+        qs_vehicles = qs_vehicles.filter(id__in=vehicle_ids)
 
     for v in qs_vehicles:
         revision = get_vehicle_revision_status(vehicle=v)
@@ -1384,3 +1412,66 @@ def set_vehicle_active(*, vehicle: Vehicle, active: bool, user, reason: str = ""
 def ensure_vehicle_active(vehicle: Vehicle):
     if not vehicle.active:
         raise ValueError("A viatura está inativa e não aceita novos lançamentos.")
+
+
+@transaction.atomic
+def change_vehicle_position(*, vehicle: Vehicle, sector, active: bool, user, reason: str):
+    """Altera a alocação setorial e a situação operacional da viatura em uma única operação auditada."""
+    from .models import AuditLog, VehicleHistory
+
+    reason = (reason or "").strip()
+    if len(reason) < 5:
+        raise ValueError("Informe o motivo da alteração.")
+    if sector is None or sector.slug not in {"adm", "lei-seca"}:
+        raise ValueError("Setor de destino inválido.")
+
+    old_sector = vehicle.sector
+    old_active = vehicle.active
+    old_sector_id = vehicle.sector_id
+    new_sector_id = sector.id
+    active_changed = old_active != active
+
+    if old_sector_id == new_sector_id and not active_changed:
+        raise ValueError("Nenhuma alteração foi informada.")
+
+    vehicle.sector = sector
+    vehicle.active = active
+    vehicle.save(update_fields=["sector", "active", "updated_at"])
+
+    if old_sector_id != new_sector_id:
+        VehicleHistory.objects.create(
+            vehicle=vehicle,
+            field="sector",
+            old_value={"id": str(old_sector.id), "name": old_sector.name, "slug": old_sector.slug} if old_sector else None,
+            new_value={"id": str(sector.id), "name": sector.name, "slug": sector.slug},
+            reason=reason,
+            changed_by=user,
+        )
+
+    if active_changed:
+        VehicleHistory.objects.create(
+            vehicle=vehicle,
+            field="active",
+            old_value={"active": old_active},
+            new_value={"active": active},
+            reason=reason,
+            changed_by=user,
+        )
+
+    AuditLog.objects.create(
+        user=user,
+        module="veículos",
+        action="MOVIMENTAÇÃO DE VIATURA",
+        entity_type="vehicle",
+        entity_id=vehicle.id,
+        old_values={
+            "sector": {"id": str(old_sector.id), "name": old_sector.name, "slug": old_sector.slug} if old_sector else None,
+            "active": old_active,
+        },
+        new_values={
+            "sector": {"id": str(sector.id), "name": sector.name, "slug": sector.slug},
+            "active": active,
+        },
+        reason=reason,
+    )
+    return vehicle

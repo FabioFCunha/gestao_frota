@@ -7,7 +7,18 @@
     <div>
         <form method="get" action="" style="display:flex; gap:10px;">
             <input type="text" name="q" value="{{ q }}" placeholder="Buscar por placa, marca, modelo, SEI ou situação..." class="form-input" style="width:480px;" />
-            <select name="active" class="form-input" style="width:150px"><option value="active" {% if active_filter == 'active' %}selected{% endif %}>Ativos</option><option value="inactive" {% if active_filter == 'inactive' %}selected{% endif %}>Inativos</option><option value="all" {% if active_filter == 'all' %}selected{% endif %}>Todos</option></select>
+            <select name="active" class="form-input" style="width:150px">
+                <option value="active" {% if active_filter == 'active' %}selected{% endif %}>Ativos</option>
+                <option value="inactive" {% if active_filter == 'inactive' %}selected{% endif %}>Inativos</option>
+                <option value="all" {% if active_filter == 'all' %}selected{% endif %}>Todos</option>
+            </select>
+            {% if show_sector_filter %}
+            <select name="sector" class="form-input" style="width:150px">
+                <option value="" {% if not requested_sector %}selected{% endif %}>Todos os setores</option>
+                <option value="adm" {% if requested_sector == 'adm' %}selected{% endif %}>ADM</option>
+                <option value="lei-seca" {% if requested_sector == 'lei-seca' %}selected{% endif %}>Lei Seca</option>
+            </select>
+            {% endif %}
             <button type="submit" class="primary-action">Buscar</button>
         </form>
     </div>
@@ -32,7 +43,8 @@
             <tr>
                 <th class="vl-th" style="width:22%;">SEI / ACAUTELAMENTO</th>
                 <th class="vl-th" style="width:14%;">PLACA</th>
-                <th class="vl-th" style="width:30%;">MARCA / MODELO</th>
+                <th class="vl-th" style="width:25%;">MARCA / MODELO</th>
+                <th class="vl-th" style="width:12%;">SETOR</th>
                 <th class="vl-th" style="width:12%;">SITUAÇÃO</th>
                 <th class="vl-th" style="width:22%; text-align:right;">AÇÕES OPERACIONAIS</th>
             </tr>
@@ -91,6 +103,17 @@
                     <div class="vl-model-sub">Veículo Institucional</div>
                 </td>
 
+                <!-- SETOR -->
+                <td class="vl-td">
+                    {% if vehicle.sector.slug == 'adm' %}
+                        <span class="vl-status vl-status--green">ADM</span>
+                    {% elif vehicle.sector.slug == 'lei-seca' %}
+                        <span class="vl-status vl-status--amber">LEI SECA</span>
+                    {% else %}
+                        <span class="vl-status vl-status--slate">SEM SETOR</span>
+                    {% endif %}
+                </td>
+
                 <!-- SITUAÇÃO -->
                 <td class="vl-td">
                     {% if vehicle.status.name == 'Ativo' %}
@@ -120,7 +143,15 @@
                 <td class="vl-td" style="text-align:right;">
                     <a href="{% url 'vehicle_dossier' vehicle.id %}" class="vl-action-btn">Ver Prontuário</a>
                     <a href="{% url 'vehicle_contract_edit' vehicle.id %}" class="vl-action-btn vl-action-btn--outline">Contrato</a>
-                    {% if perms.fleet.change_vehicle %}<form method="post" action="{% url 'vehicle_set_active' vehicle.id %}" style="display:inline" onsubmit="return confirm('Confirma {% if vehicle.active %}inativar{% else %}ativar{% endif %} a viatura desta placa?');">{% csrf_token %}<input type="hidden" name="active" value="{% if vehicle.active %}false{% else %}true{% endif %}"><input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="vl-action-btn vl-action-btn--outline" type="submit">{% if vehicle.active %}Inativar{% else %}Ativar{% endif %}</button></form>{% endif %}
+                    {% if can_manage_vehicle_status and vehicle.sector.slug == 'adm' %}
+                        <a href="{% url 'vehicle_position_edit' vehicle.id %}" class="vl-action-btn vl-action-btn--outline">Gestão ADM</a>
+                        <form method="post" action="{% url 'vehicle_set_active' vehicle.id %}" style="display:inline" onsubmit="return confirm('Confirma {% if vehicle.active %}inativar{% else %}ativar{% endif %} a viatura desta placa?');">
+                            {% csrf_token %}
+                            <input type="hidden" name="active" value="{% if vehicle.active %}false{% else %}true{% endif %}">
+                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                            <button class="vl-action-btn vl-action-btn--outline" type="submit">{% if vehicle.active %}Inativar{% else %}Ativar{% endif %}</button>
+                        </form>
+                    {% endif %}
                 </td>
             </tr>
             {% endfor %}

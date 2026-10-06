@@ -83,6 +83,7 @@ class UserForm(forms.ModelForm):
             "functional_id",
             "whatsapp",
             "groups",
+            "sectors",
             "is_active",
         ]
         labels = {
@@ -92,6 +93,7 @@ class UserForm(forms.ModelForm):
             "functional_id": "ID funcional",
             "whatsapp": "WhatsApp",
             "groups": "Perfil",
+            "sectors": "Setores de acesso",
             "is_active": "Situação",
         }
         widgets = {
@@ -112,6 +114,10 @@ class UserForm(forms.ModelForm):
         self.fields["functional_id"].required = True
         self.fields["whatsapp"].required = True
         self.fields["groups"].help_text = "O perfil define as permissões deste usuário."
+        from apps.fleet.models import Sector
+        self.fields["sectors"].queryset = Sector.objects.filter(slug__in=["adm", "lei-seca"]).order_by("name")
+        self.fields["sectors"].required = False
+        self.fields["sectors"].help_text = "Define quais setores o usuário pode visualizar."
         if not self.instance._state.adding:
             self.fields["initial_password"].help_text = (
                 "Preencha somente se quiser definir uma nova senha inicial e exigir troca no próximo acesso."

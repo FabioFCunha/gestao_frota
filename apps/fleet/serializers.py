@@ -14,7 +14,7 @@ class VehicleSerializer(serializers.ModelSerializer):
     class Meta:
         model = Vehicle
         fields = "__all__"
-        read_only_fields = ["id", "created_at", "updated_at", "created_by", "current_mileage", "current_driver", "current_plate", "reserved_plate", "latest_inspection_date", "latest_inspection_status"]
+        read_only_fields = ["id", "created_at", "updated_at", "created_by", "sector", "current_mileage", "current_driver", "current_plate", "reserved_plate", "latest_inspection_date", "latest_inspection_status"]
 
     def get_current_driver(self, obj):
         active_assignment = next((a for a in obj.driver_assignments.all() if a.is_active), None)

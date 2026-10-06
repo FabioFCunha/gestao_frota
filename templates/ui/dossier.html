@@ -58,7 +58,10 @@
         </h2>
         <p>Status: <span class="tag">{{ vehicle.status.name }}</span> {% if vehicle.armored %}| <strong style="color:#c0392b">BLINDADO</strong>{% endif %}</p>
     </div>
-    <a class="primary-action" href="{% url 'vehicle_list' %}">← Voltar</a>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+        {% if can_manage_vehicle_status %}<a class="primary-action" href="{% url 'vehicle_position_edit' vehicle.id %}">Gestão ADM</a>{% endif %}
+        <a class="primary-action" href="{% url 'vehicle_list' %}">← Voltar</a>
+    </div>
 </section>
 
 <!-- PLACAS -->

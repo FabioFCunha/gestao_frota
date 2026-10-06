@@ -150,6 +150,9 @@ class Vehicle(BaseModel):
     documents = GenericRelation('DocumentRelation')
     class Meta:
         indexes = [models.Index(fields=["status"]), models.Index(fields=["unit", "base"])]
+        permissions = [
+            ("manage_vehicle_status", "Pode gerenciar situação administrativa da viatura"),
+        ]
 
 
 class VehicleExitOrderNumberSequence(models.Model):

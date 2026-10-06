@@ -431,3 +431,25 @@ class RevisionActionForm(forms.Form):
         required=False,
         widget=forms.Textarea(attrs={**INPUT, 'rows': 3}),
     )
+
+
+class VehiclePositionForm(forms.Form):
+    sector = forms.ModelChoiceField(
+        label="Setor de destino",
+        queryset=None,
+        empty_label=None,
+    )
+    active = forms.ChoiceField(
+        label="Situação operacional",
+        choices=(("true", "Ativa"), ("false", "Inativa")),
+    )
+    reason = forms.CharField(
+        label="Motivo da alteração",
+        widget=forms.Textarea(attrs={"rows": 4, "placeholder": "Ex.: Transferência da ADM para a Lei Seca; encerramento do contrato..."}),
+        min_length=5,
+    )
+
+    def __init__(self, *args, **kwargs):
+        from apps.fleet.models import Sector
+        super().__init__(*args, **kwargs)
+        self.fields["sector"].queryset = Sector.objects.filter(slug__in=["adm", "lei-seca"]).order_by("name")

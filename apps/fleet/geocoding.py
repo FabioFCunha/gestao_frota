@@ -8,6 +8,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import api_view, permission_classes
 
 from .models import BDT
+from .sector_scope import user_can_access_vehicle
 
 logger = logging.getLogger(__name__)
 
@@ -110,9 +111,12 @@ def geocode_bdt(request, pk):
     Returns the addresses as JSON.
     """
     try:
-        bdt = BDT.objects.get(pk=pk)
+        bdt = BDT.objects.select_related("vehicle").get(pk=pk)
     except BDT.DoesNotExist:
         return JsonResponse({"error": "BDT not found"}, status=404)
+
+    if bdt.vehicle_id and not user_can_access_vehicle(request.user, bdt.vehicle):
+        return JsonResponse({"error": "Acesso negado."}, status=403)
 
     changed = False
 
