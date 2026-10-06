@@ -40,6 +40,66 @@ class VehicleCustodyWorkflowTests(TestCase):
         self.assertFalse(transferred.is_active)
         self.assertEqual(AuditLog.objects.filter(entity_id=custody.id).count(), 3)
 
+    def test_start_custody_does_not_reuse_assignment_from_closed_custody(self):
+        custody = start_vehicle_custody(
+            vehicle=self.vehicle,
+            driver=self.first,
+            sei_number="SEI-1",
+            started_on=timezone.localdate(),
+            user=self.user,
+        )
+
+        initial_assignment_id = custody.assignment_id
+
+        ended_at = timezone.now()
+
+        end_vehicle_custody(
+            custody=custody,
+            user=self.user,
+            ended_on=timezone.localdate(),
+            assignment_ended_at=ended_at,
+        )
+
+        custody.refresh_from_db()
+
+        # Simula uma inconsist?ncia hist?rica: o assignment da cust?dia
+        # encerrada permanece marcado como ativo, mas continua vinculado
+        # ? cust?dia anterior.
+        custody.assignment.is_active = True
+        custody.assignment.save(update_fields=["is_active", "updated_at"])
+
+        new_custody = start_vehicle_custody(
+            vehicle=self.vehicle,
+            driver=self.first,
+            sei_number="SEI-2",
+            started_on=timezone.localdate(),
+            user=self.user,
+        )
+
+        self.assertNotEqual(
+            new_custody.assignment_id,
+            initial_assignment_id,
+        )
+
+        self.assertEqual(
+            custody.assignment_id,
+            initial_assignment_id,
+        )
+
+        self.assertTrue(
+            custody.assignments.filter(pk=initial_assignment_id).exists()
+        )
+
+        self.assertEqual(
+            new_custody.assignment.driver_id,
+            self.first.id,
+        )
+
+        self.assertTrue(
+            new_custody.assignment.is_active
+        )
+
+
     def test_transfer_rollback_keeps_responsible_active(self):
         custody = start_vehicle_custody(vehicle=self.vehicle, driver=self.first, sei_number="SEI-1",
             started_on=timezone.localdate(), user=self.user)

@@ -589,12 +589,31 @@ def start_vehicle_custody(*, vehicle, driver, sei_number, started_on, user, note
     ensure_vehicle_active(vehicle)
     if VehicleCustody.objects.select_for_update().filter(vehicle=vehicle, ended_on__isnull=True).exists():
         raise ValueError("A viatura já possui acautelamento aberto.")
-    current = VehicleDriverAssignment.objects.select_for_update().filter(vehicle=vehicle, is_active=True).first()
+    current = VehicleDriverAssignment.objects.select_for_update().filter(
+        vehicle=vehicle,
+        is_active=True,
+    ).first()
+
     if current and current.driver_id != driver.id:
         current.is_active, current.ends_on = False, timezone.now()
         current.save(update_fields=["is_active", "ends_on", "updated_at"])
         current = None
-    assignment = current or VehicleDriverAssignment.objects.create(vehicle=vehicle, driver=driver, starts_on=timezone.now(), is_active=True, assigned_by=user, notes=notes)
+
+    # N?o reutilizar um assignment que j? pertenceu a uma cust?dia.
+    # O v?nculo hist?rico da cust?dia anterior deve permanecer preservado.
+    if current and current.custody_id is not None:
+        current.is_active, current.ends_on = False, timezone.now()
+        current.save(update_fields=["is_active", "ends_on", "updated_at"])
+        current = None
+
+    assignment = current or VehicleDriverAssignment.objects.create(
+        vehicle=vehicle,
+        driver=driver,
+        starts_on=timezone.now(),
+        is_active=True,
+        assigned_by=user,
+        notes=notes,
+    )
     custody = VehicleCustody.objects.create(assignment=assignment, vehicle=vehicle, sei_number=sei_number, started_on=started_on, notes=notes, created_by=user)
     assignment.custody = custody
     assignment.save(update_fields=["custody", "updated_at"])
