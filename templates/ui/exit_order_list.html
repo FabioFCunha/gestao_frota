@@ -1,7 +1,28 @@
 {% extends 'ui/base.html' %}
 {% block title %}Ordens de saída{% endblock %}
 {% block content %}
-<div class="page-header"><div><h1>Ordens de saída</h1><p class="subtitle">Controle de saídas e retornos das viaturas.</p></div><a class="btn btn-primary" href="{% url 'exit_order_create' %}">Nova OS de saída</a></div>
-<div class="card"><form method="get" class="filter-bar"><select name="state" class="form-input"><option value="">Todos os estados</option>{% for value,label in states %}<option value="{{ value }}" {% if selected_state == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select><select name="vehicle" class="form-input"><option value="">Todas as viaturas</option>{% for vehicle in vehicles %}<option value="{{ vehicle.id }}" {% if selected_vehicle == vehicle.id|stringformat:'s' %}selected{% endif %}>{{ vehicle }}</option>{% endfor %}</select><select name="driver" class="form-input"><option value="">Todos os motoristas</option>{% for driver in drivers %}<option value="{{ driver.id }}" {% if selected_driver == driver.id|stringformat:'s' %}selected{% endif %}>{{ driver.name }}</option>{% endfor %}</select><input class="form-input" type="date" name="from" value="{{ request.GET.from }}"><input class="form-input" type="date" name="to" value="{{ request.GET.to }}"><button class="btn btn-secondary">Filtrar</button></form></div>
-<div class="card table-card"><div class="table-responsive"><table><thead><tr><th>OS</th><th>Estado</th><th>Viatura</th><th>Motorista</th><th>Saída</th><th>Destino</th><th></th></tr></thead><tbody>{% for order, plate in order_rows %}<tr {% if order.state == 'PENDING' %}class="row-warning"{% endif %}><td>{{ order.number }}</td><td><span class="badge {% if order.state == 'PENDING' %}badge-warning{% else %}badge-success{% endif %}">{{ order.get_state_display }}</span></td><td>{{ plate }}</td><td>{{ order.driver.name }}</td><td>{{ order.departed_at|date:"d/m/Y H:i" }}</td><td>{{ order.destination }}</td><td><a href="{% url 'exit_order_detail' order.id %}">Detalhes</a></td></tr>{% empty %}<tr><td colspan="7">Nenhuma ordem de saída encontrada.</td></tr>{% endfor %}</tbody></table></div>{% if page_obj.paginator.num_pages > 1 %}<nav class="pagination">{% if page_obj.has_previous %}<a href="?{% if querystring %}{{ querystring }}&amp;{% endif %}page={{ page_obj.previous_page_number }}">Anterior</a>{% endif %}<span>Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>{% if page_obj.has_next %}<a href="?{% if querystring %}{{ querystring }}&amp;{% endif %}page={{ page_obj.next_page_number }}">Próxima</a>{% endif %}</nav>{% endif %}</div>
+<section class="os-page">
+  <form method="get" class="os-filters" aria-label="Filtros das ordens de saída">
+    <label class="os-search"><i data-lucide="search"></i><input type="search" name="q" value="{{ search }}" placeholder="Buscar por OS, destino ou motorista"></label>
+    <label class="os-select"><i data-lucide="layers-3"></i><select name="state"><option value="">Todos os estados</option>{% for value,label in states %}<option value="{{ value }}" {% if selected_state == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+    <label class="os-select"><i data-lucide="car-front"></i><select name="vehicle"><option value="">Todas as viaturas</option>{% for vehicle in vehicles %}<option value="{{ vehicle.id }}" {% if selected_vehicle == vehicle.id|stringformat:'s' %}selected{% endif %}>{{ vehicle }}</option>{% endfor %}</select></label>
+    <label class="os-select"><i data-lucide="user-round"></i><select name="driver"><option value="">Todos os motoristas</option>{% for driver in drivers %}<option value="{{ driver.id }}" {% if selected_driver == driver.id|stringformat:'s' %}selected{% endif %}>{{ driver.name }}</option>{% endfor %}</select></label>
+    <label class="os-date"><i data-lucide="calendar-days"></i><input type="date" name="from" value="{{ request.GET.from }}" aria-label="Data inicial"></label>
+    <label class="os-date"><i data-lucide="calendar-days"></i><input type="date" name="to" value="{{ request.GET.to }}" aria-label="Data final"></label>
+    <button type="submit" class="os-filter-button">Filtrar</button>
+  </form>
+
+  <div class="os-heading">
+    <div><h2>Ordens de saída</h2><p>Controle de saídas e retornos das viaturas.</p></div>
+    <div class="os-actions"><a class="os-new-button" href="{% url 'exit_order_create' %}"><i data-lucide="plus"></i> Nova ordem</a></div>
+  </div>
+
+  <div class="os-metrics">
+    <article><span>Ordens ativas</span><strong>{{ active_count }}</strong></article>
+    <article><span>Em trânsito hoje</span><strong>{{ in_transit_count }}</strong></article>
+    <article><span>Encerradas hoje</span><strong>{{ closed_today_count }}</strong></article>
+  </div>
+
+  <div class="os-table-card"><div class="os-table-scroll"><table class="os-table"><thead><tr><th>OS</th><th>Estado</th><th>Viatura</th><th>Motorista</th><th>Saída</th><th>Destino</th><th class="os-details-col">Detalhes</th></tr></thead><tbody>{% for order, plate in order_rows %}<tr><td class="os-number">{{ order.number }}</td><td><span class="os-status {% if order.state == 'PENDING' %}os-status--pending{% else %}os-status--closed{% endif %}">{{ order.get_state_display }}</span></td><td>{{ plate }}</td><td>{{ order.driver.name }}</td><td>{{ order.departed_at|date:"d/m/Y H:i" }}</td><td>{{ order.destination }}</td><td class="os-details-col"><a class="os-detail-button" aria-label="Ver detalhes da ordem {{ order.number }}" href="{% url 'exit_order_detail' order.id %}"><i data-lucide="eye"></i></a></td></tr>{% empty %}<tr><td class="os-empty" colspan="7">Nenhuma ordem de saída encontrada para os filtros selecionados.</td></tr>{% endfor %}</tbody></table></div>{% if page_obj.paginator.num_pages > 1 %}<nav class="os-pagination">{% if page_obj.has_previous %}<a href="?{% if querystring %}{{ querystring }}&amp;{% endif %}page={{ page_obj.previous_page_number }}">Anterior</a>{% endif %}<span>Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>{% if page_obj.has_next %}<a href="?{% if querystring %}{{ querystring }}&amp;{% endif %}page={{ page_obj.next_page_number }}">Próxima</a>{% endif %}</nav>{% endif %}</div>
+</section>
 {% endblock %}

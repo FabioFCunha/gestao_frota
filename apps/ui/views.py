@@ -1459,11 +1459,20 @@ def exit_order_list(request):
     from apps.fleet.models import VehicleExitOrder, Vehicle, Driver
 
     qs = VehicleExitOrder.objects.select_related('vehicle__brand', 'vehicle__model', 'driver', 'opened_by', 'closed_by').prefetch_related('vehicle__plate_history')
+    search = request.GET.get('q', '').strip()
     state = request.GET.get('state', '')
     vehicle_id = request.GET.get('vehicle', '')
     driver_id = request.GET.get('driver', '')
     if state in {VehicleExitOrder.State.PENDING, VehicleExitOrder.State.CLOSED}:
         qs = qs.filter(state=state)
+    if search:
+        qs = qs.filter(
+            Q(number__icontains=search)
+            | Q(destination__icontains=search)
+            | Q(driver__name__icontains=search)
+            | Q(vehicle__brand__name__icontains=search)
+            | Q(vehicle__model__name__icontains=search)
+        )
     for field, raw in (("vehicle_id", vehicle_id), ("driver_id", driver_id)):
         if raw:
             try:
@@ -1475,6 +1484,7 @@ def exit_order_list(request):
     for lookup, raw in (("departed_at__date__gte", request.GET.get("from", "")), ("departed_at__date__lte", request.GET.get("to", ""))):
         if raw and parse_date(raw):
             qs = qs.filter(**{lookup: parse_date(raw)})
+    today = timezone.localdate()
     page_obj = Paginator(qs.order_by('-departed_at', '-created_at'), 25).get_page(request.GET.get('page'))
     query = request.GET.copy()
     query.pop('page', None)
@@ -1483,6 +1493,14 @@ def exit_order_list(request):
         'states': VehicleExitOrder.State.choices, 'vehicles': Vehicle.objects.prefetch_related('plate_history').order_by('id'),
         'drivers': Driver.objects.filter(active=True).order_by('name'), 'selected_state': state,
         'selected_vehicle': vehicle_id, 'selected_driver': driver_id, 'querystring': query.urlencode(),
+        'search': search,
+        'active_count': VehicleExitOrder.objects.filter(state=VehicleExitOrder.State.PENDING).count(),
+        'in_transit_count': VehicleExitOrder.objects.filter(
+            state=VehicleExitOrder.State.PENDING, departed_at__date=today
+        ).count(),
+        'closed_today_count': VehicleExitOrder.objects.filter(
+            state=VehicleExitOrder.State.CLOSED, closed_at__date=today
+        ).count(),
     })
 
 
@@ -1523,9 +1541,17 @@ def exit_order_create(request):
 @login_required
 @module_permission("fleet.view_vehicleexitorder")
 def exit_order_detail(request, pk):
-    from apps.fleet.models import VehicleExitOrder
+    from apps.fleet.models import AuditLog, VehicleExitOrder
     order = get_object_or_404(VehicleExitOrder.objects.select_related('vehicle__brand', 'vehicle__model', 'driver', 'opened_by', 'closed_by').prefetch_related('vehicle__plate_history'), pk=pk)
-    return render(request, 'ui/exit_order_detail.html', {'order': order, 'plate': _exit_order_plate(order.vehicle), 'can_close': order.state == VehicleExitOrder.State.PENDING and order.opened_by_id == request.user.id and (request.user.is_system_creator or request.user.has_perm('fleet.change_vehicleexitorder'))})
+    audits = AuditLog.objects.filter(
+        entity_type='vehicle_exit_order', entity_id=order.id
+    ).select_related('user').order_by('created_at')
+    return render(request, 'ui/exit_order_detail.html', {
+        'order': order,
+        'plate': _exit_order_plate(order.vehicle),
+        'audits': audits,
+        'can_close': order.state == VehicleExitOrder.State.PENDING and order.opened_by_id == request.user.id and (request.user.is_system_creator or request.user.has_perm('fleet.change_vehicleexitorder')),
+    })
 
 
 @login_required
