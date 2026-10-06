@@ -268,11 +268,11 @@ def vehicle_set_active(request, pk):
 @module_permission("fleet.change_vehicle")
 def vehicle_position_edit(request, pk):
     from apps.fleet.models import Vehicle
-    from apps.fleet.sector_scope import is_general_admin
+    from apps.fleet.sector_scope import can_manage_vehicle_status
     from apps.fleet.services import change_vehicle_position
 
-    if not is_general_admin(request.user):
-        raise PermissionDenied("Somente o administrador geral pode alterar a posição da viatura.")
+    if not can_manage_vehicle_status(request.user):
+        raise PermissionDenied("Somente o Administrador ADM pode alterar a situação ou a posição da viatura.")
 
     vehicle = get_object_or_404(
         Vehicle.objects.select_related("sector", "brand", "model"),
