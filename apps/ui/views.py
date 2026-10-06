@@ -247,10 +247,13 @@ def vehicle_list(request):
 
 
 @login_required
-@module_permission("fleet.change_vehicle")
+@module_permission("fleet.manage_vehicle_status")
 def vehicle_set_active(request, pk):
     from apps.fleet.models import Vehicle
     from apps.fleet.services import set_vehicle_active
+    from apps.fleet.sector_scope import can_manage_vehicle_status
+    if not can_manage_vehicle_status(request.user):
+        raise PermissionDenied("Somente o Administrador ADM pode alterar a situação da viatura.")
     if request.method != "POST":
         raise Http404
     vehicle = get_object_or_404(Vehicle, pk=pk)
@@ -265,7 +268,7 @@ def vehicle_set_active(request, pk):
 
 
 @login_required
-@module_permission("fleet.change_vehicle")
+@module_permission("fleet.manage_vehicle_status")
 def vehicle_position_edit(request, pk):
     from apps.fleet.models import Vehicle
     from apps.fleet.sector_scope import can_manage_vehicle_status
