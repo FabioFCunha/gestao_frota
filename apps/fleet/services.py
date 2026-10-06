@@ -1114,7 +1114,9 @@ def get_dashboard_metrics(filters: dict) -> dict:
     base = filters.get("base")
     renter = filters.get("renter")
     status = filters.get("status")
+    vehicle_ids = filters.get("vehicle__in")
     
+    if vehicle_ids is not None: v_qs = v_qs.filter(id__in=vehicle_ids)
     if unit: v_qs = v_qs.filter(unit_id=unit)
     if base: v_qs = v_qs.filter(base_id=base)
     if renter: v_qs = v_qs.filter(renter_id=renter)
@@ -1217,6 +1219,7 @@ def get_operational_alerts(filters: dict) -> dict:
     from datetime import timedelta
     
     today = timezone.now().date()
+    vehicle_ids = filters.get("vehicle__in")
     
     # Fetch threshold from DB
     try:
@@ -1231,17 +1234,25 @@ def get_operational_alerts(filters: dict) -> dict:
         administrative_status__iexact="VIGENTE",
         ends_on__lte=warning_date,
         ends_on__gte=today
-    ).values("id", "number", "ends_on")
+    )
+    if vehicle_ids is not None:
+        expiring_contracts = expiring_contracts.filter(vehicles__in=vehicle_ids).distinct()
+    expiring_contracts = expiring_contracts.values("id", "number", "ends_on")
     
     expired_contracts = Contract.objects.filter(
         administrative_status__iexact="VIGENTE",
         ends_on__lt=today
-    ).values("id", "number", "ends_on")
+    )
+    if vehicle_ids is not None:
+        expired_contracts = expired_contracts.filter(vehicles__in=vehicle_ids).distinct()
+    expired_contracts = expired_contracts.values("id", "number", "ends_on")
     
     # 2. Open Maintenances
     open_maintenances = Maintenance.objects.filter(
         status__name__in=["Aberta", "Em andamento"]
-    ).select_related('vehicle').values("id", "vehicle__plate_history__plate", "status__name", "entered_at")
+    )
+    if vehicle_ids is not None:
+        open_maintenances = open_maintenances.filter(vehicle_id__in=vehicle_ids).select_related('vehicle').values("id", "vehicle__plate_history__plate", "status__name", "entered_at")
     
     # 3. Pending Fines
     from django.db.models import Prefetch
@@ -1249,7 +1260,9 @@ def get_operational_alerts(filters: dict) -> dict:
 
     pending_fines_qs = VehicleFine.objects.filter(
         status__name__in=["Pendente", "Em análise", "Em recurso"]
-    ).select_related('vehicle', 'status').prefetch_related(
+    )
+    if vehicle_ids is not None:
+        pending_fines_qs = pending_fines_qs.filter(vehicle_id__in=vehicle_ids).select_related('vehicle', 'status').prefetch_related(
         Prefetch(
             'vehicle__driver_assignments',
             queryset=VehicleDriverAssignment.objects.filter(is_active=True).select_related('driver'),
@@ -1282,7 +1295,9 @@ def get_operational_alerts(filters: dict) -> dict:
     # 5. Pending Inspections (Reprovadas ou Com ressalvas)
     pending_inspections = VehicleInspection.objects.filter(
         status__name__in=["Reprovada", "Com ressalvas"]
-    ).select_related('vehicle').values("id", "vehicle__plate_history__plate", "status__name", "date")
+    )
+    if vehicle_ids is not None:
+        pending_inspections = pending_inspections.filter(vehicle_id__in=vehicle_ids).select_related('vehicle').values("id", "vehicle__plate_history__plate", "status__name", "date")
 
     # 6. Revisoes preventivas
     # Regra oficial WW Trans:
@@ -1294,6 +1309,8 @@ def get_operational_alerts(filters: dict) -> dict:
     revisoes_vencidas = []
 
     qs_vehicles = Vehicle.objects.prefetch_related('plate_history')
+    if vehicle_ids is not None:
+        qs_vehicles = qs_vehicles.filter(id__in=vehicle_ids)
 
     for v in qs_vehicles:
         revision = get_vehicle_revision_status(vehicle=v)
