@@ -13,6 +13,7 @@ from .serializers import (
     VehicleInspectionSerializer, VehicleSerializer,
 )
 from .bdt_serializers import BDTSerializer
+from .sector_scope import apply_sector_scope, validate_vehicle_scope
 
 class DashboardAPIView(APIView):
     def get(self, request):
@@ -56,6 +57,11 @@ class VehicleViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = super().get_queryset()
+        queryset = apply_sector_scope(
+            queryset,
+            self.request.user,
+            self.request.query_params.get("sector"),
+        )
         activity = self.request.query_params.get("active", "true").lower()
         if activity in {"false", "0", "inactive"}:
             return queryset.filter(active=False)
@@ -199,6 +205,14 @@ class VehicleViewSet(viewsets.ModelViewSet):
 
 class MaintenanceViewSet(viewsets.ModelViewSet):
     queryset = Maintenance.objects.select_related("vehicle", "status", "type", "workshop").filter(vehicle__active=True)
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        return apply_sector_scope(queryset, self.request.user, self.request.query_params.get("sector"), "vehicle__sector")
+
+    def perform_create(self, serializer):
+        validate_vehicle_scope(self.request.user, serializer.validated_data.get("vehicle"), self.request.query_params.get("sector"))
+        serializer.save()
     serializer_class = MaintenanceSerializer
     filterset_fields = ["vehicle", "status", "type", "workshop"]
 
@@ -231,12 +245,18 @@ from .serializers import VehicleInspectionSerializer
 
 class VehicleInspectionViewSet(viewsets.ModelViewSet):
     queryset = VehicleInspection.objects.select_related("vehicle", "type", "status").filter(vehicle__active=True)
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        return apply_sector_scope(queryset, self.request.user, self.request.query_params.get("sector"), "vehicle__sector")
     serializer_class = VehicleInspectionSerializer
     filterset_fields = ["vehicle", "type", "status"]
 
     def perform_create(self, serializer):
         from .services import record_vehicle_inspection
         
+        validate_vehicle_scope(self.request.user, serializer.validated_data.get("vehicle"), self.request.query_params.get("sector"))
+
         # intercept to use the service
         try:
             record_vehicle_inspection(
@@ -266,6 +286,10 @@ from .serializers import VehicleFineSerializer
 
 class VehicleFineViewSet(viewsets.ModelViewSet):
     queryset = VehicleFine.objects.select_related("vehicle", "status").filter(vehicle__active=True)
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        return apply_sector_scope(queryset, self.request.user, self.request.query_params.get("sector"), "vehicle__sector")
     serializer_class = VehicleFineSerializer
     filterset_fields = {"vehicle": ["exact"], "status": ["exact"], "date": ["exact", "gte", "lte"], "auto_number": ["exact", "icontains"]}
 
@@ -274,6 +298,8 @@ class VehicleFineViewSet(viewsets.ModelViewSet):
             from rest_framework.exceptions import PermissionDenied
             raise PermissionDenied("Permissão negada.")
             
+        validate_vehicle_scope(self.request.user, serializer.validated_data.get("vehicle"), self.request.query_params.get("sector"))
+
         from .services import create_vehicle_fine
         
         try:
@@ -474,6 +500,10 @@ class DocumentViewSet(viewsets.ModelViewSet):
 
 class VehicleCustodyViewSet(viewsets.ModelViewSet):
     queryset = VehicleCustody.objects.select_related("vehicle", "created_by").all()
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        return apply_sector_scope(queryset, self.request.user, self.request.query_params.get("sector"), "vehicle__sector")
     serializer_class = VehicleCustodySerializer
     filterset_fields = {
         "vehicle": ["exact"],
@@ -483,6 +513,7 @@ class VehicleCustodyViewSet(viewsets.ModelViewSet):
     }
 
     def perform_create(self, serializer):
+        validate_vehicle_scope(self.request.user, serializer.validated_data.get("vehicle"), self.request.query_params.get("sector"))
         serializer.save(created_by=self.request.user)
 
     def perform_destroy(self, instance):
