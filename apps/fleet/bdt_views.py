@@ -25,6 +25,11 @@ class BDTViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         qs = super().get_queryset()
+        activity = self.request.query_params.get("vehicle_active", "true").lower()
+        if activity in {"false", "inactive", "0"}:
+            qs = qs.filter(vehicle__active=False)
+        elif activity not in {"all", ""}:
+            qs = qs.filter(vehicle__active=True)
 
         vehicle = self.request.query_params.get("vehicle")
         driver = self.request.query_params.get("driver")
