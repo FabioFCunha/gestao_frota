@@ -241,6 +241,7 @@ def open_vehicle_exit_order(*, vehicle_id, driver, departed_at, destination, rea
     from .models import VehicleExitOrder
 
     vehicle = Vehicle.objects.select_for_update().get(pk=vehicle_id)
+    ensure_vehicle_active(vehicle)
     if VehicleExitOrder.objects.filter(vehicle=vehicle, state=VehicleExitOrder.State.PENDING).exists():
         raise ValueError("Esta viatura já possui uma OS pendente de retorno.")
 
@@ -1336,3 +1337,46 @@ def get_operational_alerts(filters: dict) -> dict:
         "revisoes_vencidas": revisoes_vencidas,
         "expired_cnh": list(expired_cnh),
     }
+
+
+@transaction.atomic
+def set_vehicle_active(*, vehicle: Vehicle, active: bool, user, reason: str = ""):
+    """Applies the manual operational visibility flag without touching status."""
+    from .models import VehicleExitOrder
+
+    if vehicle.active == active:
+        return vehicle
+    if not active:
+        pending_order = VehicleExitOrder.objects.filter(
+            vehicle=vehicle, state=VehicleExitOrder.State.PENDING
+        ).exists()
+        open_maintenance = Maintenance.objects.filter(
+            vehicle=vehicle, exited_at__isnull=True,
+            status__name__in=["Aberta", "Em andamento"],
+        ).exists()
+        if pending_order or open_maintenance:
+            pending = []
+            if pending_order:
+                pending.append("ordem de saída pendente")
+            if open_maintenance:
+                pending.append("manutenção aberta/em andamento")
+            raise ValueError("Não é possível inativar: " + " e ".join(pending) + ".")
+
+    old_active = vehicle.active
+    vehicle.active = active
+    vehicle.save(update_fields=["active", "updated_at"])
+    VehicleHistory.objects.create(
+        vehicle=vehicle, field="active", old_value={"active": old_active},
+        new_value={"active": active}, reason=reason, changed_by=user,
+    )
+    AuditLog.objects.create(
+        user=user, module="veículos", action="ATIVAÇÃO DE VEÍCULO" if active else "INATIVAÇÃO DE VEÍCULO",
+        entity_type="vehicle", entity_id=vehicle.id,
+        old_values={"active": old_active}, new_values={"active": active}, reason=reason,
+    )
+    return vehicle
+
+
+def ensure_vehicle_active(vehicle: Vehicle):
+    if not vehicle.active:
+        raise ValueError("A viatura está inativa e não aceita novos lançamentos.")

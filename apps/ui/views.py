@@ -227,6 +227,12 @@ def vehicle_list(request):
         )
         .all()
     )
+    active_filter = request.GET.get('active', 'active')
+    if active_filter == 'inactive':
+        qs = qs.filter(active=False)
+    elif active_filter != 'all':
+        active_filter = 'active'
+        qs = qs.filter(active=True)
     q = request.GET.get('q', '')
     if q:
         qs = qs.filter(
@@ -234,8 +240,26 @@ def vehicle_list(request):
             Q(renavam__icontains=q) |
             Q(contract__number__icontains=q)
         ).distinct()
-    context = {"vehicles": qs[:50], "q": q}
+    context = {"vehicles": qs[:50], "q": q, "active_filter": active_filter}
     return render(request, "ui/vehicle_list.html", context)
+
+
+@login_required
+@module_permission("fleet.change_vehicle")
+def vehicle_set_active(request, pk):
+    from apps.fleet.models import Vehicle
+    from apps.fleet.services import set_vehicle_active
+    if request.method != "POST":
+        raise Http404
+    vehicle = get_object_or_404(Vehicle, pk=pk)
+    active = request.POST.get("active") == "true"
+    try:
+        set_vehicle_active(vehicle=vehicle, active=active, user=request.user, reason=request.POST.get("reason", "").strip())
+    except ValueError as exc:
+        messages.error(request, str(exc))
+    else:
+        messages.success(request, f"Viatura {'ativada' if active else 'inativada'} com sucesso.")
+    return redirect(request.POST.get("next") or "vehicle_list")
 
 @login_required
 @module_permission("fleet.view_vehicle")
