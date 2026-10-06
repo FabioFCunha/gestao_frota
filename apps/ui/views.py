@@ -227,6 +227,8 @@ def vehicle_list(request):
         )
         .all()
     )
+    from apps.fleet.sector_scope import apply_sector_scope
+    qs = apply_sector_scope(qs, request.user, request.GET.get("sector"))
     active_filter = request.GET.get('active', 'active')
     if active_filter == 'inactive':
         qs = qs.filter(active=False)
@@ -261,6 +263,49 @@ def vehicle_set_active(request, pk):
         messages.success(request, f"Viatura {'ativada' if active else 'inativada'} com sucesso.")
     return redirect(request.POST.get("next") or "vehicle_list")
 
+
+@login_required
+@module_permission("fleet.change_vehicle")
+def vehicle_position_edit(request, pk):
+    from apps.fleet.models import Vehicle
+    from apps.fleet.sector_scope import is_general_admin
+    from apps.fleet.services import change_vehicle_position
+
+    if not is_general_admin(request.user):
+        raise PermissionDenied("Somente o administrador geral pode alterar a posição da viatura.")
+
+    vehicle = get_object_or_404(
+        Vehicle.objects.select_related("sector", "brand", "model"),
+        pk=pk,
+    )
+
+    initial = {"sector": vehicle.sector, "active": "true" if vehicle.active else "false"}
+    if request.method == "POST":
+        form = VehiclePositionForm(request.POST, initial=initial)
+        if form.is_valid():
+            try:
+                change_vehicle_position(
+                    vehicle=vehicle,
+                    sector=form.cleaned_data["sector"],
+                    active=form.cleaned_data["active"] == "true",
+                    user=request.user,
+                    reason=form.cleaned_data["reason"],
+                )
+            except ValueError as exc:
+                form.add_error(None, str(exc))
+            else:
+                messages.success(request, "Posição da viatura atualizada com sucesso.")
+                return redirect("vehicle_dossier", pk=vehicle.pk)
+    else:
+        form = VehiclePositionForm(initial=initial)
+
+    return render(request, "ui/form.html", {
+        "form": form,
+        "title": "Alterar posição da viatura",
+        "subtitle": f"Placa: {vehicle.plate_history.filter(kind='CURRENT', ends_on__isnull=True).values_list('plate', flat=True).first() or 'Sem placa'}",
+        "back_url": "vehicle_dossier",
+        "back_url_url": reverse("vehicle_dossier", kwargs={"pk": vehicle.pk}),
+    })
 @login_required
 @module_permission("fleet.view_vehicle")
 def bdt_list(request):
