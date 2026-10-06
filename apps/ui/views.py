@@ -335,7 +335,8 @@ def bdt_list(request):
     filtered_vehicle = None
     if vehicle_filter:
         try:
-            filtered_vehicle = Vehicle.objects.get(pk=vehicle_filter)
+            from apps.fleet.sector_scope import apply_sector_scope
+            filtered_vehicle = apply_sector_scope(Vehicle.objects.all(), request.user, request.GET.get("sector")).get(pk=vehicle_filter)
         except (Vehicle.DoesNotExist, ValueError):
             filtered_vehicle = None
     current_plate = None
@@ -608,8 +609,10 @@ def contract_edit(request, pk):
 def contract_detail(request, pk):
     from apps.fleet.models import Contract, Vehicle, VehicleDriverAssignment, VehicleCustody, VehiclePlate
 
+    from apps.fleet.sector_scope import apply_sector_scope
+    scoped_vehicle_ids = apply_sector_scope(Vehicle.objects.all(), request.user, request.GET.get("sector")).values_list("id", flat=True)
     contract = get_object_or_404(
-        Contract.objects.select_related('renter'),
+        Contract.objects.select_related('renter').filter(vehicles__in=scoped_vehicle_ids).distinct(),
         pk=pk,
     )
 
@@ -1543,7 +1546,9 @@ def _exit_order_plate(vehicle):
 def exit_order_list(request):
     from apps.fleet.models import VehicleExitOrder, Vehicle, Driver
 
+    from apps.fleet.sector_scope import apply_sector_scope
     qs = VehicleExitOrder.objects.select_related('vehicle__brand', 'vehicle__model', 'driver', 'opened_by', 'closed_by').prefetch_related('vehicle__plate_history')
+    qs = qs.filter(vehicle_id__in=apply_sector_scope(Vehicle.objects.all(), request.user, request.GET.get("sector")).values_list("id", flat=True))
     search = request.GET.get('q', '').strip()
     state = request.GET.get('state', '')
     vehicle_id = request.GET.get('vehicle', '')
