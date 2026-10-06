@@ -118,8 +118,6 @@ def geocode_bdt(request, pk):
     if bdt.vehicle_id and not user_can_access_vehicle(request.user, bdt.vehicle):
         return JsonResponse({"error": "Acesso negado."}, status=403)
 
-    try:
-        bdt = bdt
     changed = False
 
     # Geocode departure (match) coordinates
