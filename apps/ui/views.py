@@ -1486,11 +1486,22 @@ def exit_order_list(request):
             qs = qs.filter(**{lookup: parse_date(raw)})
     today = timezone.localdate()
     page_obj = Paginator(qs.order_by('-departed_at', '-created_at'), 25).get_page(request.GET.get('page'))
+    vehicles = Vehicle.objects.prefetch_related('plate_history').order_by('id')
+    vehicle_options = []
+    for vehicle in vehicles:
+        active_plate = next(
+            (
+                item.plate for item in vehicle.plate_history.all()
+                if item.kind == 'CURRENT' and item.ends_on is None
+            ),
+            'Sem placa',
+        )
+        vehicle_options.append((str(vehicle.id), active_plate))
     query = request.GET.copy()
     query.pop('page', None)
     return render(request, 'ui/exit_order_list.html', {
         'page_obj': page_obj, 'order_rows': [(item, _exit_order_plate(item.vehicle)) for item in page_obj],
-        'states': VehicleExitOrder.State.choices, 'vehicles': Vehicle.objects.prefetch_related('plate_history').order_by('id'),
+        'states': VehicleExitOrder.State.choices, 'vehicle_options': vehicle_options,
         'drivers': Driver.objects.filter(active=True).order_by('name'), 'selected_state': state,
         'selected_vehicle': vehicle_id, 'selected_driver': driver_id, 'querystring': query.urlencode(),
         'search': search,
