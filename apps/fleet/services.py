@@ -1384,3 +1384,66 @@ def set_vehicle_active(*, vehicle: Vehicle, active: bool, user, reason: str = ""
 def ensure_vehicle_active(vehicle: Vehicle):
     if not vehicle.active:
         raise ValueError("A viatura está inativa e não aceita novos lançamentos.")
+
+
+@transaction.atomic
+def change_vehicle_position(*, vehicle: Vehicle, sector, active: bool, user, reason: str):
+    """Altera a alocação setorial e a situação operacional da viatura em uma única operação auditada."""
+    from .models import AuditLog, VehicleHistory
+
+    reason = (reason or "").strip()
+    if len(reason) < 5:
+        raise ValueError("Informe o motivo da alteração.")
+    if sector is None or sector.slug not in {"adm", "lei-seca"}:
+        raise ValueError("Setor de destino inválido.")
+
+    old_sector = vehicle.sector
+    old_active = vehicle.active
+    sector_changed = old_sector_id = vehicle.sector_id
+    new_sector_id = sector.id
+    active_changed = old_active != active
+
+    if old_sector_id == new_sector_id and not active_changed:
+        raise ValueError("Nenhuma alteração foi informada.")
+
+    vehicle.sector = sector
+    vehicle.active = active
+    vehicle.save(update_fields=["sector", "active", "updated_at"])
+
+    if old_sector_id != new_sector_id:
+        VehicleHistory.objects.create(
+            vehicle=vehicle,
+            field="sector",
+            old_value={"id": str(old_sector.id), "name": old_sector.name, "slug": old_sector.slug} if old_sector else None,
+            new_value={"id": str(sector.id), "name": sector.name, "slug": sector.slug},
+            reason=reason,
+            changed_by=user,
+        )
+
+    if active_changed:
+        VehicleHistory.objects.create(
+            vehicle=vehicle,
+            field="active",
+            old_value={"active": old_active},
+            new_value={"active": active},
+            reason=reason,
+            changed_by=user,
+        )
+
+    AuditLog.objects.create(
+        user=user,
+        module="veículos",
+        action="MOVIMENTAÇÃO DE VIATURA",
+        entity_type="vehicle",
+        entity_id=vehicle.id,
+        old_values={
+            "sector": {"id": str(old_sector.id), "name": old_sector.name, "slug": old_sector.slug} if old_sector else None,
+            "active": old_active,
+        },
+        new_values={
+            "sector": {"id": str(sector.id), "name": sector.name, "slug": sector.slug},
+            "active": active,
+        },
+        reason=reason,
+    )
+    return vehicle
