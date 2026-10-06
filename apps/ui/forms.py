@@ -234,7 +234,7 @@ class ContractForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['vehicles'].queryset = (
-            Vehicle.objects
+            Vehicle.objects.filter(active=True)
             .select_related('brand', 'model')
             .prefetch_related('plate_history')
             .order_by('brand__name', 'model__name')
@@ -319,7 +319,7 @@ class FineForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['vehicle'].queryset = Vehicle.objects.select_related('brand','model').prefetch_related('plate_history').order_by('brand__name','model__name')
+        self.fields['vehicle'].queryset = Vehicle.objects.filter(active=True).select_related('brand','model').prefetch_related('plate_history').order_by('brand__name','model__name')
         self.fields['vehicle'].label_from_instance = self.label_from_instance
         self.fields['driver'].queryset = Driver.objects.order_by('name')
         # BaseModel assigns a UUID before the object is saved, so ``pk`` is

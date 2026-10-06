@@ -54,6 +54,15 @@ class VehicleViewSet(viewsets.ModelViewSet):
     search_fields = ["plate_history__plate", "renavam", "contract__number"]
     filterset_fields = {"status": ["exact"], "armored": ["exact"], "renter": ["exact"], "unit": ["exact"], "base": ["exact"], "driver_assignments__driver": ["exact"]}
 
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        activity = self.request.query_params.get("active", "true").lower()
+        if activity in {"false", "0", "inactive"}:
+            return queryset.filter(active=False)
+        if activity in {"all", ""}:
+            return queryset
+        return queryset.filter(active=True)
+
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
 
@@ -189,7 +198,7 @@ class VehicleViewSet(viewsets.ModelViewSet):
 
 
 class MaintenanceViewSet(viewsets.ModelViewSet):
-    queryset = Maintenance.objects.select_related("vehicle", "status", "type", "workshop").all()
+    queryset = Maintenance.objects.select_related("vehicle", "status", "type", "workshop").filter(vehicle__active=True)
     serializer_class = MaintenanceSerializer
     filterset_fields = ["vehicle", "status", "type", "workshop"]
 
@@ -221,7 +230,7 @@ from .models import VehicleInspection
 from .serializers import VehicleInspectionSerializer
 
 class VehicleInspectionViewSet(viewsets.ModelViewSet):
-    queryset = VehicleInspection.objects.select_related("vehicle", "type", "status").all()
+    queryset = VehicleInspection.objects.select_related("vehicle", "type", "status").filter(vehicle__active=True)
     serializer_class = VehicleInspectionSerializer
     filterset_fields = ["vehicle", "type", "status"]
 
@@ -256,7 +265,7 @@ from .models import VehicleFine
 from .serializers import VehicleFineSerializer
 
 class VehicleFineViewSet(viewsets.ModelViewSet):
-    queryset = VehicleFine.objects.select_related("vehicle", "status").all()
+    queryset = VehicleFine.objects.select_related("vehicle", "status").filter(vehicle__active=True)
     serializer_class = VehicleFineSerializer
     filterset_fields = {"vehicle": ["exact"], "status": ["exact"], "date": ["exact", "gte", "lte"], "auto_number": ["exact", "icontains"]}
 

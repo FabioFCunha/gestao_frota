@@ -302,6 +302,7 @@ def open_maintenance(*, maintenance: Maintenance, user):
         return maintenance
         
     vehicle = maintenance.vehicle
+    ensure_vehicle_active(vehicle)
     
     # Previne múltiplas manutenções operacionais simultâneas.
     # "Aberta" e "Em andamento" ocupam a manuten??o operacional do veículo.
@@ -471,6 +472,7 @@ def assign_driver_to_vehicle(
     from django.utils import timezone
 
     sei_number = (sei_number or "").strip()
+    ensure_vehicle_active(vehicle)
 
     if sei_number and not custody_started_on:
         raise ValueError(
@@ -704,6 +706,7 @@ def record_vehicle_inspection(*, vehicle: Vehicle, type, status, user, inspector
     from .models import VehicleInspection, AuditLog
     from django.utils import timezone
     
+    ensure_vehicle_active(vehicle)
     if not date:
         date = timezone.now()
         
@@ -741,6 +744,7 @@ def record_vehicle_inspection(*, vehicle: Vehicle, type, status, user, inspector
 def create_vehicle_fine(*, vehicle: Vehicle, auto_number: str, agency: str, status, date, user, process_number: str = "", amount=None, due_date=None, notes: str = ""):
     from .models import VehicleFine, AuditLog, SEIProcessStatus
     
+    ensure_vehicle_active(vehicle)
     fine = VehicleFine.objects.create(
         vehicle=vehicle,
         auto_number=auto_number,
@@ -1104,7 +1108,7 @@ def get_dashboard_metrics(filters: dict) -> dict:
     from django.utils import timezone
     
     # 1. Base QuerySet for Vehicles
-    v_qs = Vehicle.objects.all()
+    v_qs = Vehicle.objects.filter(active=True)
     
     unit = filters.get("unit")
     base = filters.get("base")
