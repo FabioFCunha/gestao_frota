@@ -13,6 +13,7 @@ class User(AbstractUser):
     whatsapp = models.CharField("WhatsApp", max_length=30, blank=True)
     must_change_password = models.BooleanField("Exigir troca de senha", default=False)
     last_changed_at = models.DateTimeField(auto_now=True)
+    sectors = models.ManyToManyField('fleet.Sector', related_name='users', blank=True)
 
     @property
     def is_system_creator(self):

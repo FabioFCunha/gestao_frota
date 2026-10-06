@@ -36,6 +36,10 @@ class NamedModel(BaseModel):
         return self.name
 
 
+class Sector(NamedModel):
+    slug = models.SlugField(unique=True, max_length=50)
+
+
 class VehicleStatus(NamedModel):
     color = models.CharField(max_length=7, default="#64748B")
     class Meta(NamedModel.Meta):
@@ -136,6 +140,7 @@ class Vehicle(BaseModel):
     renter = models.ForeignKey(Renter, null=True, blank=True, on_delete=models.PROTECT)
     unit = models.ForeignKey(AdministrativeUnit, null=True, blank=True, on_delete=models.PROTECT)
     base = models.ForeignKey(Base, null=True, blank=True, on_delete=models.PROTECT)
+    sector = models.ForeignKey(Sector, null=True, blank=True, on_delete=models.PROTECT, related_name="vehicles")
     status = models.ForeignKey(VehicleStatus, on_delete=models.PROTECT)
     armored = models.BooleanField(default=False)
     custody_info = models.TextField(blank=True)
