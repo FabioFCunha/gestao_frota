@@ -249,7 +249,8 @@ def vehicle_list(request):
             Q(renavam__icontains=q) |
             Q(contract__number__icontains=q)
         ).distinct()
-    from apps.fleet.sector_scope import can_manage_vehicle_status\n    context = {"vehicles": qs[:50], "q": q, "active_filter": active_filter, "can_manage_vehicle_status": can_manage_vehicle_status(request.user)}
+    from apps.fleet.sector_scope import can_manage_vehicle_status
+    context = {"vehicles": qs[:50], "q": q, "active_filter": active_filter, "can_manage_vehicle_status": can_manage_vehicle_status(request.user)}
     return render(request, "ui/vehicle_list.html", context)
 
 
