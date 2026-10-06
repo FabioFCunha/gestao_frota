@@ -75,3 +75,4 @@ def validate_vehicle_scope(user, vehicle, requested_sector=None):
         from rest_framework.exceptions import PermissionDenied
 
         raise PermissionDenied("Veículo fora do setor autorizado para este usuário.")
+\n\ndef can_manage_vehicle_status(user):\n    """Permissão administrativa específica para gestão da situação das viaturas da ADM."""\n    if not user or not user.is_authenticated:\n        return False\n    if getattr(user, "is_system_creator", False) or user.is_superuser:\n        return True\n    return (\n        user.has_perm("fleet.manage_vehicle_status")\n        and user.sectors.filter(slug=ADM_SLUG).exists()\n    )\n
