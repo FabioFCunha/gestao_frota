@@ -26,9 +26,14 @@ def dashboard(request):
     from datetime import timedelta
     from apps.fleet.models import Vehicle, VehiclePlate, Maintenance, VehicleFine
     from apps.fleet.services import get_dashboard_metrics, get_operational_alerts
+    from apps.fleet.sector_scope import apply_sector_scope
 
-    metrics = get_dashboard_metrics({})
-    alerts = get_operational_alerts({})
+    requested_sector = request.GET.get("sector")
+    scoped_vehicles = apply_sector_scope(Vehicle.objects.all(), request.user, requested_sector)
+    scoped_vehicle_ids = scoped_vehicles.values_list("id", flat=True)
+
+    metrics = get_dashboard_metrics({"vehicle__in": scoped_vehicle_ids})
+    alerts = get_operational_alerts({"vehicle__in": scoped_vehicle_ids})
 
     today = timezone.now().date()
     fine_warning_date = today + timedelta(days=30)
@@ -37,13 +42,14 @@ def dashboard(request):
 
     active_maintenance_ids = set(
         Maintenance.objects
-        .filter(status__name__in=["Aberta", "Em andamento"])
+        .filter(status__name__in=["Aberta", "Em andamento"], vehicle_id__in=scoped_vehicle_ids)
         .values_list("vehicle_id", flat=True)
     )
 
     fine_due_ids = set(
         VehicleFine.objects
         .filter(
+            vehicle_id__in=scoped_vehicle_ids,
             due_date__isnull=False,
             due_date__gte=today,
             due_date__lte=fine_warning_date,
@@ -55,6 +61,7 @@ def dashboard(request):
     contract_attention_ids = set(
         Vehicle.objects
         .filter(
+            id__in=scoped_vehicle_ids,
             contract__isnull=False,
             contract__ends_on__lte=fine_warning_date,
             contract__ends_on__gte=today,
@@ -78,7 +85,7 @@ def dashboard(request):
     from apps.fleet.models import VehicleDriverAssignment, VehicleMileage
 
     vehicles = (
-        Vehicle.objects
+        scoped_vehicles
         .select_related("status", "contract", "brand", "model")
         .prefetch_related(
             "plate_history",
@@ -353,12 +360,14 @@ def vehicle_dossier(request, pk):
     from apps.fleet.models import Vehicle, VehiclePlate, VehicleMileage, VehicleCustody, VehicleExitOrder
     from django.shortcuts import get_object_or_404
 
+    from apps.fleet.sector_scope import validate_vehicle_scope
     vehicle = get_object_or_404(
         Vehicle.objects.select_related(
-            'status', 'brand', 'model', 'unit', 'base', 'renter', 'contract'
+            'status', 'brand', 'model', 'unit', 'base', 'renter', 'contract', 'sector'
         ),
         pk=pk
     )
+    validate_vehicle_scope(request.user, vehicle, request.GET.get("sector"))
     from apps.fleet.models import BDT
     from apps.fleet.utils import normalize_km
     from django.core.paginator import Paginator
