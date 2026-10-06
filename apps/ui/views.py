@@ -210,7 +210,6 @@ def dashboard(request):
 @login_required
 @module_permission("fleet.view_vehicle")
 def vehicle_list(request):
-    from apps.fleet.models import Vehicle
     from apps.fleet.models import Vehicle, VehicleDriverAssignment, VehicleCustody
 
     active_assignments = (
@@ -249,8 +248,24 @@ def vehicle_list(request):
             Q(renavam__icontains=q) |
             Q(contract__number__icontains=q)
         ).distinct()
-    from apps.fleet.sector_scope import can_manage_vehicle_status
-    context = {"vehicles": qs[:50], "q": q, "active_filter": active_filter, "can_manage_vehicle_status": can_manage_vehicle_status(request.user)}
+    from apps.fleet.sector_scope import (
+        allowed_sector_slugs,
+        can_manage_vehicle_status,
+    )
+
+    allowed_sectors = allowed_sector_slugs(request.user)
+    requested_sector = request.GET.get("sector")
+    show_sector_filter = allowed_sectors is None or len(allowed_sectors) > 1
+
+    context = {
+        "vehicles": qs[:50],
+        "q": q,
+        "active_filter": active_filter,
+        "can_manage_vehicle_status": can_manage_vehicle_status(request.user),
+        "allowed_sectors": allowed_sectors,
+        "requested_sector": requested_sector,
+        "show_sector_filter": show_sector_filter,
+    }
     return render(request, "ui/vehicle_list.html", context)
 
 
@@ -292,6 +307,7 @@ def vehicle_position_edit(request, pk):
         Vehicle.objects.select_related("sector", "brand", "model"),
         pk=pk,
     )
+    validate_vehicle_scope(request.user, vehicle, request.GET.get("sector"))
     if not request.user.is_system_creator and not request.user.is_superuser and (not vehicle.sector or vehicle.sector.slug != "adm"):
         raise PermissionDenied("O Administrador ADM só pode administrar viaturas atualmente alocadas à ADM.")
 
