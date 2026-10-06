@@ -195,6 +195,10 @@ class VehicleExitOrder(BaseModel):
 class VehicleDriverAssignment(BaseModel):
     vehicle = models.ForeignKey(Vehicle, on_delete=models.PROTECT, related_name="driver_assignments")
     driver = models.ForeignKey(Driver, on_delete=models.PROTECT, related_name="vehicle_assignments")
+    custody = models.ForeignKey(
+        "VehicleCustody", null=True, blank=True, on_delete=models.PROTECT,
+        related_name="assignments", verbose_name="Acautelamento",
+    )
     starts_on = models.DateTimeField(default=timezone.now)
     ends_on = models.DateTimeField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
@@ -212,11 +216,13 @@ class VehicleDriverAssignment(BaseModel):
 
 
 class VehicleCustody(BaseModel):
+    """Acautelamento por viatura; ``assignment`` preserva o responsável inicial legado."""
     assignment = models.ForeignKey(
         VehicleDriverAssignment,
         on_delete=models.PROTECT,
         related_name="custodies",
     )
+    vehicle = models.ForeignKey(Vehicle, on_delete=models.PROTECT, related_name="custodies")
     sei_number = models.CharField(
         "SEI do acautelamento",
         max_length=100,
@@ -233,6 +239,27 @@ class VehicleCustody(BaseModel):
         "Observações",
         blank=True,
     )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT,
+        related_name="vehicle_custodies_created",
+    )
+    ended_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT,
+        related_name="vehicle_custodies_ended",
+    )
+
+    class Meta:
+        ordering = ["-started_on", "-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["vehicle"], condition=Q(ended_on__isnull=True),
+                name="unique_open_custody_per_vehicle",
+            ),
+            models.CheckConstraint(
+                condition=Q(ended_on__isnull=True) | Q(ended_on__gte=models.F("started_on")),
+                name="custody_ended_on_after_started_on",
+            ),
+        ]
 
 class VehiclePlate(BaseModel):
     CURRENT, RESERVED = "CURRENT", "RESERVED"

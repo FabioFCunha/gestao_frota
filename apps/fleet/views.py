@@ -533,19 +533,76 @@ class VehicleCustodyViewSet(viewsets.ModelViewSet):
         queryset = super().get_queryset()
         return apply_sector_scope(queryset, self.request.user, self.request.query_params.get("sector"), "vehicle__sector")
     serializer_class = VehicleCustodySerializer
-    filterset_fields = {
-        "vehicle": ["exact"],
-        "kind": ["exact"],
-        "starts_on": ["exact", "gte", "lte"],
-        "ends_on": ["exact", "isnull"],
-    }
+    filterset_fields = {"vehicle": ["exact"], "sei_number": ["exact", "icontains"], "started_on": ["exact", "gte", "lte"], "ended_on": ["exact", "isnull"]}
 
-    def perform_create(self, serializer):
-        validate_vehicle_scope(self.request.user, serializer.validated_data.get("vehicle"), self.request.query_params.get("sector"))
-        serializer.save(created_by=self.request.user)
+    def _require(self, permission):
+        if not (self.request.user.is_superuser or self.request.user.has_perm(permission)):
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Permissão insuficiente para acautelamento.")
+
+    def create(self, request, *args, **kwargs):
+        from datetime import datetime
+        from rest_framework import status
+        from rest_framework.exceptions import ValidationError
+        from django.shortcuts import get_object_or_404
+        from .services import start_vehicle_custody
+        self._require("fleet.add_vehiclecustody")
+        vehicle = get_object_or_404(Vehicle, pk=request.data.get("vehicle"))
+        validate_vehicle_scope(request.user, vehicle, request.query_params.get("sector"))
+        from .models import Driver
+        driver = get_object_or_404(Driver, pk=request.data.get("responsible"))
+        try:
+            start_vehicle_custody(vehicle=vehicle, driver=driver, user=request.user,
+                sei_number=request.data.get("sei_number", ""),
+                started_on=datetime.fromisoformat(request.data.get("started_on")).date(),
+                notes=request.data.get("notes", ""))
+        except (TypeError, ValueError) as exc:
+            raise ValidationError(str(exc))
+        custody = VehicleCustody.objects.get(vehicle=vehicle, ended_on__isnull=True)
+        return Response(self.get_serializer(custody).data, status=status.HTTP_201_CREATED)
 
     def perform_destroy(self, instance):
         from rest_framework.exceptions import PermissionDenied
         raise PermissionDenied(
             "Registros de acautelamento não podem ser excluídos fisicamente."
         )
+
+    def update(self, request, *args, **kwargs):
+        from rest_framework.exceptions import PermissionDenied
+        raise PermissionDenied("Use transferência ou encerramento.")
+
+    partial_update = update
+
+    @action(detail=True, methods=["post"])
+    def transfer(self, request, pk=None):
+        from datetime import datetime
+        from django.shortcuts import get_object_or_404
+        from rest_framework.exceptions import ValidationError
+        from .models import Driver
+        from .services import transfer_vehicle_custody
+        self._require("fleet.change_vehiclecustody")
+        custody = self.get_object()
+        try:
+            moment = datetime.fromisoformat(request.data.get("transferred_at"))
+            assignment = transfer_vehicle_custody(custody=custody,
+                new_driver=get_object_or_404(Driver, pk=request.data.get("new_responsible")),
+                user=request.user, transferred_at=moment, notes=request.data.get("notes", ""))
+        except (TypeError, ValueError) as exc:
+            raise ValidationError(str(exc))
+        return Response({"assignment_id": str(assignment.id)})
+
+    @action(detail=True, methods=["post"])
+    def end(self, request, pk=None):
+        from datetime import datetime
+        from rest_framework.exceptions import ValidationError
+        from .services import end_vehicle_custody
+        self._require("fleet.change_vehiclecustody")
+        custody = self.get_object()
+        try:
+            end_vehicle_custody(custody=custody, user=request.user,
+                ended_on=datetime.fromisoformat(request.data.get("ended_on")).date(),
+                assignment_ended_at=datetime.fromisoformat(request.data.get("assignment_ended_at")),
+                notes=request.data.get("notes", ""))
+        except (TypeError, ValueError) as exc:
+            raise ValidationError(str(exc))
+        return Response({"status": "Acautelamento encerrado"})

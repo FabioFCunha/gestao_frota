@@ -243,6 +243,7 @@ def open_vehicle_exit_order(*, vehicle_id, driver, departed_at, destination, rea
 
     vehicle = Vehicle.objects.select_for_update().get(pk=vehicle_id)
     validate_vehicle_scope(user, vehicle)
+    vehicle = Vehicle.objects.select_for_update().get(pk=vehicle.pk)
     ensure_vehicle_active(vehicle)
     if VehicleExitOrder.objects.filter(vehicle=vehicle, state=VehicleExitOrder.State.PENDING).exists():
         raise ValueError("Esta viatura já possui uma OS pendente de retorno.")
@@ -494,7 +495,13 @@ def assign_driver_to_vehicle(
             "A data final da vigência do SEI não pode ser anterior à data inicial."
         )
 
-    current_assignment = vehicle.driver_assignments.filter(is_active=True).first()
+    open_custody = VehicleCustody.objects.select_for_update().filter(vehicle=vehicle, ended_on__isnull=True).first()
+    current_assignment = vehicle.driver_assignments.select_for_update().filter(is_active=True).first()
+
+    if open_custody:
+        if current_assignment and current_assignment.driver_id == driver.id:
+            return current_assignment
+        raise ValueError("O veículo está acautelado. Use a transferência com data e hora explícitas.")
 
     if current_assignment and current_assignment.driver_id == driver.id:
         return current_assignment
@@ -513,14 +520,6 @@ def assign_driver_to_vehicle(
             update_fields=["is_active", "ends_on", "updated_at"]
         )
 
-        VehicleCustody.objects.filter(
-            assignment=current_assignment,
-            ended_on__isnull=True,
-        ).update(
-            ended_on=now.date(),
-            updated_at=now,
-        )
-
     new_assignment = VehicleDriverAssignment.objects.create(
         vehicle=vehicle,
         driver=driver,
@@ -531,13 +530,13 @@ def assign_driver_to_vehicle(
     )
 
     if sei_number:
-        VehicleCustody.objects.create(
-            assignment=new_assignment,
-            sei_number=sei_number,
-            started_on=custody_started_on,
-            ended_on=custody_ended_on,
-            notes=notes,
+        custody = VehicleCustody.objects.create(
+            assignment=new_assignment, vehicle=vehicle, sei_number=sei_number,
+            started_on=custody_started_on, ended_on=custody_ended_on,
+            notes=notes, created_by=user,
         )
+        new_assignment.custody = custody
+        new_assignment.save(update_fields=["custody", "updated_at"])
 
     new_value = {"id": str(driver.id), "name": driver.name}
 
@@ -564,10 +563,102 @@ def assign_driver_to_vehicle(
     return new_assignment
 
 
+def _lock_custody_context(custody):
+    """Shared lock order: vehicle, custody, active assignment."""
+    vehicle = Vehicle.objects.select_for_update().get(pk=custody.vehicle_id)
+    custody = VehicleCustody.objects.select_for_update().get(pk=custody.pk, vehicle=vehicle)
+    assignment = VehicleDriverAssignment.objects.select_for_update().filter(vehicle=vehicle, is_active=True).first()
+    return vehicle, custody, assignment
+
+
+def get_open_vehicle_custody(vehicle):
+    return VehicleCustody.objects.filter(vehicle=vehicle, ended_on__isnull=True).first()
+
+
+@transaction.atomic
+def start_vehicle_custody(*, vehicle, driver, sei_number, started_on, user, notes=""):
+    from django.utils import timezone
+    sei_number = (sei_number or "").strip()
+    if not sei_number or not started_on:
+        raise ValueError("SEI e data de início são obrigatórios.")
+    if not driver.active:
+        raise ValueError("O responsável deve ser um motorista ativo.")
+    if started_on > timezone.localdate():
+        raise ValueError("A data de início não pode ser futura.")
+    vehicle = Vehicle.objects.select_for_update().get(pk=vehicle.pk)
+    ensure_vehicle_active(vehicle)
+    if VehicleCustody.objects.select_for_update().filter(vehicle=vehicle, ended_on__isnull=True).exists():
+        raise ValueError("A viatura já possui acautelamento aberto.")
+    current = VehicleDriverAssignment.objects.select_for_update().filter(vehicle=vehicle, is_active=True).first()
+    if current and current.driver_id != driver.id:
+        current.is_active, current.ends_on = False, timezone.now()
+        current.save(update_fields=["is_active", "ends_on", "updated_at"])
+        current = None
+    assignment = current or VehicleDriverAssignment.objects.create(vehicle=vehicle, driver=driver, starts_on=timezone.now(), is_active=True, assigned_by=user, notes=notes)
+    custody = VehicleCustody.objects.create(assignment=assignment, vehicle=vehicle, sei_number=sei_number, started_on=started_on, notes=notes, created_by=user)
+    assignment.custody = custody
+    assignment.save(update_fields=["custody", "updated_at"])
+    VehicleHistory.objects.create(vehicle=vehicle, field="custody", old_value=None, new_value={"sei": sei_number}, reason=notes, changed_by=user)
+    AuditLog.objects.create(user=user, module="acautelamentos", action="INÍCIO", entity_type="vehicle_custody", entity_id=custody.id, old_values=None, new_values={"sei": sei_number, "assignment_id": str(assignment.id)}, reason=notes)
+    return custody
+
+
+@transaction.atomic
+def transfer_vehicle_custody(*, custody, new_driver, user, transferred_at, notes=""):
+    from django.utils import timezone
+    if transferred_at is None or timezone.is_naive(transferred_at):
+        raise ValueError("A transferência exige data, hora e fuso horário explícitos.")
+    vehicle, custody, current = _lock_custody_context(custody)
+    if custody.ended_on or not new_driver.active:
+        raise ValueError("Acautelamento encerrado ou responsável inativo.")
+    if not current or current.custody_id != custody.id or current.driver_id == new_driver.id:
+        raise ValueError("Responsável atual inválido para transferência.")
+    if transferred_at > timezone.now() or timezone.localtime(transferred_at).date() < custody.started_on or transferred_at < current.starts_on:
+        raise ValueError("Data da transferência inválida.")
+    current.is_active, current.ends_on = False, transferred_at
+    current.save(update_fields=["is_active", "ends_on", "updated_at"])
+    assignment = VehicleDriverAssignment.objects.create(vehicle=vehicle, driver=new_driver, custody=custody,
+        starts_on=transferred_at, is_active=True, notes=(notes or "").strip(), assigned_by=user)
+    VehicleHistory.objects.create(vehicle=vehicle, field="driver", old_value={"id": str(current.driver_id)}, new_value={"id": str(new_driver.id)}, reason=notes, changed_by=user)
+    AuditLog.objects.create(user=user, module="acautelamentos", action="TRANSFERÊNCIA", entity_type="vehicle_custody", entity_id=custody.id, old_values={"assignment_id": str(current.id)}, new_values={"assignment_id": str(assignment.id), "transferred_at": transferred_at.isoformat()}, reason=notes)
+    return assignment
+
+
+@transaction.atomic
+def end_vehicle_custody(*, custody, user, ended_on, assignment_ended_at, notes=""):
+    from django.utils import timezone
+    if assignment_ended_at is None or timezone.is_naive(assignment_ended_at):
+        raise ValueError("O encerramento exige data, hora e fuso do responsável.")
+    vehicle, custody, current = _lock_custody_context(custody)
+    if custody.ended_on or ended_on < custody.started_on or ended_on > timezone.localdate():
+        raise ValueError("Data de encerramento inválida.")
+    if timezone.localtime(assignment_ended_at).date() != ended_on or assignment_ended_at > timezone.now():
+        raise ValueError("Horário de encerramento inválido.")
+    if current and current.custody_id not in (None, custody.id):
+        raise ValueError("O responsável ativo pertence a outro acautelamento.")
+    if current and current.custody_id == custody.id:
+        if assignment_ended_at < current.starts_on:
+            raise ValueError("O horário antecede a responsabilidade atual.")
+        current.is_active, current.ends_on = False, assignment_ended_at
+        current.save(update_fields=["is_active", "ends_on", "updated_at"])
+    custody.ended_on, custody.ended_by = ended_on, user
+    if notes:
+        custody.notes = f"{custody.notes}\n[Encerramento] {notes}".strip()
+        custody.save(update_fields=["ended_on", "ended_by", "notes", "updated_at"])
+    else:
+        custody.save(update_fields=["ended_on", "ended_by", "updated_at"])
+    VehicleHistory.objects.create(vehicle=vehicle, field="custody", old_value={"ended_on": None}, new_value={"ended_on": ended_on.isoformat()}, reason=notes, changed_by=user)
+    AuditLog.objects.create(user=user, module="acautelamentos", action="ENCERRAMENTO", entity_type="vehicle_custody", entity_id=custody.id, old_values={"ended_on": None}, new_values={"ended_on": ended_on.isoformat()}, reason=notes)
+    return custody
+
+
 @transaction.atomic
 def unassign_driver_from_vehicle(*, vehicle: Vehicle, user, notes: str = ""):
     from django.utils import timezone
-    current_assignment = vehicle.driver_assignments.filter(is_active=True).first()
+    vehicle = Vehicle.objects.select_for_update().get(pk=vehicle.pk)
+    if VehicleCustody.objects.select_for_update().filter(vehicle=vehicle, ended_on__isnull=True).exists():
+        raise ValueError("A viatura está acautelada; transfira ou encerre antes de desvincular.")
+    current_assignment = vehicle.driver_assignments.select_for_update().filter(is_active=True).first()
     
     if not current_assignment:
         return None

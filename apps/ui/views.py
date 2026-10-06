@@ -447,12 +447,7 @@ def vehicle_dossier(request, pk):
         .first()
     )
     active_driver = active_assignment.driver if active_assignment else None
-    active_custody = None
-    if active_assignment:
-        active_custody = next(
-            (custody for custody in active_assignment.ordered_custodies if custody.ended_on is None),
-            None,
-        )
+    active_custody = VehicleCustody.objects.filter(vehicle=vehicle, ended_on__isnull=True).first()
 
     # Parse structured notes
     notes = vehicle.notes or ''
@@ -493,36 +488,34 @@ def vehicle_dossier(request, pk):
         and normalize_km(bdt_latest_operational.ended_km) >= km_prox_revisao
     )
 
-    if request.method == 'POST' and request.POST.get('action') == 'add_custody':
+    if request.method == 'POST':
         from datetime import datetime
-        kind = request.POST.get('kind') or VehicleCustody.OUTRO
-        allowed_kinds = {value for value, _ in VehicleCustody.KIND_CHOICES}
-        reference = (request.POST.get('reference') or '').strip()
-        starts_on_raw = request.POST.get('starts_on') or ''
-        starts_on = None
-        if starts_on_raw:
+        from apps.fleet.models import Driver
+        from apps.fleet.services import start_vehicle_custody, transfer_vehicle_custody, end_vehicle_custody
+        action = request.POST.get('action')
+        permission = 'fleet.add_vehiclecustody' if action == 'start_custody' else 'fleet.change_vehiclecustody'
+        if action in {'start_custody', 'transfer_custody', 'end_custody'}:
+            if not (request.user.is_superuser or request.user.has_perm(permission)):
+                raise PermissionDenied
             try:
-                starts_on = datetime.fromisoformat(starts_on_raw)
-                if timezone.is_naive(starts_on):
-                    starts_on = timezone.make_aware(starts_on)
-            except ValueError:
-                starts_on = None
-        notes_custody = (request.POST.get('custody_notes') or '').strip()
-        if kind not in allowed_kinds:
-            messages.error(request, 'Tipo de registro inválido.')
-        elif not reference:
-            messages.error(request, 'Informe o SEI ou referência do acautelamento.')
-        else:
-            record = VehicleCustody(
-                vehicle=vehicle,
-                kind=kind,
-                reference=reference,
-                starts_on=starts_on or timezone.now(),
-                notes=notes_custody,
-                created_by=request.user,
-            )
-            record.save()
-            messages.success(request, 'Registro de SEI/acautelamento adicionado ao veículo.')
+                if action == 'start_custody':
+                    start_vehicle_custody(vehicle=vehicle, driver=Driver.objects.get(pk=request.POST.get('driver')),
+                        user=request.user, sei_number=request.POST.get('sei_number', ''),
+                        started_on=datetime.fromisoformat(request.POST.get('started_on')).date(),
+                        notes=request.POST.get('notes', ''))
+                elif action == 'transfer_custody':
+                    transfer_vehicle_custody(custody=active_custody,
+                        new_driver=Driver.objects.get(pk=request.POST.get('new_driver')), user=request.user,
+                        transferred_at=datetime.fromisoformat(request.POST.get('transferred_at')),
+                        notes=request.POST.get('notes', ''))
+                else:
+                    end_vehicle_custody(custody=active_custody, user=request.user,
+                        ended_on=datetime.fromisoformat(request.POST.get('ended_on')).date(),
+                        assignment_ended_at=datetime.fromisoformat(request.POST.get('assignment_ended_at')),
+                        notes=request.POST.get('notes', ''))
+                messages.success(request, 'Acautelamento atualizado com sucesso.')
+            except (Driver.DoesNotExist, TypeError, ValueError) as exc:
+                messages.error(request, str(exc))
             return redirect('vehicle_dossier', pk=vehicle.pk)
 
     context = {
@@ -541,6 +534,9 @@ def vehicle_dossier(request, pk):
         'active_driver': active_driver,
         'active_assignment': active_assignment,
         'active_custody': active_custody,
+        'all_drivers': __import__('apps.fleet.models', fromlist=['Driver']).Driver.objects.filter(active=True).order_by('name'),
+        'can_start_custody': request.user.is_superuser or request.user.has_perm('fleet.add_vehiclecustody'),
+        'can_change_custody': request.user.is_superuser or request.user.has_perm('fleet.change_vehiclecustody'),
         'motorista': motorista,
         'motorista_tel': motorista_tel,
         'oficina': oficina,
@@ -670,12 +666,7 @@ def contract_detail(request, pk):
             None,
         )
         assignment = vehicle.active_driver_assignments[0] if vehicle.active_driver_assignments else None
-        active_custody = None
-        if assignment:
-            active_custody = next(
-                (custody for custody in assignment.ordered_custodies if custody.ended_on is None),
-                None,
-            )
+        active_custody = VehicleCustody.objects.filter(vehicle=vehicle, ended_on__isnull=True).first()
 
         vehicle_rows.append({
             'vehicle': vehicle,

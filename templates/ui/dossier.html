@@ -142,6 +142,12 @@
             <li><strong>Contrato:</strong> {{ vehicle.contract.number }} (até {{ vehicle.contract.ends_on|date:"d/m/Y" }})</li>
             {% endif %}
         </ul>
+        {% if active_custody and can_change_custody %}
+        <form method="post">{% csrf_token %}<input type="hidden" name="action" value="transfer_custody"><select name="new_driver" required>{% for d in all_drivers %}<option value="{{ d.id }}">{{ d.name }}</option>{% endfor %}</select><input type="text" name="transferred_at" required placeholder="2026-10-06T14:30:00-03:00"><button type="submit">Transferir</button></form>
+        <form method="post">{% csrf_token %}<input type="hidden" name="action" value="end_custody"><input type="date" name="ended_on" required><input type="text" name="assignment_ended_at" required placeholder="2026-10-06T14:30:00-03:00"><button type="submit">Encerrar</button></form>
+        {% elif can_start_custody %}
+        <form method="post">{% csrf_token %}<input type="hidden" name="action" value="start_custody"><input name="sei_number" required placeholder="SEI"><input type="date" name="started_on" required><select name="driver" required>{% for d in all_drivers %}<option value="{{ d.id }}">{{ d.name }}</option>{% endfor %}</select><button type="submit">Iniciar acautelamento</button></form>
+        {% endif %}
         {% if obs_list %}
         <div style="margin-top:15px;padding:10px;background:#f9f9f9;border-radius:4px;">
             <strong>Observações:</strong>
