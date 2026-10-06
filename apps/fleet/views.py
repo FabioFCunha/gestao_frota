@@ -27,12 +27,20 @@ class DashboardAPIView(APIView):
             "renter": request.query_params.get("rental_company"),
             "status": request.query_params.get("vehicle_status"),
         }
+
+        from .sector_scope import apply_sector_scope
+        scoped_vehicle_ids = apply_sector_scope(
+            Vehicle.objects.all(),
+            request.user,
+            request.query_params.get("sector"),
+        ).values_list("id", flat=True)
         
         # Remove empty filters
         filters = {k: v for k, v in filters.items() if v}
         
         from .services import get_dashboard_metrics, get_operational_alerts
         
+        filters["vehicle__in"] = scoped_vehicle_ids
         metrics = get_dashboard_metrics(filters)
         alerts = get_operational_alerts(filters)
         
