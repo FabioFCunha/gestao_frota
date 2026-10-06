@@ -1167,6 +1167,7 @@ def driver_assign_vehicle(request, pk):
 
         if form.is_valid():
             try:
+                validate_vehicle_scope(request.user, form.cleaned_data['vehicle'], request.GET.get("sector"))
                 assign_driver_to_vehicle(
                     vehicle=form.cleaned_data['vehicle'],
                     driver=driver,
