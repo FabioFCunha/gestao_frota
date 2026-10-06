@@ -256,7 +256,9 @@ def vehicle_set_active(request, pk):
         raise PermissionDenied("Somente o Administrador ADM pode alterar a situação da viatura.")
     if request.method != "POST":
         raise Http404
-    vehicle = get_object_or_404(Vehicle, pk=pk)
+    vehicle = get_object_or_404(Vehicle.objects.select_related("sector"), pk=pk)
+    if not request.user.is_system_creator and not request.user.is_superuser and (not vehicle.sector or vehicle.sector.slug != "adm"):
+        raise PermissionDenied("O Administrador ADM só pode administrar viaturas atualmente alocadas à ADM.")
     active = request.POST.get("active") == "true"
     try:
         set_vehicle_active(vehicle=vehicle, active=active, user=request.user, reason=request.POST.get("reason", "").strip())
@@ -281,6 +283,8 @@ def vehicle_position_edit(request, pk):
         Vehicle.objects.select_related("sector", "brand", "model"),
         pk=pk,
     )
+    if not request.user.is_system_creator and not request.user.is_superuser and (not vehicle.sector or vehicle.sector.slug != "adm"):
+        raise PermissionDenied("O Administrador ADM só pode administrar viaturas atualmente alocadas à ADM.")
 
     initial = {"sector": vehicle.sector, "active": "true" if vehicle.active else "false"}
     if request.method == "POST":
