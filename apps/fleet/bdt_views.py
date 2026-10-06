@@ -4,7 +4,8 @@ from rest_framework.permissions import IsAuthenticated
 from uuid import UUID
 
 from .bdt_serializers import BDTSerializer
-from .models import BDT
+from .models import BDT, Vehicle
+from .sector_scope import apply_sector_scope
 
 
 class BDTViewSet(viewsets.ReadOnlyModelViewSet):
@@ -25,6 +26,7 @@ class BDTViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         qs = super().get_queryset()
+        qs = apply_sector_scope(qs, self.request.user, self.request.query_params.get("sector"), "vehicle__sector")
         # O filtro de atividade controla a listagem. No detalhe, o BDT
         # solicitado por PK deve continuar acessível mesmo quando a viatura
         # estiver inativa ou quando o BDT ainda não tiver viatura vinculada.
