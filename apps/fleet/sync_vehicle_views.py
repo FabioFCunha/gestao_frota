@@ -96,7 +96,7 @@ class VehicleSyncAPIView(APIView):
                     vehicle.color = data["color"]
                     update_fields.append("color")
 
-                if "management_name" in data:
+                if "management_name" in data and not vehicle.notes:
                     vehicle.notes = (
                         "Sincronizado do Horus. "
                         f"Gestao: {data['management_name']}"
@@ -191,3 +191,4 @@ class VehicleSyncAPIView(APIView):
                 else status.HTTP_200_OK
             ),
         )
+
