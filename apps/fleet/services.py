@@ -11,11 +11,17 @@ REVISION_INTERVAL_KM = 10_000
 REVISION_ALERT_KM = 3_000
 
 
+def get_vehicle_revision_interval(*, vehicle):
+    """Intervalo preventivo por marca, em quilômetros."""
+    brand_name = getattr(getattr(vehicle, "brand", None), "name", "") or ""
+    return 12_000 if brand_name.strip().casefold() == "byd" else REVISION_INTERVAL_KM
+
+
 def get_vehicle_revision_status(*, vehicle):
     """
     Calcula a situação da revisão preventiva do veículo.
 
-    A próxima revisão é sempre 10.000 km após a última revisão
+    A próxima revisão é 12.000 km para BYD e 10.000 km para as demais marcas após a última revisão
     efetivamente concluída e registrada com quilometragem.
 
     Apenas manutenções:
@@ -29,6 +35,8 @@ def get_vehicle_revision_status(*, vehicle):
     referência ``[KM_PROX_REVISAO]`` armazenada nas observações do veículo.
     """
     from .models import MaintenanceType, MaintenanceStatus, VehicleMileage
+
+    interval_km = get_vehicle_revision_interval(vehicle=vehicle)
 
     revision_type = MaintenanceType.objects.filter(
         name__iexact="Revisão",
@@ -90,7 +98,7 @@ def get_vehicle_revision_status(*, vehicle):
             if last_revision.completion_mileage is not None
             else last_revision.mileage
         )
-        next_revision_km = last_revision_km + REVISION_INTERVAL_KM
+        next_revision_km = last_revision_km + interval_km
         has_history = True
     else:
         legacy_reference = re.search(
@@ -103,7 +111,7 @@ def get_vehicle_revision_status(*, vehicle):
             has_history = False
         elif vehicle.revision_reference_km is not None:
             last_revision_km = vehicle.revision_reference_km
-            next_revision_km = last_revision_km + REVISION_INTERVAL_KM
+            next_revision_km = last_revision_km + interval_km
             has_history = False
         elif current_mileage is None:
             return {
@@ -120,6 +128,7 @@ def get_vehicle_revision_status(*, vehicle):
                 "km_remaining": None,
                 "status": "SEM_QUILOMETRAGEM",
                 "has_history": False,
+                "interval_km": interval_km,
             }
 
         else:
@@ -140,13 +149,16 @@ def get_vehicle_revision_status(*, vehicle):
                 "km_remaining": None,
                 "status": "SEM_HISTORICO",
                 "has_history": False,
+                "interval_km": interval_km,
                 "reference_initialization_required": True,
             }
 
-    km_remaining = next_revision_km - current_mileage
+    km_remaining = next_revision_km - current_mileage if current_mileage is not None else None
 
     if active_revision:
         status = "EM_REVISAO"
+    elif km_remaining is None:
+        status = "SEM_QUILOMETRAGEM"
     elif km_remaining <= 0:
         status = "DEVIDA"
     elif km_remaining <= REVISION_ALERT_KM:
@@ -170,6 +182,7 @@ def get_vehicle_revision_status(*, vehicle):
         "km_remaining": km_remaining,
         "status": status,
         "has_history": has_history,
+        "interval_km": interval_km,
     }
 
 
@@ -1585,3 +1598,4 @@ def change_vehicle_position(*, vehicle: Vehicle, sector, active: bool, user, rea
         reason=reason,
     )
     return vehicle
+

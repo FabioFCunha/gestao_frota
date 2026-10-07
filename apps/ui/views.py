@@ -165,6 +165,7 @@ def dashboard(request):
                 "status": revision["status"],
                 "km_prox_revisao": revision["next_revision_km"],
                 "km_faltando": revision["km_remaining"],
+                "interval_km": revision["interval_km"],
                 "ultrapassado": max(0, -revision["km_remaining"]) if revision["km_remaining"] is not None else 0
             }
         else:
@@ -776,6 +777,7 @@ def maintenance_list(request):
             'km_atual': revision['current_km'],
             'km_prox_revisao': revision['next_revision_km'],
             'km_faltando': revision['km_remaining'],
+            'revision_interval_km': revision['interval_km'],
             'revisao_status': revision['status'],
             'last_revision_km': revision['last_revision_km'],
             'has_history': revision['has_history'],
@@ -822,6 +824,7 @@ def revision_action(request, pk):
     from apps.fleet.models import Vehicle, Maintenance, MaintenanceType, MaintenanceStatus
     from apps.fleet.services import (
         get_vehicle_revision_status,
+        get_vehicle_revision_interval,
         open_maintenance,
         complete_maintenance,
         change_vehicle_status,
@@ -1042,7 +1045,7 @@ def revision_action(request, pk):
         else:
             messages.success(
                 request,
-                f'Revisão registrada. Próxima revisão calculada em {completion_mileage + 10000:,} km.'.replace(',', '.')
+                f'Revisão registrada. Próxima revisão calculada em {completion_mileage + get_vehicle_revision_interval(vehicle=vehicle):,} km.'.replace(',', '.')
             )
         return redirect('maintenance_list')
 
@@ -1097,7 +1100,7 @@ def revision_action(request, pk):
         if return_date:
             messages.success(
                 request,
-                f'Histórico atualizado. Próxima revisão: {last_revision_km + 10000:,} km.'.replace(',', '.')
+                f'Histórico atualizado. Próxima revisão: {last_revision_km + get_vehicle_revision_interval(vehicle=vehicle):,} km.'.replace(',', '.')
             )
         else:
             messages.success(request, 'Histórico salvo sem data de retorno. O veículo permanece EM REVISÃO.')
@@ -1699,3 +1702,4 @@ def exit_order_return(request, pk):
     else:
         form = VehicleExitOrderReturnForm()
     return render(request, 'ui/exit_order_return_form.html', {'form': form, 'order': order, 'plate': _exit_order_plate(order.vehicle)})
+
