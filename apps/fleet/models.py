@@ -80,6 +80,9 @@ class VehicleModel(NamedModel):
 
 
 class Driver(NamedModel):
+    sectors = models.ManyToManyField(
+        "Sector", related_name="drivers", blank=True, verbose_name="Setores",
+    )
     horus_user_id = models.UUIDField(
         null=True, blank=True, unique=True,
         help_text="ID do usuario na tabela users do Horus.",
@@ -365,6 +368,13 @@ class VehicleInspection(BaseModel):
     date = models.DateTimeField(default=timezone.now)
     type = models.ForeignKey(VehicleInspectionType, on_delete=models.PROTECT)
     status = models.ForeignKey(VehicleInspectionStatus, on_delete=models.PROTECT)
+    inspection_moment = models.CharField(
+        max_length=10,
+        choices=[("SAIDA", "Saída"), ("RETORNO", "Retorno"), ("AVULSA", "Vistoria avulsa")],
+        blank=True,
+        default="",
+    )
+    checklist = models.JSONField(default=dict, blank=True)
     inspector_name = models.CharField(max_length=150, blank=True)
     mileage = models.PositiveIntegerField(null=True, blank=True)
     notes = models.TextField(blank=True)
@@ -520,3 +530,4 @@ class AuditLog(models.Model):
     new_values = models.JSONField(null=True, blank=True)
     reason = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
