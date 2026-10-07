@@ -3,14 +3,15 @@ import uuid
 from django.test import TestCase
 from django.utils import timezone
 
-from .models import BDT, Vehicle, VehicleMileage, VehicleStatus
+from .models import BDT, Vehicle, VehicleMileage, VehicleStatus, Sector
 from .sync_bdt import sync_bdt_mileage
 
 
 class BDTMileageProjectionTests(TestCase):
     def setUp(self):
         status = VehicleStatus.objects.create(name="Ativo")
-        self.vehicle = Vehicle.objects.create(horus_fleet_id=uuid.uuid4(), status=status)
+        sector = Sector.objects.get(slug="adm")
+        self.vehicle = Vehicle.objects.create(horus_fleet_id=uuid.uuid4(), status=status, sector=sector)
 
     def make_bdt(self, started="0", ended="100", **kwargs):
         return BDT.objects.create(
@@ -38,4 +39,3 @@ class BDTMileageProjectionTests(TestCase):
         manual.refresh_from_db()
         self.assertEqual(manual.mileage, 999)
         self.assertFalse(BDT.objects.filter(vehicle=self.vehicle, ended_at__isnull=False).count() == 0)
-

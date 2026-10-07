@@ -14,6 +14,7 @@ from .forms import DriverForm, DriverVehicleAssignmentForm, VehicleForm, Vehicle
 from apps.accounts.forms import FleetAuthenticationForm
 from apps.accounts.decorators import module_permission
 from apps.fleet.models import VehiclePlate, Renter
+from apps.fleet.sector_scope import apply_sector_scope, validate_vehicle_scope
 
 class FleetLoginView(LoginView):
     template_name = "ui/login.html"
