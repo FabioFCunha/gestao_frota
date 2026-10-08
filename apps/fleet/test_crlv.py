@@ -25,7 +25,7 @@ class CRLVTests(TestCase):
         self.user = get_user_model().objects.create_user(username='crlv', password='x')
         self.user.user_permissions.add(Permission.objects.get(codename='change_vehicle'))
         self.status = VehicleStatus.objects.create(name='Operacional')
-        self.sector = Sector.objects.create(name='ADM', slug='adm')
+        self.sector, _ = Sector.objects.get_or_create(name='ADM', slug='adm')
         self.user.sectors.add(self.sector)
         self.vehicle = Vehicle.objects.create(status=self.status, sector=self.sector)
         VehiclePlate.objects.create(vehicle=self.vehicle, plate='ABC1D23', kind='CURRENT')
