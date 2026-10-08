@@ -295,7 +295,7 @@ def _extract_linearized_crlv_values(text):
         r"(\d+(?:\.\d+)?)\s+"
         r"([A-Z0-9*]+)\s+"
         r"(\d+(?:\.\d+)?)\s+"
-        r"\*\s+"
+        r"(\d+)\s+"
         r"(\d+P)\s+"
         r"(.+?)\s+"
         r"CS BRASIL FROTAS SA\s+"
@@ -315,11 +315,11 @@ def _extract_linearized_crlv_values(text):
         result["gross_weight"] = tail.group(7)
         result["motor"] = re.sub(r"[^A-Z0-9]", "", tail.group(8))
         result["cmt"] = tail.group(9)
-        result["axles"] = ""
-        result["seating"] = tail.group(10)
-        result["bodywork"] = _clean_text(tail.group(11))
+        result["axles"] = tail.group(10)
+        result["seating"] = tail.group(11)
+        result["bodywork"] = _clean_text(tail.group(12))
         result["owner_name"] = "CS BRASIL FROTAS SA"
-        result["owner_document"] = tail.group(12)
+        result["owner_document"] = tail.group(13)
 
     # O padrão acima cobre o CRLV real. Para outros proprietários, preservamos
     # apenas campos seguros já identificados pelas heurísticas gerais.
