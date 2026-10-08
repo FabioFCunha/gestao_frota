@@ -203,11 +203,19 @@ def extract_crlv_data(file_obj):
 
     manufacture_year = None
     model_year = None
+    if plate:
+        compact_years = re.search(
+            r"\b" + re.escape(plate) + r"\s+(20\d{2})\s+(20\d{2})\s+(20\d{2})\b",
+            compact,
+        )
+        if compact_years:
+            manufacture_year = int(compact_years.group(2))
+            model_year = int(compact_years.group(3))
     m = re.search(r"ANO FABRICA[CÇ][AÃ]O\D{0,500}(20\d{2})", upper)
-    if m:
+    if m and manufacture_year is None:
         manufacture_year = int(m.group(1))
     m = re.search(r"ANO MODELO\D{0,500}(20\d{2})", upper)
-    if m:
+    if m and model_year is None:
         model_year = int(m.group(1))
 
     if manufacture_year is None and len(years) >= 2:
