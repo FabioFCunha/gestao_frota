@@ -1278,6 +1278,166 @@ def confirm_crlv(*, vehicle, document, plate, renavam, chassi='', exercise, user
     AuditLog.objects.create(user=user,module='crlv',action='CONFIRMAÇÃO DE CRLV',entity_type='vehicle',entity_id=vehicle.id,old_values=old,new_values=new)
     return record
 
+
+@transaction.atomic
+def stage_crlv_document_for_creation(*, file_obj, user):
+    """Recebe um CRLV antes de existir um veículo e prepara a conferência."""
+    from .models import Document, DocumentVersion, DocumentStatus, DocumentType, AuditLog
+    from .crlv import extract_crlv_data
+    import mimetypes
+
+    ext = file_obj.name.rsplit(".", 1)[-1].lower() if "." in file_obj.name else ""
+    if ext not in {"pdf", "jpg", "jpeg", "png"}:
+        raise ValueError("CRLV deve ser PDF, JPG ou PNG.")
+    if file_obj.size > getattr(settings, "DOCUMENT_MAX_UPLOAD_SIZE", 10 * 1024 * 1024):
+        raise ValueError("O arquivo excede o limite permitido.")
+
+    typ, _ = DocumentType.objects.get_or_create(name="CRLV", defaults={"active": True})
+    status, _ = DocumentStatus.objects.get_or_create(name="Ativo", defaults={"active": True})
+    document = Document.objects.create(
+        title=f"CRLV - {file_obj.name}",
+        document_type=typ,
+        status=status,
+        created_by=user,
+    )
+    DocumentVersion.objects.create(
+        document=document,
+        file=file_obj,
+        original_filename=file_obj.name,
+        file_extension=ext,
+        mime_type=mimetypes.guess_type(file_obj.name)[0] or "application/octet-stream",
+        file_size=file_obj.size,
+        uploaded_by=user,
+    )
+    data = extract_crlv_data(file_obj)
+    AuditLog.objects.create(
+        user=user,
+        module="crlv",
+        action="CRLV PARA INCLUSÃO DE VEÍCULO",
+        entity_type="document",
+        entity_id=document.id,
+        new_values=data,
+    )
+    return document, data
+
+
+@transaction.atomic
+def create_vehicle_from_crlv(*, document, plate, renavam="", chassi="", exercise=None,
+                             brand="", model="", color="", sector=None, status=None,
+                             user=None, extracted_data=None):
+    """Cria a viatura a partir do CRLV revisado e preserva o documento como histórico."""
+    from .models import (
+        Vehicle, VehiclePlate, VehicleCRLV, VehicleHistory,
+        Brand, VehicleModel, AuditLog,
+    )
+    from .crlv import normalize_plate, normalize_renavam, normalize_chassi
+
+    plate = normalize_plate(plate)
+    renavam = normalize_renavam(renavam)
+    raw_chassi = str(chassi or "").strip()
+    chassi = normalize_chassi(raw_chassi)
+    brand_name = " ".join(str(brand or "").split()).strip()
+    model_name = " ".join(str(model or "").split()).strip()
+
+    if len(plate) != 7:
+        raise ValueError("Informe uma placa válida.")
+    if raw_chassi and not chassi:
+        raise ValueError("O chassi informado deve conter exatamente 17 caracteres alfanuméricos válidos.")
+    try:
+        exercise = int(exercise)
+    except (TypeError, ValueError):
+        raise ValueError("Informe o exercício do CRLV.")
+    if not brand_name or not model_name:
+        raise ValueError("Marca e modelo são obrigatórios para incluir o veículo.")
+    if not sector or not status:
+        raise ValueError("Setor e situação são obrigatórios para incluir o veículo.")
+
+    from .models import Document, DocumentType
+    if document.document_type.name.casefold() != "crlv":
+        raise ValueError("O documento informado não é um CRLV.")
+    if VehicleCRLV.objects.filter(document=document).exists():
+        raise ValueError("Este CRLV já foi confirmado.")
+
+    if VehiclePlate.objects.filter(plate__iexact=plate, ends_on__isnull=True, kind=VehiclePlate.CURRENT).exists():
+        raise ValueError("Esta placa já está vinculada a outra viatura ativa.")
+    if renavam and Vehicle.objects.filter(renavam=renavam).exists():
+        raise ValueError("Este RENAVAM já pertence a outra viatura.")
+    if chassi and Vehicle.objects.filter(chassi=chassi).exists():
+        raise ValueError("Este chassi já pertence a outra viatura.")
+
+    aliases = {
+        "CHEV": "Chevrolet", "GM": "Chevrolet",
+        "VW": "Volkswagen", "I/": "Importado",
+        "MB": "Mercedes-Benz", "M.BENZ": "Mercedes-Benz",
+    }
+    normalized_brand = aliases.get(brand_name.upper(), brand_name)
+    brand_obj = Brand.objects.filter(name__iexact=normalized_brand).first()
+    if not brand_obj:
+        brand_obj = Brand.objects.create(name=normalized_brand)
+
+    model_obj = VehicleModel.objects.filter(brand=brand_obj, name__iexact=model_name).first()
+    if not model_obj:
+        model_obj = VehicleModel.objects.create(brand=brand_obj, name=model_name)
+
+    vehicle = Vehicle.objects.create(
+        brand=brand_obj,
+        model=model_obj,
+        color=color or "",
+        renavam=renavam or None,
+        chassi=chassi or None,
+        crlv_exercise=exercise,
+        sector=sector,
+        status=status,
+        created_by=user,
+    )
+    VehiclePlate.objects.create(
+        vehicle=vehicle,
+        plate=plate,
+        kind=VehiclePlate.CURRENT,
+        starts_on=timezone.now(),
+        changed_by=user,
+    )
+    link_document(document=document, obj=vehicle, user=user)
+
+    record = VehicleCRLV.objects.create(
+        vehicle=vehicle,
+        document=document,
+        plate=plate,
+        renavam=renavam,
+        chassi=chassi,
+        exercise=exercise,
+        extracted_data=extracted_data or {},
+        confirmed_by=user,
+    )
+    VehicleHistory.objects.create(
+        vehicle=vehicle,
+        field="crlv",
+        old_value=None,
+        new_value={
+            "renavam": vehicle.renavam,
+            "chassi": vehicle.chassi,
+            "crlv_exercise": vehicle.crlv_exercise,
+            "document_id": str(document.id),
+        },
+        reason=f"Veículo incluído a partir do CRLV exercício {exercise}.",
+        changed_by=user,
+    )
+    AuditLog.objects.create(
+        user=user,
+        module="crlv",
+        action="INCLUSÃO DE VEÍCULO POR CRLV",
+        entity_type="vehicle",
+        entity_id=vehicle.id,
+        new_values={
+            "vehicle_id": str(vehicle.id),
+            "plate": plate,
+            "renavam": renavam,
+            "chassi": chassi,
+            "exercise": exercise,
+        },
+    )
+    return vehicle, record
+
 def get_crlv_alerts(vehicles, today=None):
     from .models import LicensingCalendar
     from .crlv import normalize_plate
