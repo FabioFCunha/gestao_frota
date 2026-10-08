@@ -53,7 +53,33 @@
       {% csrf_token %}
       {{ confirm_form.non_field_errors }}
       {{ confirm_form.document_id }}
-      {{ confirm_form.as_p }}
+
+      {% for field in confirm_form %}
+        {% if field.name != "document_id" %}
+          <p>
+            {{ field.label_tag }}
+            {% if field.name == "plate" %}
+              <input type="text" name="{{ field.html_name }}" value="{{ field.value|default:preview.plate }}" class="form-input" readonly>
+            {% elif field.name == "renavam" %}
+              <input type="text" name="{{ field.html_name }}" value="{{ field.value|default:preview.renavam }}" class="form-input">
+            {% elif field.name == "chassi" %}
+              <input type="text" name="{{ field.html_name }}" value="{{ field.value|default:preview.chassi }}" class="form-input" maxlength="17">
+            {% elif field.name == "exercise" %}
+              <input type="number" name="{{ field.html_name }}" value="{{ field.value|default:preview.exercise }}" class="form-input" min="2000" max="2100">
+            {% elif field.name == "brand" %}
+              <input type="text" name="{{ field.html_name }}" value="{{ field.value|default:preview.brand_raw }}" class="form-input">
+            {% elif field.name == "model" %}
+              <input type="text" name="{{ field.html_name }}" value="{{ field.value|default:preview.model_raw }}{% if not field.value %}{% if preview.version %} {{ preview.version }}{% endif %}{% endif %}" class="form-input">
+            {% elif field.name == "color" %}
+              <input type="text" name="{{ field.html_name }}" value="{{ field.value|default:preview.color }}" class="form-input">
+            {% else %}
+              {{ field }}
+            {% endif %}
+            {% for error in field.errors %}<span class="error">{{ error }}</span>{% endfor %}
+          </p>
+        {% endif %}
+      {% endfor %}
+
       <div style="display:flex;gap:10px;flex-wrap:wrap;">
         <button class="primary-action" type="submit">Confirmar e incluir veículo</button>
         <a class="secondary-action" href="{% url 'vehicle_create' %}">Enviar outro CRLV</a>
