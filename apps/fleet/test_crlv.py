@@ -78,6 +78,40 @@ class CRLVTests(TestCase):
         self.assertEqual(alerts['calendar_missing'][0]['exercise'], 2027)
 
     @patch("apps.fleet.crlv._all_text")
+    def test_extracts_crlv_linearized_values(self, all_text):
+        all_text.return_value = """
+        CÓDIGO RENAVAM PLACA EXERCÍCIO ANO FABRICAÇÃO ANO MODELO NÚMERO DO CRV
+        CATEGORIA CAPACIDADE POTÊNCIA/CILINDRADA PESO BRUTO TOTAL CMT EIXOS LOTAÇÃO
+        MOTOR CARROCERIA NOME CPF / CNPJ LOCAL DATA
+        MARCA / MODELO / VERSÃO ESPÉCIE / TIPO COR PREDOMINANTE COMBUSTÍVEL
+        01234567890 ABC1D23 2026 2025 2026 123456789012
+        CHEV/ONIX 10TMT HB PASSAGEIRO AUTOMOVEL
+        9BWZZZ377VT004251 BRANCA ALCOOL/GASOLINA PARTICULAR
+        115CV/1000 1.4 L4G*252585140* 1.4 * 05P
+        NÃO APLICAVEL
+        EMPRESA TESTE LTDA 12.345.678/0001-90 RIO DE JANEIRO RJ 20/10/2026
+        """
+        upload = SimpleUploadedFile("crlv.pdf", b"%PDF", content_type="application/pdf")
+        data = extract_crlv_data(upload)
+        self.assertEqual(data["brand_raw"], "CHEV")
+        self.assertEqual(data["model_raw"], "ONIX")
+        self.assertEqual(data["version"], "10TMT HB")
+        self.assertEqual(data["renavam"], "01234567890")
+        self.assertEqual(data["crv_number"], "123456789012")
+        self.assertEqual(data["vehicle_type"], "PASSAGEIRO AUTOMOVEL")
+        self.assertEqual(data["color"], "BRANCA")
+        self.assertEqual(data["fuel"], "ALCOOL/GASOLINA")
+        self.assertEqual(data["category"], "PARTICULAR")
+        self.assertEqual(data["power_cylinder"], "115CV/1000")
+        self.assertEqual(data["gross_weight"], "1.4")
+        self.assertEqual(data["motor"], "L4G252585140")
+        self.assertEqual(data["cmt"], "1.4")
+        self.assertEqual(data["seating"], "05P")
+        self.assertEqual(data["bodywork"], "NÃO APLICAVEL")
+        self.assertEqual(data["location"], "RIO DE JANEIRO RJ")
+        self.assertEqual(data["issue_date"], "20/10/2026")
+
+    @patch("apps.fleet.crlv._all_text")
     def test_extracts_crlv_digital_layout_maximum_data(self, all_text):
         all_text.return_value = """
         CÓDIGO RENAVAM PLACA EXERCÍCIO ANO FABRICAÇÃO ANO MODELO NÚMERO DO CRV
@@ -97,7 +131,7 @@ class CRLVTests(TestCase):
         upload = SimpleUploadedFile("crlv.pdf", b"%PDF", content_type="application/pdf")
         data = extract_crlv_data(upload)
         self.assertEqual(data["plate"], "TTO8A04")
-        self.assertEqual(data["renavam"], "90048500446")
+        self.assertEqual(data["renavam"], "01455165457")
         self.assertEqual(data["chassi"], "9BGEA48H0TG145235")
         self.assertEqual(data["exercise"], 2025)
         self.assertEqual(data["manufacture_year"], 2025)

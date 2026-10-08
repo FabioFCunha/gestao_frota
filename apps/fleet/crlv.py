@@ -176,6 +176,18 @@ def _plate_candidates(text):
 
 def _extract_renavam(text):
     upper = text.upper()
+
+    # No CRLV-e linearizado, o RENAVAM aparece imediatamente antes da
+    # placa no bloco de identificação. Isso evita confundi-lo com o CRV.
+    plates = re.findall(r"\b[A-Z]{3}[0-9][A-Z0-9][0-9]{2}\b", upper)
+    for plate in plates:
+        match = re.search(
+            r"\b(\d{11})\s+" + re.escape(plate) +
+            r"\s+20\d{2}\s+20\d{2}\s+20\d{2}\b",
+            upper,
+        )
+        if match:
+            return match.group(1), [match.group(1)]
     contextual = re.findall(r"RENAVAM\D{0,500}([0-9][0-9 .-]{9,14})", upper)
     contextual_digits = []
     for value in contextual:
@@ -236,6 +248,155 @@ def _extract_vehicle_description(text):
     version = " ".join(parts[1:]) if len(parts) > 1 else ""
     return brand_code, model, version
 
+
+
+def _extract_linearized_layout_values(compact):
+    """Recupera valores quando o extrator PDF separa os rótulos dos valores.
+
+    Alguns CRLV-e geram um texto linearizado em que todos os rótulos aparecem
+    primeiro e os valores correspondentes somente depois. Nesse formato,
+    extrair apenas o texto entre dois rótulos captura os próprios rótulos em
+    vez dos dados. As expressões abaixo usam os padrões semânticos e os
+    valores fortemente identificáveis do leiaute oficial.
+    """
+    data = {}
+
+    # MARCA/MODELO/VERSÃO: ex. CHEV/ONIX 10TMT HB, VW/17.210 CRM 4X2.
+    vehicle_match = re.search(
+        r"\b([A-Z]{2,8})/([A-Z0-9][A-Z0-9.-]{1,24})(?:\s+([A-Z0-9][A-Z0-9./-]*(?:\s+[A-Z0-9][A-Z0-9./-]*){0,4}))?"
+        r"\s+(?=(?:PASSAGEIRO|ESPECIAL|CARGA|MISTO|UTILITARIO|UTILITÁRIO|MOTOCICLETA|CICLOMOTOR|TRATOR|REBOQUE|SEMI-REBOQUE))",
+        compact,
+    )
+    if vehicle_match:
+        data["brand_raw"] = vehicle_match.group(1)
+        data["model_raw"] = vehicle_match.group(2)
+        data["version"] = _clean_text(vehicle_match.group(3) or "")
+
+    known_vehicle_types = (
+        "PASSAGEIRO AUTOMOVEL", "PASSAGEIRO AUTOMÓVEL", "ESPECIAL CAMINHONETE",
+        "ESPECIAL CAMINHAO", "ESPECIAL CAMINHÃO", "CARGA CAMINHAO",
+        "CARGA CAMINHÃO", "CARGA CAMINHONETE", "MISTO", "MOTOCICLETA",
+        "CICLOMOTOR", "REBOQUE", "SEMI-REBOQUE",
+    )
+    for value in known_vehicle_types:
+        if value in compact:
+            data["vehicle_type"] = value
+            break
+
+    known_colors = (
+        "BRANCA", "PRETA", "PRATA", "CINZA", "VERMELHA", "AZUL",
+        "VERDE", "AMARELA", "MARROM", "BEGE", "DOURADA",
+    )
+    for value in known_colors:
+        if re.search(r"\b" + re.escape(value) + r"\b", compact):
+            data["color"] = value
+            break
+
+    known_fuels = (
+        "GASOLINA/ALCOOL/ELETRICO", "GASOLINA/ÁLCOOL/ELÉTRICO",
+        "ALCOOL/GASOLINA", "ÁLCOOL/GASOLINA", "GASOLINA",
+        "ALCOOL", "ÁLCOOL", "DIESEL", "ELETRICO", "ELÉTRICO", "FLEX", "GNV",
+    )
+    for value in known_fuels:
+        if value in compact:
+            data["fuel"] = value
+            break
+
+    known_categories = ("PARTICULAR", "ALUGUEL", "OFICIAL", "APRENDIZAGEM", "EXPERIENCIA", "EXPERIÊNCIA")
+    for value in known_categories:
+        if re.search(r"\b" + re.escape(value) + r"\b", compact):
+            data["category"] = value
+            break
+
+    power_match = re.search(r"\b(\d{2,3}CV/\d{3,5})\b\s+(\d+(?:\.\d+)?)", compact)
+    if power_match:
+        data["power_cylinder"] = power_match.group(1)
+        data["gross_weight"] = power_match.group(2)
+
+    motor_match = re.search(r"\b(L[A-Z0-9*]{6,24})(?=\s+)(?:\s+)(\d+(?:\.\d+)?)\s+\*?\s+(\d{1,2}P)\b", compact)
+    if motor_match:
+        data["motor"] = motor_match.group(1).replace("*", "")
+        data["cmt"] = motor_match.group(2)
+        data["seating"] = motor_match.group(3)
+
+    if "motor" not in data:
+        motor_match = re.search(r"\b(L[A-Z0-9*]{6,24})\b", compact)
+        if motor_match:
+            candidate = motor_match.group(1).replace("*", "")
+            if len(candidate) >= 8:
+                data["motor"] = candidate
+
+    # No leiaute linearizado, o CMT aparece semanticamente após o
+    # identificador do motor e antes da lotação. Nunca aceitar identificadores
+    # longos (RENAVAM/CRV) como CMT.
+    cmt_semantic = re.search(
+        r"\bL[A-Z0-9*]{6,24}(?=\s+)\s+(\d+(?:\.\d+)?)\s+\*?\s+\d{1,2}P\b",
+        compact,
+    )
+    if cmt_semantic:
+        data["cmt"] = cmt_semantic.group(1)
+    elif "cmt" not in data:
+        cmt_match = re.search(r"\bCMT\b.*?\b(\d+(?:\.\d+)?)\b", compact)
+        if cmt_match and len(re.sub(r"\D", "", cmt_match.group(1))) <= 4:
+            data["cmt"] = cmt_match.group(1)
+
+    if "axles" not in data:
+        axles_match = re.search(
+            r"\bEIXOS\b.*?\b(\d{1,2})\b.*?\bLOTA[CÇ][AÃ]O\b.*?\b(\d{1,2}P)\b",
+            compact,
+        )
+        if axles_match:
+            data["axles"] = axles_match.group(1)
+            data["seating"] = data.get("seating") or axles_match.group(2)
+
+    if "seating" not in data:
+        seating_match = re.search(r"\b(\d{1,2}P)\b", compact)
+        if seating_match:
+            data["seating"] = seating_match.group(1)
+
+    body_values = (
+        "NÃO APLICAVEL", "NAO APLICAVEL", "ABERTA/CABINE DUPLA",
+        "MEC OPERAC/C ESTENDIDA", "MEC. OPERAC/C ESTENDIDA",
+        "MECANISMO OPERACIONAL/CAB. LINEAR",
+    )
+    for value in body_values:
+        if value in compact:
+            data["bodywork"] = value
+            break
+
+    cnpj_match = re.search(r"\b\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}\b", compact)
+    if cnpj_match:
+        data["owner_document"] = cnpj_match.group(0)
+        before = compact[:cnpj_match.start()].rstrip()
+        # O nome do proprietário normalmente é o bloco imediatamente anterior
+        # ao CNPJ, após os campos técnicos do CRLV.
+        name_match = re.search(
+            r"(?:NOME\s+)?([A-ZÀ-Ú][A-ZÀ-Ú0-9 .&/-]{3,100})$",
+            before,
+        )
+        if name_match:
+            candidate = _clean_text(name_match.group(1))
+            if not any(label in candidate for label in ("CARROCERIA", "MOTOR", "LOTAÇÃO", "CMT", "NÚMERO")):
+                data["owner_name"] = candidate
+
+    # Em textos linearizados o local/data continuam sendo um par fortemente
+    # identificável.
+    local_match = re.search(
+        r"\b([A-ZÀ-Ú][A-ZÀ-Ú .'-]{2,45}\s+[A-Z]{2})\s+(\d{2}/\d{2}/\d{4})\b",
+        compact,
+    )
+    if local_match:
+        data["location"] = _clean_text(local_match.group(1))
+        data["issue_date"] = local_match.group(2)
+
+    obs_match = re.search(
+        r"(BENEF\.\s*TRIBUTARIO|BENEF\.\s*TRIBUTÁRIO|ALIENA[CÇ][AÃ]O FIDUCI[AÁ]RIA|SEM OBSERVA[CÇ][OÕ]ES)(.{0,160})",
+        compact,
+    )
+    if obs_match:
+        data["observation"] = _clean_text(obs_match.group(0))
+
+    return data
 
 def extract_crlv_data(file_obj):
     name = (getattr(file_obj, "name", "") or "").lower()
@@ -298,6 +459,13 @@ def extract_crlv_data(file_obj):
         model_year = years[1]
 
     brand_code, model_raw, version = _extract_vehicle_description(upper)
+    linearized = _extract_linearized_layout_values(compact)
+    # Quando o PDF separa rótulos e valores, o parser por janela pode
+    # devolver os próprios rótulos. O padrão semântico acima tem prioridade.
+    if linearized.get("brand_raw"):
+        brand_code = linearized["brand_raw"]
+        model_raw = linearized.get("model_raw", model_raw)
+        version = linearized.get("version", version)
 
     colors = ["BRANCA", "PRETA", "PRATA", "CINZA", "VERMELHA", "AZUL", "VERDE", "AMARELA", "MARROM", "BEGE", "DOURADA"]
     fuels = ["ALCOOL/GASOLINA", "GASOLINA/ALCOOL/ELETRICO", "GASOLINA", "ALCOOL", "DIESEL", "ELETRICO", "FLEX", "GNV"]
@@ -438,12 +606,33 @@ def extract_crlv_data(file_obj):
         if m:
             local, issue_date = _clean_text(m.group(1)), m.group(2)
 
+    # Completa os campos que vieram em branco no texto linearizado.
+    color = color or linearized.get("color", "")
+    fuel = fuel or linearized.get("fuel", "")
+    category = category or linearized.get("category", "")
+    vehicle_type = vehicle_type or linearized.get("vehicle_type", "")
+    power_cc = power_cc or linearized.get("power_cylinder", "")
+    gross_weight = gross_weight or linearized.get("gross_weight", "")
+    motor = motor or linearized.get("motor", "")
+    if not re.fullmatch(r"\d+(?:\.\d+)?", cmt or "") or len(re.sub(r"\D", "", cmt or "")) > 4:
+        cmt = linearized.get("cmt", "") or cmt
+    else:
+        cmt = cmt or linearized.get("cmt", "")
+    axles = axles or linearized.get("axles", "")
+    seating = seating if re.fullmatch(r"\d{1,2}P", seating or "") else linearized.get("seating", "")
+    body = body if body and "INFORMAÇÕES DO SEGURO" not in body else linearized.get("bodywork", "")
+    cnpj = cnpj or linearized.get("owner_document", "")
+    owner = owner if owner and "CÓDIGO" not in owner else linearized.get("owner_name", "")
+    local = local or linearized.get("location", "")
+    issue_date = issue_date or linearized.get("issue_date", "")
+
     observation = ""
-    for marker in ["BENEF. TRIBUTARIO", "ALIENAÇÃO FIDUCIÁRIA", "ALIENACAO FIDUCIARIA", "SEM OBSERVAÇÕES", "SEM OBSERVACOES"]:
+    for marker in ["BENEF. TRIBUTARIO", "BENEF. TRIBUTÁRIO", "ALIENAÇÃO FIDUCIÁRIA", "ALIENACAO FIDUCIARIA", "SEM OBSERVAÇÕES", "SEM OBSERVACOES"]:
         if marker in upper:
             pos = upper.find(marker)
             observation = _clean_text(upper[pos:pos + 180])
             break
+    observation = observation or linearized.get("observation", "")
 
     extracted = {
         "plate": plate,
