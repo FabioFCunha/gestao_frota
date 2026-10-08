@@ -411,7 +411,13 @@ def vehicle_crlv(request, pk):
                     or not document.relations.filter(content_type=vehicle_type, object_id=vehicle.id).exists()
                 ):
                     raise ValueError("O documento informado não é um CRLV vinculado a este veículo.")
-                confirm_crlv(vehicle=vehicle, document=document, user=request.user, extracted_data=preview or {}, **data)
+                extraction_audit = AuditLog.objects.filter(
+                    entity_type="document",
+                    entity_id=document.id,
+                    action="ANEXO DE CRLV PARA CONFERÊNCIA",
+                ).order_by("-created_at").first()
+                extracted_data = extraction_audit.new_values if extraction_audit else {}
+                confirm_crlv(vehicle=vehicle, document=document, user=request.user, extracted_data=extracted_data, **data)
             except (Document.DoesNotExist, ValueError) as exc:
                 confirm_form.add_error(None, str(exc))
             else:
