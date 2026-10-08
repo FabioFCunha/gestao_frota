@@ -446,7 +446,7 @@ def licensing_calendar(request):
 @module_permission("fleet.view_vehicle")
 def vehicle_dossier(request, pk):
     import re
-    from apps.fleet.models import Vehicle, VehiclePlate, VehicleMileage, VehicleCustody, VehicleExitOrder
+    from apps.fleet.models import Vehicle, VehiclePlate, VehicleMileage, VehicleCustody, VehicleExitOrder, VehicleCRLV
     from django.shortcuts import get_object_or_404
 
     from apps.fleet.sector_scope import validate_vehicle_scope
@@ -518,6 +518,7 @@ def vehicle_dossier(request, pk):
     )
     active_driver = active_assignment.driver if active_assignment else None
     active_custody = VehicleCustody.objects.filter(vehicle=vehicle, ended_on__isnull=True).first()
+    latest_crlv = vehicle.crlvs.select_related('document').order_by('-exercise', '-confirmed_at').first()
 
     # Parse structured notes
     notes = vehicle.notes or ''
@@ -590,6 +591,7 @@ def vehicle_dossier(request, pk):
 
     context = {
         'vehicle': vehicle,
+        'latest_crlv': latest_crlv,
         'current_plates': current_plates,
         'reserved_plates': reserved_plates,
         'all_plates': plates,
