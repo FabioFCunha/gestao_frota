@@ -1,6 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.test import TestCase
-from .models import Brand, Maintenance, MaintenanceStatus, MaintenanceType, Vehicle, VehicleHistory, VehicleStatus
+from .models import Brand, Maintenance, MaintenanceStatus, MaintenanceType, Vehicle, VehicleHistory, VehicleStatus, Sector
 from .services import open_maintenance
 
 
@@ -30,8 +30,10 @@ class MaintenanceOpeningTests(TestCase):
 class DriverAssignmentTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(username="admin", password="123")
+        self.sector = Sector.objects.get_or_create(slug="adm", defaults={"name": "ADM"})[0]
+        self.user.sectors.add(self.sector)
         self.active_status = VehicleStatus.objects.get(name="Ativo")
-        self.vehicle = Vehicle.objects.create(status=self.active_status, created_by=self.user)
+        self.vehicle = Vehicle.objects.create(status=self.active_status, sector=self.sector, created_by=self.user)
         from .models import Driver
         self.driver1 = Driver.objects.create(name="João")
         self.driver2 = Driver.objects.create(name="Maria")
@@ -626,8 +628,10 @@ class InfraMigrationTests(TestCase):
 class VehicleMileageServicesTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(username="maint_admin", password="123")
+        self.sector = Sector.objects.get_or_create(slug="adm", defaults={"name": "ADM"})[0]
+        self.user.sectors.add(self.sector)
         self.active_status = VehicleStatus.objects.get(name="Ativo")
-        self.vehicle = Vehicle.objects.create(status=self.active_status, created_by=self.user)
+        self.vehicle = Vehicle.objects.create(status=self.active_status, sector=self.sector, created_by=self.user)
 
     def test_record_first_mileage(self):
         from .services import record_vehicle_mileage
@@ -703,8 +707,11 @@ class VehicleMileageAPITests(TestCase):
         perm = Permission.objects.get(codename="add_vehiclemileage")
         self.user.user_permissions.add(perm)
         self.readonly_user = get_user_model().objects.create_user(username="viewer", password="123")
+        self.sector = Sector.objects.get_or_create(slug="adm", defaults={"name": "ADM"})[0]
+        self.user.sectors.add(self.sector)
+        self.readonly_user.sectors.add(self.sector)
         self.active_status = VehicleStatus.objects.get(name="Ativo")
-        self.vehicle = Vehicle.objects.create(status=self.active_status, created_by=self.user)
+        self.vehicle = Vehicle.objects.create(status=self.active_status, sector=self.sector, created_by=self.user)
 
     def test_record_mileage_api_auth(self):
         # Without auth
@@ -739,6 +746,9 @@ class VehicleInspectionTests(TestCase):
         self.client = APIClient()
         self.user = get_user_model().objects.create_user(username="insp_admin", password="123")
         self.readonly_user = get_user_model().objects.create_user(username="insp_viewer", password="123")
+        self.sector = Sector.objects.get_or_create(slug="adm", defaults={"name": "ADM"})[0]
+        self.user.sectors.add(self.sector)
+        self.readonly_user.sectors.add(self.sector)
         
         # O DRF exige permissões apropriadas, como não estamos usando DjangoModelPermissions global, 
         # para a API de vistorias o ViewSet default usa IsAuthenticated. Mas pra ser seguro 
@@ -751,7 +761,7 @@ class VehicleInspectionTests(TestCase):
             pass # Pode ainda não estar carregado
             
         self.active_status = VehicleStatus.objects.get(name="Ativo")
-        self.vehicle = Vehicle.objects.create(status=self.active_status, created_by=self.user)
+        self.vehicle = Vehicle.objects.create(status=self.active_status, sector=self.sector, created_by=self.user)
         from .models import VehicleInspectionType, VehicleInspectionStatus
         self.type = VehicleInspectionType.objects.get(name="Rotina")
         self.status = VehicleInspectionStatus.objects.get(name="Aprovada")
@@ -830,6 +840,9 @@ class VehicleFineTests(TestCase):
         self.client = APIClient()
         self.user = get_user_model().objects.create_user(username="fine_admin", password="123")
         self.readonly_user = get_user_model().objects.create_user(username="fine_viewer", password="123")
+        self.sector = Sector.objects.get_or_create(slug="adm", defaults={"name": "ADM"})[0]
+        self.user.sectors.add(self.sector)
+        self.readonly_user.sectors.add(self.sector)
         
         from django.contrib.auth.models import Permission
         try:
@@ -840,7 +853,7 @@ class VehicleFineTests(TestCase):
             pass
             
         self.active_status = VehicleStatus.objects.get(name="Ativo")
-        self.vehicle = Vehicle.objects.create(status=self.active_status, created_by=self.user)
+        self.vehicle = Vehicle.objects.create(status=self.active_status, sector=self.sector, created_by=self.user)
         from .models import VehicleFineStatus
         self.status_pendente = VehicleFineStatus.objects.get(name="Pendente")
         self.status_paga = VehicleFineStatus.objects.get(name="Paga")
@@ -944,6 +957,9 @@ class SEIProcessTests(TestCase):
         self.client = APIClient()
         self.user = get_user_model().objects.create_user(username="sei_admin", password="123")
         self.readonly_user = get_user_model().objects.create_user(username="sei_viewer", password="123")
+        self.sector = Sector.objects.get_or_create(slug="adm", defaults={"name": "ADM"})[0]
+        self.user.sectors.add(self.sector)
+        self.readonly_user.sectors.add(self.sector)
         
         from django.contrib.auth.models import Permission
         try:
@@ -1004,8 +1020,15 @@ class SEIProcessTests(TestCase):
         self.assertEqual(response.status_code, 403)
         
     def test_api_prevent_delete(self):
-        from .services import create_sei_process
+        from .services import create_sei_process, link_sei_process
+        from .models import Vehicle, VehicleStatus
+        vehicle = Vehicle.objects.create(
+            status=VehicleStatus.objects.get(name="Ativo"),
+            sector=self.sector,
+            created_by=self.user,
+        )
         process = create_sei_process(sei_number="SEI-DEL", status=self.status_aberto, user=self.user)
+        link_sei_process(process=process, obj=vehicle, user=self.user)
         self.client.force_authenticate(user=self.user)
         response = self.client.delete(f"/api/sei-processes/{process.id}/")
         self.assertEqual(response.status_code, 403)
@@ -1199,10 +1222,12 @@ class DashboardTests(TestCase):
         except Permission.DoesNotExist:
             pass
             
-        from .models import Vehicle, VehicleStatus, Contract, Renter
+        from .models import Vehicle, VehicleStatus, Contract, Renter, Sector
         import datetime
         active = VehicleStatus.objects.get(name="Ativo")
-        self.v1 = Vehicle.objects.create(status=active, created_by=self.user)
+        sector = Sector.objects.get_or_create(slug="adm", defaults={"name": "ADM"})[0]
+        self.user.sectors.add(sector)
+        self.v1 = Vehicle.objects.create(status=active, sector=sector, created_by=self.user)
         
         renter = Renter.objects.create(name="Locadora X")
         c1 = Contract.objects.create(number="CT-123", renter=renter, starts_on=datetime.date(2023,1,1), ends_on=datetime.date(2025,1,1), administrative_status="VIGENTE")
