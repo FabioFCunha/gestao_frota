@@ -55,7 +55,9 @@ def _vin_is_valid(value):
 def _clean_text(value):
     value = str(value or "").replace("\xa0", " ")
     return re.sub(r"[ \t\r\f\v]+", " ", value).strip()
-\n\ndef _extract_between_labels(text, label, next_labels=(), *, max_len=200):
+
+
+def _extract_between_labels(text, label, next_labels=(), *, max_len=200):
     """Extrai o conteúdo de um campo mesmo quando o PDF lineariza as colunas."""
     upper = text.upper()
     match = re.search(label + r"\s*[:.-]?\s*", upper)
@@ -325,16 +327,47 @@ def extract_crlv_data(file_obj):
     if "PASSAGEIRO AUTOMOVEL" in upper:
         vehicle_type = "PASSAGEIRO AUTOMOVEL"
 
-    crv = _extract_between_labels(
-        upper, r"N[ÚU]MERO\s+DO\s+CRV",
-        [r"MARCA\s*/\s*MODELO\s*/\s*VERS[AÃ]O"],
-        max_len=30,
-    )
-    crv_match = re.search(r"\b\d{10,14}\b", crv)
-    crv = crv_match.group(0) if crv_match else ""
+    # O CRV pode aparecer no cabeçalho linearizado junto com RENAVAM,
+    # placa e os anos do veículo. Nesse leiaute, procurar simplesmente
+    # o primeiro número depois do rótulo é incorreto.
+    #
+    # Exemplo:
+    # CÓDIGO RENAVAM PLACA EXERCÍCIO ANO FABRICAÇÃO ANO MODELO
+    # NÚMERO DO CRV
+    # 01455165457 TTO8A04 2025 2025 2026 254508272509 90048500446
+    #
+    # Primeiro tentamos associar o CRV ao bloco formado pela placa + três
+    # anos consecutivos. O número seguinte aos três anos é o CRV.
+    crv = ""
+    if plate:
+        crv_header_pattern = (
+            r"\b" + re.escape(plate) +
+            r"\s+(20\d{2})\s+(20\d{2})\s+(20\d{2})\s+"
+            r"(\d{10,14})\b"
+        )
+        crv_header_match = re.search(crv_header_pattern, compact)
+        if crv_header_match:
+            crv = crv_header_match.group(4)
+
+    # Fallback específico para o rótulo NÚMERO DO CRV quando o PDF
+    # não preserva o cabeçalho acima.
+    if not crv:
+        crv_section = _extract_between_labels(
+            upper,
+            r"N[ÚU]MERO\s+DO\s+CRV",
+            [r"MARCA\s*/\s*MODELO\s*/\s*VERS[AÃ]O"],
+            max_len=50,
+        )
+        crv_match = re.search(r"\b\d{10,14}\b", crv_section)
+        if crv_match:
+            crv = crv_match.group(0)
+
+    # Último fallback: um CRV normalmente possui 12 dígitos.
+    # Não usamos o primeiro número de 12 dígitos indiscriminadamente,
+    # pois isso pode capturar outro identificador do documento.
     if not crv:
         twelve = re.findall(r"\b\d{12}\b", upper)
-        if twelve:
+        if len(twelve) == 1:
             crv = twelve[0]
 
     security_cla = _extract_between_labels(
@@ -386,9 +419,24 @@ def extract_crlv_data(file_obj):
 
     local = ""
     issue_date = ""
-    m = re.search(r"\b([A-ZÀ-Ú ]{3,50}\s+[A-Z]{2})\s+(\d{2}/\d{2}/\d{4})\b", upper)
-    if m:
-        local, issue_date = _clean_text(m.group(1)), m.group(2)
+
+    # No CRLV digital linearizado, o cabeçalho "LOCAL DATA" pode
+    # aparecer imediatamente antes do município. Removemos o rótulo
+    # antes de capturar LOCAL + UF.
+    local_data_match = re.search(
+        r"LOCAL\s+DATA\s+(.{3,80}?)\s+(\d{2}/\d{2}/\d{4})\b",
+        upper,
+    )
+    if local_data_match:
+        local = _clean_text(local_data_match.group(1))
+        issue_date = local_data_match.group(2)
+    else:
+        m = re.search(
+            r"\b([A-ZÀ-Ú ]{3,50}\s+[A-Z]{2})\s+(\d{2}/\d{2}/\d{4})\b",
+            upper,
+        )
+        if m:
+            local, issue_date = _clean_text(m.group(1)), m.group(2)
 
     observation = ""
     for marker in ["BENEF. TRIBUTARIO", "ALIENAÇÃO FIDUCIÁRIA", "ALIENACAO FIDUCIARIA", "SEM OBSERVAÇÕES", "SEM OBSERVACOES"]:
