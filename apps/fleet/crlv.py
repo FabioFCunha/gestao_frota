@@ -312,10 +312,10 @@ def _extract_linearized_crlv_values(text):
         result["capacity"] = tail.group(5)
         result["power_cylinder"] = tail.group(6)
         # O valor seguinte é cilindrada, enquanto o peso vem depois.
-        result["gross_weight"] = tail.group(8)
-        result["motor"] = re.sub(r"[^A-Z0-9]", "", tail.group(9))
-        result["cmt"] = tail.group(10)
-        result["axles"] = "2"
+        result["gross_weight"] = tail.group(7)
+        result["motor"] = re.sub(r"[^A-Z0-9]", "", tail.group(8))
+        result["cmt"] = tail.group(9)
+        result["axles"] = ""
         result["seating"] = tail.group(11)
         result["bodywork"] = _clean_text(tail.group(12))
         result["owner_name"] = "CS BRASIL FROTAS SA"
