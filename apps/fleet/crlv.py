@@ -136,6 +136,9 @@ def _extract_labeled_or_known(text, label, known):
     match = re.search(label + r"\s*[:.-]?\s*([^\n]{2,100})", upper)
     if match:
         value = _clean_text(match.group(1))
+        for item in known:
+            if item in value:
+                return item
         if value:
             return value
     for item in known:
@@ -224,11 +227,10 @@ def extract_crlv_data(file_obj):
     vehicle_type = first([
         r"ESP[ÉE]CIE\s*/\s*TIPO\s*[:.-]?\s*([^\n]{3,80})",
     ])
-    if not vehicle_type:
-        for value in ["PASSAGEIRO AUTOMOVEL", "CARGA CAMINHONETE", "ESPECIAL CAMINHAO", "MISTO UTILITARIO"]:
-            if value in upper:
-                vehicle_type = value
-                break
+    for value in ["PASSAGEIRO AUTOMOVEL", "CARGA CAMINHONETE", "ESPECIAL CAMINHAO", "MISTO UTILITARIO"]:
+        if value in upper:
+            vehicle_type = value
+            break
 
     crv = first([
         r"N[ÚU]MERO DO CRV\s*[:.-]?\s*(\d{10,14})",
