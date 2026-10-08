@@ -237,94 +237,6 @@ def _extract_vehicle_description(text):
     return brand_code, model, version
 
 
-def _extract_linearized_crlv_values(text):
-    """Extrai valores do CRLV-e quando o PDF lineariza rótulos e valores."""
-    upper = text.upper()
-    compact = re.sub(r"\s+", " ", upper).strip()
-    result = {}
-
-    # O VIN real aparece depois de PLACA ANTERIOR / UF e também pode ser
-    # validado pelo dígito de controle. Nunca usamos o código interno de 17
-    # caracteres como fallback quando existe um VIN válido.
-    for candidate in re.findall(r"\b[A-HJ-NPR-Z0-9]{17}\b", compact):
-        normalized = normalize_chassi(candidate)
-        if _vin_is_valid(normalized):
-            result["chassi"] = normalized
-            break
-
-    description = re.search(
-        r"\b([A-Z]{2,8})/([A-Z0-9]+(?: [A-Z0-9]+)*)\s+PASSAGEIRO AUTOMOVEL\b",
-        compact,
-    )
-    if description:
-        result["brand_raw"] = description.group(1)
-        parts = description.group(2).split()
-        result["model_raw"] = parts[0] if parts else ""
-        result["version"] = " ".join(parts[1:]) if len(parts) > 1 else ""
-
-    for value in ["BRANCA", "PRETA", "PRATA", "CINZA", "VERMELHA", "AZUL",
-                  "VERDE", "AMARELA", "MARROM", "BEGE", "DOURADA"]:
-        if re.search(r"\b" + re.escape(value) + r"\b", compact):
-            result["color"] = value
-            break
-
-    for value in ["ALCOOL/GASOLINA", "GASOLINA/ALCOOL/ELETRICO",
-                  "GASOLINA", "ALCOOL", "DIESEL", "ELETRICO", "FLEX", "GNV"]:
-        if value in compact:
-            result["fuel"] = value
-            break
-
-    for value in ["PARTICULAR", "ALUGUEL", "OFICIAL", "APRENDIZAGEM", "EXPERIENCIA"]:
-        if re.search(r"\b" + re.escape(value) + r"\b", compact):
-            result["category"] = value
-            break
-
-    # Sequência de valores do leiaute real:
-    # tipo / placa anterior / VIN / cor / combustível / categoria /
-    # capacidade / potência / cilindrada / peso / motor / CMT / eixos /
-    # lotação / carroceria / proprietário / CNPJ.
-    tail = re.search(
-        r"PASSAGEIRO AUTOMOVEL\s+"
-        r"\*{3,}/\*{2}\s+"
-        r"([A-HJ-NPR-Z0-9]{17})\s+"
-        r"([A-Z]+)\s+"
-        r"([A-Z]+/[A-Z]+)\s+"
-        r"([A-Z]+)\s+"
-        r"(\*\.\*)\s+"
-        r"(\d+CV/\d+)\s+"
-        r"(\d+(?:\.\d+)?)\s+"
-        r"([A-Z0-9*]+)\s+"
-        r"(\d+(?:\.\d+)?)\s+"
-        r"(\d+)\s+"
-        r"(\d+P)\s+"
-        r"(.+?)\s+"
-        r"CS BRASIL FROTAS SA\s+"
-        r"(\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2})",
-        compact,
-    )
-    if tail:
-        vin = normalize_chassi(tail.group(1))
-        if _vin_is_valid(vin):
-            result["chassi"] = vin
-        result["color"] = tail.group(2)
-        result["fuel"] = tail.group(3)
-        result["category"] = tail.group(4)
-        result["capacity"] = tail.group(5)
-        result["power_cylinder"] = tail.group(6)
-        # O valor seguinte é cilindrada, enquanto o peso vem depois.
-        result["gross_weight"] = tail.group(7)
-        result["motor"] = re.sub(r"[^A-Z0-9]", "", tail.group(8))
-        result["cmt"] = tail.group(9)
-        result["axles"] = tail.group(10)
-        result["seating"] = tail.group(11)
-        result["bodywork"] = _clean_text(tail.group(12))
-        result["owner_name"] = "CS BRASIL FROTAS SA"
-        result["owner_document"] = tail.group(13)
-
-    # O padrão acima cobre o CRLV real. Para outros proprietários, preservamos
-    # apenas campos seguros já identificados pelas heurísticas gerais.
-    return result
-
 def extract_crlv_data(file_obj):
     name = (getattr(file_obj, "name", "") or "").lower()
     raw = file_obj.read()
@@ -567,12 +479,4 @@ def extract_crlv_data(file_obj):
         "text_extracted": bool(text.strip()),
         "raw_text": text,
     }
-    # O texto nativo do CRLV-e pode ser linearizado em blocos: os rótulos
-    # ficam no topo e os valores no final. Quando esse leiaute é reconhecido,
-    # os valores estruturados têm prioridade sobre as heurísticas genéricas.
-    linearized = _extract_linearized_crlv_values(upper)
-    for key, value in linearized.items():
-        if value not in (None, ""):
-            extracted[key] = value
-
     return extracted
