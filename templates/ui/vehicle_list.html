@@ -142,6 +142,9 @@
                 <!-- AÇÕES -->
                 <td class="vl-td" style="text-align:right;">
                     <a href="{% url 'vehicle_dossier' vehicle.id %}" class="vl-action-btn">Ver Prontuário</a>
+                    {% if perms.fleet.change_vehicle or request.user.is_system_creator %}
+                        <a href="{% url 'vehicle_crlv' vehicle.id %}" class="vl-action-btn vl-action-btn--outline">CRLV</a>
+                    {% endif %}
                     <a href="{% url 'vehicle_contract_edit' vehicle.id %}" class="vl-action-btn vl-action-btn--outline">Contrato</a>
                     {% if can_manage_vehicle_status and vehicle.sector.slug == 'adm' %}
                         <a href="{% url 'vehicle_position_edit' vehicle.id %}" class="vl-action-btn vl-action-btn--outline">Gestão ADM</a>

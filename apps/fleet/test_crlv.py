@@ -2,6 +2,7 @@ from datetime import date, timedelta
 from io import BytesIO
 import tempfile
 from unittest.mock import patch
+from apps.fleet.crlv import extract_crlv_data
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
@@ -12,7 +13,7 @@ from rest_framework.test import APIClient
 
 from apps.fleet.models import (Document, LicensingCalendar, Sector, Vehicle, VehiclePlate,
                                VehicleStatus)
-from apps.fleet.services import confirm_crlv, get_crlv_alerts, stage_crlv_document
+from apps.fleet.services import confirm_crlv, get_crlv_alerts, stage_crlv_document, stage_crlv_document_for_creation, create_vehicle_from_crlv
 
 
 class CRLVTests(TestCase):
@@ -72,3 +73,49 @@ class CRLVTests(TestCase):
         alerts = get_crlv_alerts(Vehicle.objects.filter(pk=self.vehicle.pk), today=today)
         self.assertEqual(alerts['overdue'][0]['exercise'], 2026)
         self.assertEqual(alerts['calendar_missing'][0]['exercise'], 2027)
+
+    @patch("apps.fleet.crlv._all_text")
+    def test_extracts_crlv_digital_layout_maximum_data(self, all_text):
+        all_text.return_value = """
+        CÓDIGO RENAVAM PLACA EXERCÍCIO ANO FABRICAÇÃO ANO MODELO NÚMERO DO CRV
+        01455165457 TTO8A04 2025 2025 2026 254508272509 90048500446 ***
+        MARCA / MODELO / VERSÃO CHEV/ONIX 10TMT HB
+        ESPÉCIE / TIPO PASSAGEIRO AUTOMOVEL
+        PLACA ANTERIOR / UF *******/** CHASSI 9BGEA48H0TG145235
+        COR PREDOMINANTE BRANCA COMBUSTÍVEL ALCOOL/GASOLINA
+        CATEGORIA PARTICULAR CAPACIDADE *.* POTÊNCIA/CILINDRADA 115CV/1000
+        PESO BRUTO TOTAL 1.4 MOTOR L4G252585140 CMT 1.4 EIXOS 2 LOTAÇÃO 05P
+        CARROCERIA NÃO APLICAVEL
+        NOME CS BRASIL FROTAS SA CPF / CNPJ 27.595.780/0025-93
+        LOCAL DATA RIO DE JANEIRO RJ 20/10/2025
+        OBSERVAÇÕES DO VEÍCULO BENEF. TRIBUTARIO 30/09/2026
+        """
+        upload = SimpleUploadedFile("crlv.pdf", b"%PDF", content_type="application/pdf")
+        data = extract_crlv_data(upload)
+        self.assertEqual(data["plate"], "TTO8A04")
+        self.assertEqual(data["renavam"], "90048500446")
+        self.assertEqual(data["chassi"], "9BGEA48H0TG145235")
+        self.assertEqual(data["exercise"], 2025)
+        self.assertEqual(data["color"], "BRANCA")
+        self.assertEqual(data["fuel"], "ALCOOL/GASOLINA")
+        self.assertEqual(data["owner_document"], "27.595.780/0025-93")
+        self.assertTrue(data["raw_text"])
+
+    def test_create_vehicle_from_crlv_preserves_document_history(self):
+        document, extracted = stage_crlv_document_for_creation(
+            file_obj=SimpleUploadedFile("crlv.pdf", b"%PDF placeholder", content_type="application/pdf"),
+            user=self.user,
+        )
+        self.assertIsNotNone(document)
+        vehicle, record = create_vehicle_from_crlv(
+            document=document, plate="ABC1D23", renavam="12345678901",
+            chassi="9BWZZZ377VT004251", exercise=2026, brand="Chevrolet",
+            model="Onix 1.0", color="BRANCO", sector=self.sector, status=self.status,
+            user=self.user, extracted_data={"source": "CRLV", "reviewed": True},
+        )
+        self.assertEqual(vehicle.plate_history.get(kind="CURRENT").plate, "ABC1D23")
+        self.assertEqual(vehicle.renavam, "12345678901")
+        self.assertEqual(vehicle.chassi, "9BWZZZ377VT004251")
+        self.assertEqual(record.exercise, 2026)
+        self.assertTrue(document.relations.filter(object_id=vehicle.id).exists())
+        self.assertEqual(vehicle.crlvs.count(), 1)

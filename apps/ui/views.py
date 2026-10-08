@@ -11,7 +11,7 @@ from django.urls import reverse
 from django.http import JsonResponse, Http404
 from django.contrib import messages
 from django.utils import timezone
-from .forms import DriverForm, DriverVehicleAssignmentForm, VehicleForm, VehicleContractForm, FineForm, RevisionActionForm, VehicleExitOrderForm, VehicleExitOrderReturnForm, VehiclePositionForm, CRLVUploadForm, CRLVConfirmForm, LicensingCalendarForm
+from .forms import DriverForm, DriverVehicleAssignmentForm, VehicleForm, VehicleContractForm, FineForm, RevisionActionForm, VehicleExitOrderForm, VehicleExitOrderReturnForm, VehiclePositionForm, CRLVUploadForm, CRLVConfirmForm, CRLVVehicleCreateForm, LicensingCalendarForm
 from apps.accounts.forms import FleetAuthenticationForm
 from apps.accounts.decorators import module_permission
 from apps.fleet.models import VehiclePlate, Renter
@@ -385,7 +385,7 @@ def bdt_list(request):
 @login_required
 @module_permission("fleet.change_vehicle")
 def vehicle_crlv(request, pk):
-    from apps.fleet.models import Document, Vehicle
+    from apps.fleet.models import Document, Vehicle, AuditLog
     from apps.fleet.services import confirm_crlv, stage_crlv_document
 
     vehicle = get_object_or_404(Vehicle.objects.prefetch_related("plate_history"), pk=pk)
@@ -411,7 +411,13 @@ def vehicle_crlv(request, pk):
                     or not document.relations.filter(content_type=vehicle_type, object_id=vehicle.id).exists()
                 ):
                     raise ValueError("O documento informado não é um CRLV vinculado a este veículo.")
-                confirm_crlv(vehicle=vehicle, document=document, user=request.user, extracted_data={}, **data)
+                extraction_audit = AuditLog.objects.filter(
+                    entity_type="document",
+                    entity_id=document.id,
+                    action="ANEXO DE CRLV PARA CONFERÊNCIA",
+                ).order_by("-created_at").first()
+                extracted_data = extraction_audit.new_values if extraction_audit else {}
+                confirm_crlv(vehicle=vehicle, document=document, user=request.user, extracted_data=extracted_data, **data)
             except (Document.DoesNotExist, ValueError) as exc:
                 confirm_form.add_error(None, str(exc))
             else:
@@ -446,7 +452,7 @@ def licensing_calendar(request):
 @module_permission("fleet.view_vehicle")
 def vehicle_dossier(request, pk):
     import re
-    from apps.fleet.models import Vehicle, VehiclePlate, VehicleMileage, VehicleCustody, VehicleExitOrder
+    from apps.fleet.models import Vehicle, VehiclePlate, VehicleMileage, VehicleCustody, VehicleExitOrder, VehicleCRLV
     from django.shortcuts import get_object_or_404
 
     from apps.fleet.sector_scope import validate_vehicle_scope
@@ -518,6 +524,7 @@ def vehicle_dossier(request, pk):
     )
     active_driver = active_assignment.driver if active_assignment else None
     active_custody = VehicleCustody.objects.filter(vehicle=vehicle, ended_on__isnull=True).first()
+    latest_crlv = vehicle.crlvs.select_related('document').order_by('-exercise', '-confirmed_at').first()
 
     # Parse structured notes
     notes = vehicle.notes or ''
@@ -590,6 +597,7 @@ def vehicle_dossier(request, pk):
 
     context = {
         'vehicle': vehicle,
+        'latest_crlv': latest_crlv,
         'current_plates': current_plates,
         'reserved_plates': reserved_plates,
         'all_plates': plates,
@@ -1415,23 +1423,95 @@ def vehicle_quick_create(request):
 @login_required
 @module_permission("fleet.add_vehicle")
 def vehicle_create(request):
-    if request.method == 'POST':
-        form = VehicleForm(request.POST)
-        if form.is_valid():
-            vehicle = form.save(commit=False)
-            vehicle.created_by = request.user
-            vehicle.save()
-            plate_str = form.cleaned_data['plate']
-            if plate_str:
-                VehiclePlate.objects.create(vehicle=vehicle, plate=plate_str, kind='CURRENT', starts_on=timezone.now(), changed_by=request.user)
-            res_plate_str = form.cleaned_data.get('reserved_plate')
-            if res_plate_str:
-                VehiclePlate.objects.create(vehicle=vehicle, plate=res_plate_str, kind='RESERVED', starts_on=timezone.now(), changed_by=request.user)
-            messages.success(request, 'Veículo cadastrado com sucesso!')
-            return redirect('vehicle_list')
-    else:
-        form = VehicleForm()
-    return render(request, 'ui/form.html', {'form': form, 'title': 'Cadastrar Veículo', 'back_url': 'vehicle_list', 'quick_create': True})
+    """Inclusão principal de veículo: CRLV -> extração -> revisão -> cadastro."""
+    if request.GET.get("manual") == "1":
+        if request.method == "POST":
+            form = VehicleForm(request.POST)
+            if form.is_valid():
+                vehicle = form.save(commit=False)
+                vehicle.created_by = request.user
+                vehicle.save()
+                plate_str = form.cleaned_data["plate"]
+                if plate_str:
+                    VehiclePlate.objects.create(vehicle=vehicle, plate=plate_str, kind="CURRENT", starts_on=timezone.now(), changed_by=request.user)
+                res_plate_str = form.cleaned_data.get("reserved_plate")
+                if res_plate_str:
+                    VehiclePlate.objects.create(vehicle=vehicle, plate=res_plate_str, kind="RESERVED", starts_on=timezone.now(), changed_by=request.user)
+                messages.success(request, "Veículo cadastrado com sucesso!")
+                return redirect("vehicle_list")
+        else:
+            form = VehicleForm()
+        return render(request, "ui/form.html", {
+            "form": form,
+            "title": "Cadastrar Veículo manualmente",
+            "back_url": "vehicle_list",
+            "quick_create": True,
+        })
+
+    from apps.fleet.services import stage_crlv_document_for_creation, create_vehicle_from_crlv
+    upload_form = CRLVUploadForm()
+    confirm_form = None
+    preview = None
+    document = None
+
+    if request.method == "POST" and request.POST.get("step") == "upload":
+        upload_form = CRLVUploadForm(request.POST, request.FILES)
+        if upload_form.is_valid():
+            try:
+                document, preview = stage_crlv_document_for_creation(
+                    file_obj=upload_form.cleaned_data["file"],
+                    user=request.user,
+                )
+                confirm_form = CRLVVehicleCreateForm(initial={
+                    "document_id": document.id,
+                    "plate": preview.get("plate", ""),
+                    "renavam": preview.get("renavam", ""),
+                    "chassi": preview.get("chassi", ""),
+                    "exercise": preview.get("exercise"),
+                    "brand": preview.get("brand_raw", ""),
+                    "model": " ".join(x for x in [preview.get("model_raw", ""), preview.get("version", "")] if x).strip(),
+                    "color": preview.get("color", ""),
+                })
+            except ValueError as exc:
+                upload_form.add_error("file", str(exc))
+    elif request.method == "POST":
+        confirm_form = CRLVVehicleCreateForm(request.POST)
+        if confirm_form.is_valid():
+            from apps.fleet.models import Document, AuditLog
+            data = confirm_form.cleaned_data.copy()
+            document_id = data.pop("document_id")
+            document = get_object_or_404(Document, pk=document_id)
+            try:
+                extraction_audit = AuditLog.objects.filter(
+                    entity_type="document",
+                    entity_id=document.id,
+                    action="CRLV PARA INCLUSÃO DE VEÍCULO",
+                ).order_by("-created_at").first()
+                extracted_data = dict(extraction_audit.new_values or {}) if extraction_audit else {}
+                extracted_data.update({
+                    "reviewed": True,
+                    "source": "CRLV",
+                    "form_values": {k: (str(v) if hasattr(v, "pk") else v) for k, v in data.items()},
+                })
+                vehicle, _ = create_vehicle_from_crlv(
+                    document=document,
+                    user=request.user,
+                    extracted_data=extracted_data,
+                    **data,
+                )
+            except ValueError as exc:
+                confirm_form.add_error(None, str(exc))
+            else:
+                messages.success(request, f"Veículo {vehicle.plate_history.filter(kind='CURRENT', ends_on__isnull=True).values_list('plate', flat=True).first()} incluído a partir do CRLV.")
+                return redirect("vehicle_list")
+
+    return render(request, "ui/vehicle_create_crlv.html", {
+        "upload_form": upload_form,
+        "confirm_form": confirm_form,
+        "preview": preview,
+        "document": document,
+        "back_url": "vehicle_list",
+    })
 
 @login_required
 @module_permission("fleet.change_vehicle")

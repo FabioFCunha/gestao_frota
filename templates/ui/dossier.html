@@ -91,11 +91,37 @@
             <li><strong>Modelo:</strong> {{ vehicle.model.name|default:"-" }}</li>
             <li><strong>Cor:</strong> {{ vehicle.color|default:"-" }}</li>
             <li><strong>RENAVAM:</strong> {{ vehicle.renavam|default:"-" }}</li>
+            <li><strong>Chassi:</strong> {{ vehicle.chassi|default:"-" }}</li>
             <li><strong>CRLV confirmado:</strong> {{ vehicle.crlv_exercise|default:"-" }}</li>
             <li><strong>Blindado:</strong> {% if vehicle.armored %}SIM{% else %}NÃO{% endif %}</li>
         </ul>
         {% if perms.fleet.change_vehicle or request.user.is_system_creator %}<a class="primary-action" href="{% url 'vehicle_crlv' vehicle.id %}">Anexar CRLV</a>{% endif %}
     </article>
+</section>
+
+<!-- DADOS DO CRLV -->
+<section class="panel" style="margin-top:20px;">
+    <div class="panel-title"><div><h3>📄 Dados do CRLV</h3></div></div>
+    {% if latest_crlv %}
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px 24px;">
+        <div><strong>Exercício:</strong> {{ latest_crlv.exercise }}</div>
+        <div><strong>Placa no documento:</strong> {{ latest_crlv.plate|default:"-" }}</div>
+        <div><strong>RENAVAM:</strong> {{ latest_crlv.renavam|default:"-" }}</div>
+        <div><strong>Chassi:</strong> {{ latest_crlv.chassi|default:"-" }}</div>
+        <div><strong>Fabricação:</strong> {{ latest_crlv.extracted_data.manufacture_year|default:"-" }}</div>
+        <div><strong>Ano modelo:</strong> {{ latest_crlv.extracted_data.model_year|default:"-" }}</div>
+        <div><strong>Cor:</strong> {{ latest_crlv.extracted_data.color|default:"-" }}</div>
+        <div><strong>Combustível:</strong> {{ latest_crlv.extracted_data.fuel|default:"-" }}</div>
+        <div><strong>Categoria:</strong> {{ latest_crlv.extracted_data.category|default:"-" }}</div>
+        <div><strong>Espécie / tipo:</strong> {{ latest_crlv.extracted_data.vehicle_type|default:"-" }}</div>
+        <div><strong>Motor:</strong> {{ latest_crlv.extracted_data.motor|default:"-" }}</div>
+        <div><strong>Carroceria:</strong> {{ latest_crlv.extracted_data.bodywork|default:"-" }}</div>
+        <div style="grid-column:1/-1;"><strong>Proprietário:</strong> {{ latest_crlv.extracted_data.owner_name|default:"-" }} — {{ latest_crlv.extracted_data.owner_document|default:"-" }}</div>
+        <div style="grid-column:1/-1;"><strong>Observações:</strong> {{ latest_crlv.extracted_data.observation|default:"-" }}</div>
+    </div>
+    {% else %}
+    <p>Nenhum CRLV confirmado.</p>
+    {% endif %}
 </section>
 
 <!-- KM E REVISÃO -->
