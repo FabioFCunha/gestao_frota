@@ -1477,7 +1477,7 @@ def vehicle_create(request):
     elif request.method == "POST":
         confirm_form = CRLVVehicleCreateForm(request.POST)
         if confirm_form.is_valid():
-            from apps.fleet.models import Document
+            from apps.fleet.models import Document, AuditLog
             data = confirm_form.cleaned_data.copy()
             document_id = data.pop("document_id")
             document = get_object_or_404(Document, pk=document_id)
