@@ -108,7 +108,7 @@ class CRLVTests(TestCase):
         )
         self.assertIsNotNone(document)
         vehicle, record = create_vehicle_from_crlv(
-            document=document, plate="ABC1D23", renavam="12345678901",
+            document=document, plate="XYZ1A23", renavam="12345678901",
             chassi="9BWZZZ377VT004251", exercise=2026, brand="Chevrolet",
             model="Onix 1.0", color="BRANCO", sector=self.sector, status=self.status,
             user=self.user, extracted_data={"source": "CRLV", "reviewed": True},
