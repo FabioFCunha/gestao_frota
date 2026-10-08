@@ -6,7 +6,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.accounts.models import User
-from apps.fleet.models import Driver, Vehicle, VehicleExitOrder, VehiclePlate, VehicleStatus
+from apps.fleet.models import Driver, Vehicle, VehicleExitOrder, VehiclePlate, VehicleStatus, Sector
 
 
 class VehicleExitOrderTests(TestCase):
@@ -17,8 +17,11 @@ class VehicleExitOrderTests(TestCase):
         self.user.user_permissions.add(*permissions)
         self.other.user_permissions.add(*permissions)
         self.status = VehicleStatus.objects.create(name='Ativo')
-        self.vehicle = Vehicle.objects.create(status=self.status)
-        self.other_vehicle = Vehicle.objects.create(status=self.status)
+        self.sector = Sector.objects.get(slug="adm")
+        self.user.sectors.add(self.sector)
+        self.other.sectors.add(self.sector)
+        self.vehicle = Vehicle.objects.create(status=self.status, sector=self.sector)
+        self.other_vehicle = Vehicle.objects.create(status=self.status, sector=self.sector)
         VehiclePlate.objects.create(vehicle=self.vehicle, plate='ABC1D23', kind=VehiclePlate.CURRENT)
         self.driver = Driver.objects.create(name='Motorista OS')
         self.client.force_login(self.user)

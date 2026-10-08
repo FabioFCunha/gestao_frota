@@ -2,7 +2,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from apps.accounts.models import User
-from apps.fleet.models import Vehicle, VehicleFine, VehicleFineStatus, VehicleStatus
+from apps.fleet.models import Vehicle, VehicleFine, VehicleFineStatus, VehicleStatus, Sector
 
 
 class FineCreateRegressionTests(TestCase):
@@ -11,9 +11,11 @@ class FineCreateRegressionTests(TestCase):
             username="fine-create", email="fabiocunhaosp@gmail.com", password="safe-password"
         )
         self.client.force_login(self.user)
+        self.sector = Sector.objects.get(slug="adm")
+        self.user.sectors.add(self.sector)
         status = VehicleStatus.objects.create(name="Ativo")
-        self.vehicle = Vehicle.objects.create(status=status)
-        self.other_vehicle = Vehicle.objects.create(status=status)
+        self.vehicle = Vehicle.objects.create(status=status, sector=self.sector)
+        self.other_vehicle = Vehicle.objects.create(status=status, sector=self.sector)
         self.fine_status = VehicleFineStatus.objects.create(name="Pendente")
 
     def payload(self, vehicle):

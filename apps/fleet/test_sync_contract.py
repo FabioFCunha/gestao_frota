@@ -17,10 +17,15 @@ class SyncContractTests(TestCase):
         self.client = APIClient()
         self.client.credentials(HTTP_AUTHORIZATION="Bearer test-token")
         self.reader = APIClient()
-        self.reader.force_authenticate(
-            User.objects.create_user(username="bdt-reader", password="safe-password")
+        self.reader_user = User.objects.create_user(
+            username="bdt-reader",
+            password="safe-password",
         )
+        self.reader.force_authenticate(self.reader_user)
         self.active = VehicleStatus.objects.create(name="Ativo", active=True)
+        from apps.fleet.models import Sector
+        self.sector = Sector.objects.get(slug="adm")
+        self.reader_user.sectors.add(self.sector)
 
     def test_vehicle_omitted_fields_preserve_local_values(self):
         external_id = uuid.uuid4()
@@ -86,8 +91,8 @@ class SyncContractTests(TestCase):
         self.assertEqual(VehicleMileage.objects.filter(external_id=str(external_id)).count(), 1)
 
     def test_bdt_api_vehicle_filter_does_not_leak_other_vehicle(self):
-        vehicle_1 = Vehicle.objects.create(horus_fleet_id=uuid.uuid4(), status=self.active)
-        vehicle_2 = Vehicle.objects.create(horus_fleet_id=uuid.uuid4(), status=self.active)
+        vehicle_1 = Vehicle.objects.create(horus_fleet_id=uuid.uuid4(), status=self.active, sector=self.sector)
+        vehicle_2 = Vehicle.objects.create(horus_fleet_id=uuid.uuid4(), status=self.active, sector=self.sector)
         bdt_1 = BDT.objects.create(external_id=uuid.uuid4(), vehicle=vehicle_1)
         BDT.objects.create(external_id=uuid.uuid4(), vehicle=vehicle_2)
         response = self.reader.get(f"/api/bdts/?vehicle={vehicle_1.id}")

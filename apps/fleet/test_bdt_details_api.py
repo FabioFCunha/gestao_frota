@@ -9,7 +9,7 @@ from apps.fleet.models import BDT
 
 class BDTDetailsAPITests(APITestCase):
     def setUp(self):
-        self.user = User.objects.create_user(username="bdt-reader", password="safe-password")
+        self.user = User.objects.create_superuser(username="bdt-reader", email="bdt-reader@example.com", password="safe-password")
         self.client.force_authenticate(self.user)
 
     def test_open_bdt_detail_preserves_zero_and_long_note(self):
@@ -63,7 +63,7 @@ class BDTKmDisplayTests(APITestCase):
     """
 
     def setUp(self):
-        self.user = User.objects.create_user(
+        self.user = User.objects.create_superuser(
             username="km-tester", password="safe-password"
         )
         self.client.force_authenticate(self.user)

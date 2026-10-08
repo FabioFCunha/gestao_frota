@@ -4,9 +4,18 @@
 {% block content %}
 <section class="welcome" style="margin-bottom:20px;">
     <div>
-        <form method="get" action="" style="display:flex;gap:10px;">
+        <form method="get" action="" style="display:flex;gap:10px;flex-wrap:wrap;">
             <input type="text" name="q" value="{{ q }}" placeholder="Buscar por nome ou telefone..." style="padding:10px;width:320px;border-radius:4px;border:1px solid #ccc;" />
-            <select name="status" style="padding:10px;border-radius:4px;border:1px solid #ccc;">
+            {% if show_sector_filter %}
+            <select name="sector" class="form-input" style="width:auto;">
+                <option value="">Todos os setores</option>
+                <option value="adm" {% if requested_sector == "adm" %}selected{% endif %}>ADM</option>
+                <option value="lei-seca" {% if requested_sector == "lei-seca" %}selected{% endif %}>Lei Seca</option>
+            </select>
+            {% elif requested_sector %}
+            <input type="hidden" name="sector" value="{{ requested_sector }}">
+            {% endif %}
+            <select name="status"  style="padding:10px;border-radius:4px;border:1px solid #ccc;">
                 <option value="active" {% if status == "active" %}selected{% endif %}>Motoristas ativos</option>
                 <option value="inactive" {% if status == "inactive" %}selected{% endif %}>Motoristas inativos</option>
                 <option value="cnh_vencida" {% if status == "cnh_vencida" %}selected{% endif %}>CNHs Vencidas</option>
@@ -14,7 +23,7 @@
             <button type="submit" class="primary-action">Buscar</button>
         </form>
     </div>
-    <a class="primary-action" href="{% url 'driver_create' %}">+ Novo Motorista</a>
+    <a class="primary-action" href="{% url 'driver_create' %}{% if requested_sector %}?sector={{ requested_sector|urlencode }}{% endif %}">+ Novo Motorista</a>
 </section>
 <section class="grid">
     <article class="panel" style="grid-column:1/-1;">
@@ -53,8 +62,8 @@
                         {% endif %}
                     </td>
                     <td style="white-space:nowrap;">
-                        <a class="table-action" href="{% url 'driver_assign_vehicle' d.id %}">Vincular veículo</a>
-                        <a class="table-action secondary" href="{% url 'driver_edit' d.id %}">Editar</a>
+                        <a class="table-action" href="{% url 'driver_assign_vehicle' d.id %}{% if requested_sector %}?sector={{ requested_sector|urlencode }}{% endif %}">Vincular veículo</a>
+                        <a class="table-action secondary" href="{% url 'driver_edit' d.id %}{% if requested_sector %}?sector={{ requested_sector|urlencode }}{% endif %}">Editar</a>
                     </td>
                 </tr>
                 {% endfor %}
@@ -66,3 +75,4 @@
     </article>
 </section>
 {% endblock %}
+

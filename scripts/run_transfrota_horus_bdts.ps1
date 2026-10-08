@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [switch]$DryRun,
-    [int]$Limit = 100
+    [int]$Limit = 100,
+    [int[]]$ManagementIds = @(49, 125)
 )
 
 $ErrorActionPreference = 'Stop'
@@ -52,12 +53,29 @@ try {
 
     Push-Location $ProjectRoot
     try {
-        $arguments = @('manage.py', 'sync_horus_bdt', '--limit', $Limit)
-        if ($DryRun) { $arguments += '--dry-run' }
-        Write-SyncLog "Início (limite=$Limit; dry-run=$($DryRun.IsPresent))."
-        & $PythonExe @arguments *>> $LogPath
-        if ($LASTEXITCODE -ne 0) { throw "Agente encerrou com código $LASTEXITCODE." }
-        Write-SyncLog 'Conclusão com sucesso.'
+        if (!$ManagementIds -or ($ManagementIds | Where-Object { $_ -lt 1 })) {
+            throw 'Informe IDs de gestão maiores que zero.'
+        }
+        $failures = @()
+        foreach ($management in ($ManagementIds | Select-Object -Unique)) {
+            $managementState = if ($management -eq 49) { $StatePath } else {
+                Join-Path $DataRoot "horus-bdts-state.management-$management.json"
+            }
+            $arguments = @('manage.py', 'sync_horus_bdt', '--limit', $Limit,
+                '--management-id', $management, '--state-file', $managementState)
+            if ($DryRun) { $arguments += '--dry-run' }
+            Write-SyncLog "Início gestão=$management (limite=$Limit; dry-run=$($DryRun.IsPresent))."
+            & $PythonExe @arguments *>> $LogPath
+            if ($LASTEXITCODE -ne 0) {
+                $failures += $management
+                Write-SyncLog "FALHA gestão=${management}: agente encerrou com código $LASTEXITCODE."
+            } else {
+                Write-SyncLog "Conclusão com sucesso gestão=$management."
+            }
+        }
+        if ($failures.Count -gt 0) {
+            throw "Falha nas gestões: $($failures -join ', ')."
+        }
     } finally { Pop-Location }
     exit 0
 } catch {
@@ -65,3 +83,4 @@ try {
     Write-SyncLog "FALHA: $($_.Exception.Message)"
     exit 1
 }
+

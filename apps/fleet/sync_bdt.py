@@ -208,6 +208,11 @@ class BDTSyncWorker:
                 BDT.objects.bulk_update(to_update, fields=update_fields, batch_size=1000)
                 resumo["atualizados"] += len(to_update)
 
+            from apps.fleet.driver_scope import sync_driver_sectors_from_bdts
+            sync_driver_sectors_from_bdts(
+                BDT.objects.filter(external_id__in=list(external_ids))
+            )
+
             # Reconcile only after the BDT row is durable.  Invalid updates do
             # not delete or overwrite a previously valid mileage projection.
             persisted = BDT.objects.filter(external_id__in=list(external_ids)).select_related("vehicle")
@@ -222,3 +227,4 @@ class BDTSyncWorker:
                     resumo["inconsistencias"] += 1
             
         return resumo
+

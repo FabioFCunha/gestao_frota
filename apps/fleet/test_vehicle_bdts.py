@@ -4,17 +4,19 @@ from django.utils import timezone
 from rest_framework.test import APITestCase
 
 from apps.accounts.models import User
-from .models import BDT, Driver, Vehicle, VehicleStatus
+from .models import BDT, Driver, Vehicle, VehicleStatus, Sector
 
 
 class VehicleBDTEndpointTests(APITestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="bdt-vehicle-reader", password="safe-password")
         self.client.force_authenticate(self.user)
+        self.sector = Sector.objects.get(slug="adm")
+        self.user.sectors.add(self.sector)
         status = VehicleStatus.objects.create(name="Ativo")
         self.fleet_id = uuid.uuid4()
-        self.vehicle = Vehicle.objects.create(horus_fleet_id=self.fleet_id, status=status)
-        self.other = Vehicle.objects.create(horus_fleet_id=uuid.uuid4(), status=status)
+        self.vehicle = Vehicle.objects.create(horus_fleet_id=self.fleet_id, status=status, sector=self.sector)
+        self.other = Vehicle.objects.create(horus_fleet_id=uuid.uuid4(), status=status, sector=self.sector)
         self.driver = Driver.objects.create(name="Motorista BDT")
 
     def test_returns_only_uuid_linked_bdts_with_summary_and_pagination(self):

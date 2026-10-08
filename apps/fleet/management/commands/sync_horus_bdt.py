@@ -4,9 +4,12 @@ from apps.fleet.horus_sync import HorusBDTSyncer
 
 
 class Command(BaseCommand):
-    help = "Sincroniza frota Lei Seca e BDTs do Hórus."
+    help = "Sincroniza viaturas, motoristas e BDTs de uma gestão do Hórus."
 
     def add_arguments(self, parser):
+        parser.add_argument("--management-id", type=int, default=None)
+        parser.add_argument("--state-file", type=str, default=None)
+        parser.add_argument("--lookback-days", type=int, default=None)
         parser.add_argument(
             "--dry-run",
             action="store_true",
@@ -24,6 +27,9 @@ class Command(BaseCommand):
             syncer = HorusBDTSyncer(
                 dry_run=options["dry_run"],
                 limit=options["limit"],
+                management_id=options["management_id"],
+                state_file=options["state_file"],
+                lookback_days=options["lookback_days"],
             )
 
             stats = syncer.run()
@@ -63,3 +69,4 @@ class Command(BaseCommand):
         self.stdout.write(
             f"BDTs atualizados: {stats.bdts_updated}"
         )
+

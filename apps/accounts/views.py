@@ -10,7 +10,7 @@ from .models import User
 
 
 def _ensure_default_groups():
-    defaults = ["Administrador", "Gestor", "Operacional", "Consulta"]
+    defaults = ["Administrador", "Administrador ADM", "Gestor", "Operacional", "Consulta"]
     for name in defaults:
         Group.objects.get_or_create(name=name)
 
