@@ -101,7 +101,7 @@ class CRLVTests(TestCase):
         self.assertEqual(data["owner_document"], "27.595.780/0025-93")
         self.assertTrue(data["raw_text"])
 
-    @patch("apps.fleet.services.extract_crlv_data", create=True)
+    @patch("apps.fleet.crlv.extract_crlv_data")
     def test_stage_crlv_rewinds_uploaded_file_after_document_save(self, extract):
         # O save do DocumentVersion pode consumir o stream. A extração deve
         # receber o arquivo reposicionado no início.
