@@ -1482,14 +1482,21 @@ def vehicle_create(request):
             document_id = data.pop("document_id")
             document = get_object_or_404(Document, pk=document_id)
             try:
+                extraction_audit = AuditLog.objects.filter(
+                    entity_type="document",
+                    entity_id=document.id,
+                    action="CRLV PARA INCLUSÃO DE VEÍCULO",
+                ).order_by("-created_at").first()
+                extracted_data = dict(extraction_audit.new_values or {}) if extraction_audit else {}
+                extracted_data.update({
+                    "reviewed": True,
+                    "source": "CRLV",
+                    "form_values": {k: (str(v) if hasattr(v, "pk") else v) for k, v in data.items()},
+                })
                 vehicle, _ = create_vehicle_from_crlv(
                     document=document,
                     user=request.user,
-                    extracted_data={
-                        "reviewed": True,
-                        "source": "CRLV",
-                        "form_values": {k: (str(v) if hasattr(v, "pk") else v) for k, v in data.items()},
-                    },
+                    extracted_data=extracted_data,
                     **data,
                 )
             except ValueError as exc:
