@@ -316,10 +316,10 @@ def _extract_linearized_crlv_values(text):
         result["motor"] = re.sub(r"[^A-Z0-9]", "", tail.group(8))
         result["cmt"] = tail.group(9)
         result["axles"] = ""
-        result["seating"] = tail.group(11)
-        result["bodywork"] = _clean_text(tail.group(12))
+        result["seating"] = tail.group(10)
+        result["bodywork"] = _clean_text(tail.group(11))
         result["owner_name"] = "CS BRASIL FROTAS SA"
-        result["owner_document"] = tail.group(13)
+        result["owner_document"] = tail.group(12)
 
     # O padrão acima cobre o CRLV real. Para outros proprietários, preservamos
     # apenas campos seguros já identificados pelas heurísticas gerais.
