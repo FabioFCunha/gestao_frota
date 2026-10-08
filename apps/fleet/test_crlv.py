@@ -113,7 +113,7 @@ class CRLVTests(TestCase):
             model="Onix 1.0", color="BRANCO", sector=self.sector, status=self.status,
             user=self.user, extracted_data={"source": "CRLV", "reviewed": True},
         )
-        self.assertEqual(vehicle.plate_history.get(kind="CURRENT").plate, "ABC1D23")
+        self.assertEqual(vehicle.plate_history.get(kind="CURRENT").plate, "XYZ1A23")
         self.assertEqual(vehicle.renavam, "12345678901")
         self.assertEqual(vehicle.chassi, "9BWZZZ377VT004251")
         self.assertEqual(record.exercise, 2026)
