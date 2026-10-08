@@ -101,6 +101,24 @@ class CRLVTests(TestCase):
         self.assertEqual(data["owner_document"], "27.595.780/0025-93")
         self.assertTrue(data["raw_text"])
 
+    @patch("apps.fleet.services.extract_crlv_data", create=True)
+    def test_stage_crlv_rewinds_uploaded_file_after_document_save(self, extract):
+        # O save do DocumentVersion pode consumir o stream. A extração deve
+        # receber o arquivo reposicionado no início.
+        extract.side_effect = lambda file_obj: {
+            "bytes_read": len(file_obj.read()),
+            "text_extracted": True,
+        }
+        upload = SimpleUploadedFile(
+            "crlv.pdf", b"%PDF-1.4 CRLV TEST DATA", content_type="application/pdf"
+        )
+        document, extracted = stage_crlv_document_for_creation(
+            file_obj=upload,
+            user=self.user,
+        )
+        self.assertEqual(extracted["bytes_read"], len(b"%PDF-1.4 CRLV TEST DATA"))
+        self.assertTrue(document.versions.exists())
+
     def test_create_vehicle_from_crlv_preserves_document_history(self):
         document, extracted = stage_crlv_document_for_creation(
             file_obj=SimpleUploadedFile("crlv.pdf", b"%PDF placeholder", content_type="application/pdf"),
