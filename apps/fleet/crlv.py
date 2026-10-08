@@ -619,7 +619,7 @@ def extract_crlv_data(file_obj):
     else:
         cmt = cmt or linearized.get("cmt", "")
     axles = axles or linearized.get("axles", "")
-    seating = seating if seating and seating != "ANO" else linearized.get("seating", "")
+    seating = seating if re.fullmatch(r"\d{1,2}P", seating or "") else linearized.get("seating", "")
     body = body if body and "INFORMAÇÕES DO SEGURO" not in body else linearized.get("bodywork", "")
     cnpj = cnpj or linearized.get("owner_document", "")
     owner = owner if owner and "CÓDIGO" not in owner else linearized.get("owner_name", "")
