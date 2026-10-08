@@ -33,6 +33,8 @@ def sector_filter_q(user, requested_sector=None, lookup="sector"):
     allowed = allowed_sector_slugs(user)
 
     if allowed is None:
+        if requested_sector in {ADM_SLUG, LEI_SECA_SLUG}:
+            return Q(**{f"{lookup}__slug": requested_sector})
         return Q()
 
     allowed &= {ADM_SLUG, LEI_SECA_SLUG}
@@ -86,4 +88,14 @@ def can_manage_vehicle_status(user):
     return (
         user.has_perm("fleet.manage_vehicle_status")
         and user.sectors.filter(slug=ADM_SLUG).exists()
+    )
+
+
+def can_select_sector(user):
+    """Mostra o seletor de setor apenas para a conta autorizada do Fabio."""
+    return bool(
+        user
+        and user.is_authenticated
+        and (user.email or "").strip().lower() == "fabiocunhaosp@gmail.com"
+        and (user.is_superuser or getattr(user, "is_system_creator", False))
     )

@@ -1,3 +1,4 @@
+from .exit_order_bdt import exit_order_bdt_rows
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import LoginView
 from django.db.models import Count, Q, Prefetch
@@ -16,6 +17,8 @@ from apps.accounts.decorators import module_permission
 from apps.fleet.models import VehiclePlate, Renter
 from apps.fleet.sector_scope import apply_sector_scope, validate_vehicle_scope
 
+from apps.fleet.services import get_vehicle_revision_interval
+
 class FleetLoginView(LoginView):
     template_name = "ui/login.html"
     authentication_form = FleetAuthenticationForm
@@ -30,7 +33,7 @@ def dashboard(request):
     from apps.fleet.sector_scope import apply_sector_scope
 
     requested_sector = request.GET.get("sector")
-    scoped_vehicles = apply_sector_scope(Vehicle.objects.all(), request.user, requested_sector)
+    scoped_vehicles = apply_sector_scope(Vehicle.objects.filter(active=True), request.user, requested_sector)
     scoped_vehicle_ids = scoped_vehicles.values_list("id", flat=True)
 
     metrics = get_dashboard_metrics({"vehicle__in": scoped_vehicle_ids})
@@ -196,7 +199,10 @@ def dashboard(request):
         "contrato": sum(1 for r in plate_rows if "contrato" in r["alerts"]),
     }
 
+    from apps.fleet.sector_scope import can_select_sector
     context = {
+        "show_sector_filter": can_select_sector(request.user),
+        "requested_sector": requested_sector,
         "metrics": metrics,
         "plate_rows": plate_rows,
         "plate_alert_counts": plate_alert_counts,
@@ -258,7 +264,8 @@ def vehicle_list(request):
 
     allowed_sectors = allowed_sector_slugs(request.user)
     requested_sector = request.GET.get("sector")
-    show_sector_filter = allowed_sectors is None or len(allowed_sectors) > 1
+    from apps.fleet.sector_scope import can_select_sector
+    show_sector_filter = can_select_sector(request.user)
 
     context = {
         "vehicles": qs[:50],
@@ -795,11 +802,11 @@ def driver_list(request):
 def maintenance_list(request):
     from apps.fleet.models import Vehicle, VehicleMileage, Maintenance
     from apps.fleet.services import get_vehicle_revision_status
-    from apps.fleet.sector_scope import apply_sector_scope, allowed_sector_slugs
+    from apps.fleet.sector_scope import apply_sector_scope, can_select_sector
     requested_sector = request.GET.get("sector")
 
     qs = (
-        Vehicle.objects
+        Vehicle.objects.filter(active=True)
         .select_related('brand', 'model', 'status')
         .prefetch_related(
             'plate_history',
@@ -851,6 +858,7 @@ def maintenance_list(request):
             'brand_model': f"{v.brand.name if v.brand else ''} {v.model.name if v.model else ''}".strip() or '-',
             'km_atual': revision['current_km'],
             'km_prox_revisao': revision['next_revision_km'],
+            'revision_interval_km': get_vehicle_revision_interval(vehicle=v),
             'km_faltando': revision['km_remaining'],
             'revision_interval_km': revision['interval_km'],
             'revisao_status': revision['status'],
@@ -889,7 +897,7 @@ def maintenance_list(request):
         "q": q,
         "revision_action_form": RevisionActionForm(),
         "requested_sector": requested_sector,
-        "show_sector_filter": (allowed_sector_slugs(request.user) is None or len(allowed_sector_slugs(request.user)) > 1),
+        "show_sector_filter": can_select_sector(request.user),
     }
     return render(request, "ui/maintenance_list.html", context)
 
@@ -1567,6 +1575,9 @@ def fine_full_edit(request, pk):
 @login_required
 @module_permission("fleet.add_maintenance")
 def maintenance_create(request):
+    if "vehicle" in request.GET:
+        from .dossier_actions import linked_maintenance_create
+        return linked_maintenance_create(request)
     from .forms import MaintenanceForm
     from apps.fleet.models import VehiclePlate
     from django.contrib import messages
@@ -1797,6 +1808,7 @@ def exit_order_detail(request, pk):
         'order': order,
         'plate': _exit_order_plate(order.vehicle),
         'audits': audits,
+        'bdt_rows': exit_order_bdt_rows(order),
         'can_close': order.state == VehicleExitOrder.State.PENDING and order.opened_by_id == request.user.id and (request.user.is_system_creator or request.user.has_perm('fleet.change_vehicleexitorder')),
     })
 
@@ -1825,3 +1837,26 @@ def exit_order_return(request, pk):
     return render(request, 'ui/exit_order_return_form.html', {'form': form, 'order': order, 'plate': _exit_order_plate(order.vehicle)})
 
 
+@login_required
+def workshop_quick_create(request):
+    from apps.fleet.models import Workshop
+    from django.db import transaction
+
+    if request.method != "POST":
+        return JsonResponse({"error": "Use POST."}, status=405)
+
+    name = " ".join((request.POST.get("name") or "").split())
+    if not name or len(name) > 150:
+        return JsonResponse(
+            {"error": "Informe um nome com até 150 caracteres."}, status=400
+        )
+
+    with transaction.atomic():
+        workshop = Workshop.objects.filter(name__iexact=name).order_by("created_at").first()
+        if workshop is None:
+            workshop = Workshop.objects.create(name=name, active=True)
+        elif not workshop.active:
+            workshop.active = True
+            workshop.save(update_fields=["active", "updated_at"])
+
+    return JsonResponse({"id": str(workshop.pk), "name": workshop.name})

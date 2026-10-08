@@ -15,6 +15,48 @@
     <article class="os-detail-card"><h3>Detalhes de retorno</h3>{% if order.state == 'CLOSED' %}<div class="os-detail-fields"><div class="os-info-line"><i data-lucide="calendar-check-2"></i><div><span>Data/hora do retorno</span><strong>{{ order.returned_at|date:"d/m/Y H:i" }}</strong></div></div><div class="os-info-line"><i data-lucide="rectangle-ellipsis"></i><div><span>Observações</span><strong>{{ order.return_notes|default:"Não informado" }}</strong></div></div></div>{% else %}<div class="os-return-empty"><i data-lucide="clock-3"></i><span>Aguardando registro de retorno.</span></div>{% endif %}</article>
   </div>
 
+
+  <article class="os-detail-card" style="margin:20px 0;">
+    <h3>BDT — abertura e fechamento</h3>
+    <p>Registros da mesma viatura e motorista, abertos durante o período desta saída.</p>
+    {% for row in bdt_rows %}
+    <section style="padding:16px 0;border-bottom:1px solid #ddd;">
+      <p><strong>Situação:</strong> {{ row.status }}</p>
+      <div class="os-detail-fields">
+        <div class="os-info-line"><div>
+          <span>Data da abertura</span>
+          <strong>{{ row.bdt.started_at|date:"d/m/Y"|default:"Não informada" }}</strong>
+        </div></div>
+        <div class="os-info-line"><div>
+          <span>Horário da abertura</span>
+          <strong>{{ row.bdt.started_at|date:"H:i"|default:"Não informado" }}</strong>
+        </div></div>
+        <div class="os-info-line"><div>
+          <span>KM inicial</span>
+          <strong>{{ row.bdt.started_km|default_if_none:"Não informado"|default:"Não informado" }}</strong>
+        </div></div>
+        <div class="os-info-line"><div>
+          <span>Data do fechamento</span>
+          <strong>{{ row.bdt.ended_at|date:"d/m/Y"|default:"Não informada" }}</strong>
+        </div></div>
+        <div class="os-info-line"><div>
+          <span>Horário do fechamento</span>
+          <strong>{{ row.bdt.ended_at|date:"H:i"|default:"Não informado" }}</strong>
+        </div></div>
+        <div class="os-info-line"><div>
+          <span>KM final</span>
+          <strong>{{ row.bdt.ended_km|default_if_none:"Não informado"|default:"Não informado" }}</strong>
+        </div></div>
+      </div>
+      <p>Última sincronização: {{ row.bdt.last_synced_at|date:"d/m/Y H:i" }}</p>
+    </section>
+    {% empty %}
+      <p><strong>BDT não localizado para esta saída.</strong></p>
+      <p>A abertura pode ainda não ter sido recebida pela sincronização.</p>
+    {% endfor %}
+    <p>Informações do Hórus, disponíveis somente para consulta.</p>
+  </article>
+
   <article class="os-audit-card"><h3>Log de auditoria</h3><div class="os-audit-list">{% for audit in audits %}<div class="os-audit-entry"><span class="os-audit-avatar">{{ audit.user.username|default:"S"|first|upper }}</span><p><strong>{{ audit.action|capfirst }}</strong> por {{ audit.user.get_full_name|default:audit.user.username|default:"Sistema" }} em {{ audit.created_at|date:"d/m/Y H:i" }}</p></div>{% empty %}<p class="os-audit-empty">Nenhum registro de auditoria encontrado.</p>{% endfor %}</div></article>
 </section>
 {% endblock %}

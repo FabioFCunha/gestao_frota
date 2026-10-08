@@ -1,0 +1,75 @@
+{% extends 'ui/base.html' %}
+{% block title %}Nova vistoria | Gestão de Frotas{% endblock %}
+{% block heading %}Nova vistoria{% endblock %}
+{% block content %}
+<style>
+.inspection-mobile { max-width:720px; margin:0 auto; }
+.inspection-mobile .panel { margin-bottom:16px; }
+.inspection-mobile label { display:block; margin-bottom:8px; font-weight:600; }
+.inspection-mobile input:not([type=radio]):not([type=hidden]),
+.inspection-mobile select,
+.inspection-mobile textarea {
+  width:100%; box-sizing:border-box; min-height:48px; font-size:16px;
+}
+.inspection-mobile .field { margin-bottom:18px; }
+.inspection-mobile .errorlist { color:#b91c1c; }
+.inspection-mobile .check-options label {
+  display:flex; align-items:center; gap:10px; min-height:48px;
+  padding:8px 12px; border:1px solid #d1d5db; border-radius:8px;
+  box-sizing:border-box; margin-bottom:8px; cursor:pointer;
+}
+.inspection-mobile input[type=radio] { width:22px; height:22px; flex-shrink:0; }
+.inspection-mobile .actions { display:flex; gap:12px; flex-wrap:wrap; }
+.inspection-mobile .actions button,
+.inspection-mobile .actions a { min-height:48px; }
+</style>
+<div class="inspection-mobile">
+  <article class="panel">
+    <h2>Vistoria da viatura</h2>
+    <p>
+      {% for plate in vehicle.plate_history.all %}
+        {% if plate.kind == 'CURRENT' and not plate.ends_on %}
+          <strong>{{ plate.plate }}</strong>
+        {% endif %}
+      {% endfor %}
+      — {{ vehicle.brand.name|default:"" }} {{ vehicle.model.name|default:"" }}
+    </p>
+    <p>Preencha os itens durante a inspeção da viatura.</p>
+  </article>
+
+  <form method="post">
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+    <article class="panel">
+      <h3>Identificação</h3>
+      <div class="field">{{ form.inspector_name.label_tag }}{{ form.inspector_name }}{{ form.inspector_name.errors }}</div>
+      <div class="field">{{ form.inspection_moment.label_tag }}{{ form.inspection_moment }}{{ form.inspection_moment.errors }}</div>
+      <div class="field">{{ form.date.label_tag }}{{ form.date }}{{ form.date.errors }}</div>
+      <div class="field">{{ form.type.label_tag }}{{ form.type }}{{ form.type.errors }}</div>
+      <div class="field">{{ form.mileage.label_tag }}{{ form.mileage }}{{ form.mileage.errors }}</div>
+    </article>
+
+    {% for item in form.checklist_rows %}
+    <article class="panel">
+      <fieldset style="border:0;padding:0;margin:0;">
+        <legend style="font-weight:700;margin-bottom:12px;">{{ forloop.counter }}. {{ item.answer.label }}</legend>
+        <div class="check-options">{{ item.answer }}</div>
+        {{ item.answer.errors }}
+        <div class="field">{{ item.note.label_tag }}{{ item.note }}{{ item.note.errors }}</div>
+      </fieldset>
+    </article>
+    {% endfor %}
+
+    <article class="panel">
+      <h3>Conclusão</h3>
+      <p>Confirme a situação final considerando os problemas registrados.</p>
+      <div class="field">{{ form.status.label_tag }}{{ form.status }}{{ form.status.errors }}</div>
+      <div class="field">{{ form.notes.label_tag }}{{ form.notes }}{{ form.notes.errors }}</div>
+      <div class="actions">
+        <button type="submit" class="primary-action">Salvar vistoria</button>
+        <a href="{{ back_url }}" class="secondary-action">Cancelar</a>
+      </div>
+    </article>
+  </form>
+</div>
+{% endblock %}

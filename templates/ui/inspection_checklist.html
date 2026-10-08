@@ -1,0 +1,31 @@
+{% if inspection.checklist.items %}
+<details style="margin-top:10px;">
+  <summary style="cursor:pointer;min-height:44px;display:flex;align-items:center;">
+    Ver checklist
+  </summary>
+  <div style="min-width:200px;max-width:520px;white-space:normal;">
+    <p><strong>Momento:</strong> {{ inspection.get_inspection_moment_display }}</p>
+    <p><strong>Responsável:</strong> {{ inspection.inspector_name }}</p>
+    {% for item in inspection.checklist.items %}
+    <div style="padding:10px 0;border-bottom:1px solid #e5e7eb;">
+      <strong>{{ item.label }}</strong><br>
+      {% if item.answer == 'CONFORME' %}
+        <span style="color:#15803d;">Conforme</span>
+      {% elif item.answer == 'PROBLEMA' %}
+        <span style="color:#b91c1c;">Com problema</span>
+      {% elif item.answer == 'NA' %}
+        Não se aplica
+      {% else %}
+        {{ item.answer }}
+      {% endif %}
+      {% if item.observation %}
+        <p style="overflow-wrap:anywhere;">{{ item.observation|linebreaksbr }}</p>
+      {% endif %}
+    </div>
+    {% endfor %}
+    {% if inspection.notes %}
+      <p><strong>Observações gerais:</strong><br>{{ inspection.notes|linebreaksbr }}</p>
+    {% endif %}
+  </div>
+</details>
+{% endif %}

@@ -43,3 +43,33 @@ urlpatterns = [
     path("entrar/", FleetLoginView.as_view(), name="login"),
     path("sair/", LogoutView.as_view(next_page="login"), name="logout"),
 ]
+
+
+from .dossier_actions import inspection_create
+
+urlpatterns += [
+    path(
+        "vistorias/nova/<uuid:vehicle_id>/",
+        inspection_create,
+        name="inspection_create",
+    ),
+]
+
+
+from .inspection_views import inspection_list
+
+urlpatterns += [
+    path("vistorias/", inspection_list, name="inspection_list"),
+]
+
+
+from django.urls import path as workshop_path
+from .views import workshop_quick_create
+
+urlpatterns += [
+    workshop_path(
+        "oficinas/cadastro-rapido/",
+        workshop_quick_create,
+        name="workshop_quick_create",
+    ),
+]

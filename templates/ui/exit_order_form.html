@@ -7,9 +7,68 @@
   <form method="post">{% csrf_token %}
     {{ form.non_field_errors }}
     {% for field in form %}{% if not linked_vehicle or field.name != 'vehicle' %}
-      <div class="form-group"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{{ field.errors }}</div>
+      <div class="form-group">
+        <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+        {% if field.name == 'driver' %}
+        <label for="driver-name-search" style="display:block;margin-top:8px;">
+          Pesquisar motorista pelo nome
+        </label>
+        <input type="search" id="driver-name-search" class="form-input"
+               placeholder="Digite parte do nome..."
+               autocomplete="off" aria-controls="{{ field.id_for_label }}"
+               style="width:100%;margin:6px 0 10px;">
+        {% endif %}
+        {{ field }}{{ field.errors }}
+        {% if field.name == 'driver' %}
+        <small id="driver-search-result" role="status" aria-live="polite"></small>
+        {% endif %}
+      </div>
     {% endif %}{% endfor %}
     <div class="form-actions"><button class="btn btn-primary" type="submit">Abrir OS</button>{% if linked_vehicle %}<a class="btn btn-secondary" href="{% url 'vehicle_dossier' linked_vehicle.id %}">Cancelar</a>{% else %}<a class="btn btn-secondary" href="{% url 'exit_order_list' %}">Cancelar</a>{% endif %}</div>
   </form>
 </div>
+
+<script>
+(function () {
+  const search = document.getElementById('driver-name-search');
+  const select = document.getElementById('id_driver');
+  const result = document.getElementById('driver-search-result');
+  if (!search || !select || !result) return;
+
+  const options = Array.from(select.options).map(option => option.cloneNode(true));
+  const normalize = value => value.normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+
+  function filterDrivers() {
+    const term = normalize(search.value);
+    const selected = select.value;
+    let matches = 0;
+    let retained = false;
+    const fragment = document.createDocumentFragment();
+
+    options.forEach(option => {
+      const match = option.value && normalize(option.textContent).includes(term);
+      if (match) matches++;
+      if (!option.value || match || option.value === selected) {
+        const copy = option.cloneNode(true);
+        copy.selected = option.value === selected;
+        fragment.appendChild(copy);
+        if (option.value === selected && selected && !match) retained = true;
+      }
+    });
+
+    select.replaceChildren(fragment);
+    select.value = selected;
+    // Impede seleção automática do primeiro resultado durante a pesquisa.
+    if (select.value !== selected) select.selectedIndex = -1;
+
+    result.textContent = matches + ' motorista(s) encontrado(s).' +
+      (retained ? ' O motorista selecionado foi mantido na lista.' : '');
+  }
+
+  search.addEventListener('input', filterDrivers);
+  select.addEventListener('change', filterDrivers);
+  filterDrivers();
+})();
+</script>
 {% endblock %}

@@ -38,6 +38,19 @@
 
 
 
+
+{% if show_sector_filter %}
+<form method="get" style="display:flex;gap:12px;align-items:center;margin:16px 0;">
+    <label for="dashboard-sector">Setor:</label>
+    <select id="dashboard-sector" name="sector" class="form-input" style="width:190px;">
+        <option value="" {% if not requested_sector %}selected{% endif %}>Todos os setores</option>
+        <option value="adm" {% if requested_sector == 'adm' %}selected{% endif %}>ADM</option>
+        <option value="lei-seca" {% if requested_sector == 'lei-seca' %}selected{% endif %}>Lei Seca</option>
+    </select>
+    <button type="submit" class="primary-action">Aplicar</button>
+</form>
+{% endif %}
+
 <section class="fd-hero">
     <div class="fd-hero-left">
         <span class="fd-eyebrow">CENTRAL DA FROTA</span>
