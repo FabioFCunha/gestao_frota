@@ -313,7 +313,7 @@ def _extract_linearized_layout_values(compact):
         data["power_cylinder"] = power_match.group(1)
         data["gross_weight"] = power_match.group(2)
 
-    motor_match = re.search(r"\b(L[A-Z0-9*]{6,24})\b\s+(\d+(?:\.\d+)?)\s+\*?\s+(\d{1,2}P)\b", compact)
+    motor_match = re.search(r"\b(L[A-Z0-9*]{6,24})(?=\s+)(?:\s+)(\d+(?:\.\d+)?)\s+\*?\s+(\d{1,2}P)\b", compact)
     if motor_match:
         data["motor"] = motor_match.group(1).replace("*", "")
         data["cmt"] = motor_match.group(2)
@@ -330,7 +330,7 @@ def _extract_linearized_layout_values(compact):
     # identificador do motor e antes da lotação. Nunca aceitar identificadores
     # longos (RENAVAM/CRV) como CMT.
     cmt_semantic = re.search(
-        r"\bL[A-Z0-9*]{6,24}\b\s+(\d+(?:\.\d+)?)\s+\*?\s+\d{1,2}P\b",
+        r"\bL[A-Z0-9*]{6,24}(?=\s+)\s+(\d+(?:\.\d+)?)\s+\*?\s+\d{1,2}P\b",
         compact,
     )
     if cmt_semantic:
