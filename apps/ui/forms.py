@@ -16,18 +16,40 @@ class CRLVUploadForm(forms.Form):
         if f.name.rsplit('.',1)[-1].lower() not in {'pdf','jpg','jpeg','png'}: raise forms.ValidationError('Envie PDF, JPG ou PNG.')
         return f
 class CRLVConfirmForm(forms.Form):
-    document_id=forms.UUIDField(widget=forms.HiddenInput()); plate=forms.CharField(max_length=8,widget=forms.TextInput(attrs=INPUT)); renavam=forms.CharField(max_length=20,required=False,widget=forms.TextInput(attrs=INPUT)); chassi=forms.CharField(max_length=17,required=False,widget=forms.TextInput(attrs=INPUT)); exercise=forms.IntegerField(min_value=2000,max_value=2100,widget=forms.NumberInput(attrs=INPUT))
-class CRLVVehicleCreateForm(forms.Form):
     document_id = forms.UUIDField(widget=forms.HiddenInput())
-    plate = forms.CharField(max_length=8, label="Placa", widget=forms.TextInput(attrs={**INPUT, "readonly": True}))
+    plate = forms.CharField(max_length=8, label="Placa", widget=forms.TextInput(attrs=INPUT))
     renavam = forms.CharField(max_length=20, required=False, label="RENAVAM", widget=forms.TextInput(attrs=INPUT))
     chassi = forms.CharField(max_length=17, required=False, label="Chassi", widget=forms.TextInput(attrs=INPUT))
     exercise = forms.IntegerField(min_value=2000, max_value=2100, label="Exercício do CRLV", widget=forms.NumberInput(attrs=INPUT))
-    brand = forms.CharField(max_length=100, label="Marca", widget=forms.TextInput(attrs=INPUT))
-    model = forms.CharField(max_length=150, label="Modelo / Versão", widget=forms.TextInput(attrs=INPUT))
+    brand = forms.CharField(max_length=100, required=False, label="Marca", widget=forms.TextInput(attrs=INPUT))
+    model = forms.CharField(max_length=150, required=False, label="Modelo", widget=forms.TextInput(attrs=INPUT))
+    version = forms.CharField(max_length=100, required=False, label="Versão", widget=forms.TextInput(attrs=INPUT))
+    manufacture_year = forms.IntegerField(min_value=1900, max_value=2100, required=False, label="Ano de fabricação", widget=forms.NumberInput(attrs=INPUT))
+    model_year = forms.IntegerField(min_value=1900, max_value=2100, required=False, label="Ano modelo", widget=forms.NumberInput(attrs=INPUT))
     color = forms.CharField(max_length=50, required=False, label="Cor", widget=forms.TextInput(attrs=INPUT))
-    sector = forms.ModelChoiceField(queryset=Sector.objects.filter(active=True).order_by("name"), label="Setor", widget=forms.Select(attrs=SELECT))
-    status = forms.ModelChoiceField(queryset=VehicleStatus.objects.filter(active=True).order_by("name"), label="Situação", widget=forms.Select(attrs=SELECT))
+    fuel = forms.CharField(max_length=50, required=False, label="Combustível", widget=forms.TextInput(attrs=INPUT))
+    category = forms.CharField(max_length=50, required=False, label="Categoria", widget=forms.TextInput(attrs=INPUT))
+    vehicle_type = forms.CharField(max_length=100, required=False, label="Espécie / tipo", widget=forms.TextInput(attrs=INPUT))
+    motor = forms.CharField(max_length=100, required=False, label="Motor", widget=forms.TextInput(attrs=INPUT))
+    power_cylinder = forms.CharField(max_length=100, required=False, label="Potência / cilindrada", widget=forms.TextInput(attrs=INPUT))
+    gross_weight = forms.CharField(max_length=50, required=False, label="PBT", widget=forms.TextInput(attrs=INPUT))
+    cmt = forms.CharField(max_length=50, required=False, label="CMT", widget=forms.TextInput(attrs=INPUT))
+    axles = forms.CharField(max_length=20, required=False, label="Eixos", widget=forms.TextInput(attrs=INPUT))
+    seating = forms.CharField(max_length=20, required=False, label="Lotação", widget=forms.TextInput(attrs=INPUT))
+    bodywork = forms.CharField(max_length=100, required=False, label="Carroceria", widget=forms.TextInput(attrs=INPUT))
+
+
+class CRLVVehicleCreateForm(CRLVConfirmForm):
+    sector = forms.ModelChoiceField(
+        queryset=Sector.objects.filter(active=True).order_by("name"),
+        label="Setor",
+        widget=forms.Select(attrs=SELECT),
+    )
+    status = forms.ModelChoiceField(
+        queryset=VehicleStatus.objects.filter(active=True).order_by("name"),
+        label="Situação",
+        widget=forms.Select(attrs=SELECT),
+    )
 
 class LicensingCalendarForm(forms.ModelForm):
     class Meta:
@@ -177,13 +199,20 @@ class VehicleForm(forms.ModelForm):
     class Meta:
         model = Vehicle
         fields = [
-            'brand', 'model', 'color', 'renavam',
+            'brand', 'model', 'version', 'manufacture_year', 'model_year',
+            'color', 'fuel', 'category', 'vehicle_type', 'motor', 'power_cylinder',
+            'gross_weight', 'cmt', 'axles', 'seating', 'bodywork', 'renavam',
             'contract', 'renter', 'unit', 'base',
             'status', 'armored', 'custody_info', 'notes',
         ]
         labels = {
-            'brand': 'Marca', 'model': 'Modelo', 'color': 'Cor',
-            'renavam': 'RENAVAM', 'contract': 'Contrato',
+            'brand': 'Marca', 'model': 'Modelo', 'version': 'Versão',
+            'manufacture_year': 'Ano de fabricação', 'model_year': 'Ano modelo',
+            'color': 'Cor', 'fuel': 'Combustível', 'category': 'Categoria',
+            'vehicle_type': 'Espécie / tipo', 'motor': 'Motor',
+            'power_cylinder': 'Potência / cilindrada', 'gross_weight': 'PBT',
+            'cmt': 'CMT', 'axles': 'Eixos', 'seating': 'Lotação',
+            'bodywork': 'Carroceria', 'renavam': 'RENAVAM', 'contract': 'Contrato',
             'renter': 'Locadora', 'unit': 'Unidade Administrativa',
             'base': 'Base', 'status': 'Situação', 'armored': 'Blindado',
             'custody_info': 'SEI / Acautelamento', 'notes': 'Observações',
@@ -191,7 +220,20 @@ class VehicleForm(forms.ModelForm):
         widgets = {
             'brand': forms.Select(attrs=SELECT),
             'model': forms.Select(attrs=SELECT),
+            'version': forms.TextInput(attrs=INPUT),
+            'manufacture_year': forms.NumberInput(attrs=INPUT),
+            'model_year': forms.NumberInput(attrs=INPUT),
             'color': forms.TextInput(attrs={**INPUT, 'placeholder': 'Ex: PRETO'}),
+            'fuel': forms.TextInput(attrs=INPUT),
+            'category': forms.TextInput(attrs=INPUT),
+            'vehicle_type': forms.TextInput(attrs=INPUT),
+            'motor': forms.TextInput(attrs=INPUT),
+            'power_cylinder': forms.TextInput(attrs=INPUT),
+            'gross_weight': forms.TextInput(attrs=INPUT),
+            'cmt': forms.TextInput(attrs=INPUT),
+            'axles': forms.TextInput(attrs=INPUT),
+            'seating': forms.TextInput(attrs=INPUT),
+            'bodywork': forms.TextInput(attrs=INPUT),
             'renavam': forms.TextInput(attrs={**INPUT, 'placeholder': 'Número do RENAVAM'}),
             'contract': forms.Select(attrs=SELECT),
             'renter': forms.Select(attrs=SELECT),

@@ -10,10 +10,56 @@
     {{ upload_form.as_p }}<button class="primary-action" type="submit">Anexar CRLV</button>
   </form>
   {% else %}
-  {% if preview %}<div class="alert alert-info">Extração: placa {{ preview.plate|default:"não identificada" }}, RENAVAM {{ preview.renavam|default:"não identificado" }}, CHASSI {{ preview.chassi|default:"não identificado" }}, exercício {{ preview.exercise|default:"não identificado" }}. {% if preview.plate and preview.plate != current_plate %}<strong>Placa divergente: a confirmação será bloqueada.</strong>{% endif %}</div>{% endif %}
-  <form method="post">{% csrf_token %}
-    {{ confirm_form.non_field_errors }}{{ confirm_form.document_id }}{{ confirm_form.plate.as_field_group }}{{ confirm_form.renavam.as_field_group }}{{ confirm_form.chassi.as_field_group }}{{ confirm_form.exercise.as_field_group }}
-    <button class="primary-action" type="submit">Confirmar CRLV</button> <a class="secondary-action" href="{% url 'vehicle_dossier' vehicle.id %}">Cancelar</a>
+  {% if preview %}
+  <div class="panel" style="margin:20px 0;background:#f8fafc;">
+    <h3 style="margin-top:0;">Resultado da extração</h3>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px 20px;">
+      <div><strong>Placa:</strong> {{ preview.plate|default:"-" }}</div>
+      <div><strong>RENAVAM:</strong> {{ preview.renavam|default:"-" }}</div>
+      <div><strong>Chassi:</strong> {{ preview.chassi|default:"-" }}</div>
+      <div><strong>Exercício:</strong> {{ preview.exercise|default:"-" }}</div>
+      <div><strong>Fabricação:</strong> {{ preview.manufacture_year|default:"-" }}</div>
+      <div><strong>Ano modelo:</strong> {{ preview.model_year|default:"-" }}</div>
+      <div><strong>Marca:</strong> {{ preview.brand_raw|default:"-" }}</div>
+      <div><strong>Modelo:</strong> {{ preview.model_raw|default:"-" }}</div>
+      <div><strong>Versão:</strong> {{ preview.version|default:"-" }}</div>
+      <div><strong>Cor:</strong> {{ preview.color|default:"-" }}</div>
+      <div><strong>Combustível:</strong> {{ preview.fuel|default:"-" }}</div>
+      <div><strong>Categoria:</strong> {{ preview.category|default:"-" }}</div>
+      <div><strong>Espécie / tipo:</strong> {{ preview.vehicle_type|default:"-" }}</div>
+      <div><strong>Motor:</strong> {{ preview.motor|default:"-" }}</div>
+      <div><strong>Potência / cilindrada:</strong> {{ preview.power_cylinder|default:"-" }}</div>
+      <div><strong>PBT:</strong> {{ preview.gross_weight|default:"-" }}</div>
+      <div><strong>CMT:</strong> {{ preview.cmt|default:"-" }}</div>
+      <div><strong>Eixos:</strong> {{ preview.axles|default:"-" }}</div>
+      <div><strong>Lotação:</strong> {{ preview.seating|default:"-" }}</div>
+      <div><strong>Carroceria:</strong> {{ preview.bodywork|default:"-" }}</div>
+      <div><strong>CRV:</strong> {{ preview.crv_number|default:"-" }}</div>
+      <div><strong>Proprietário:</strong> {{ preview.owner_name|default:"-" }}</div>
+      <div><strong>CPF / CNPJ:</strong> {{ preview.owner_document|default:"-" }}</div>
+      <div><strong>Local:</strong> {{ preview.location|default:"-" }}</div>
+      <div><strong>Data de emissão:</strong> {{ preview.issue_date|default:"-" }}</div>
+    </div>
+    {% if preview.plate and preview.plate != current_plate %}<p class="error"><strong>Placa divergente: a confirmação será bloqueada.</strong></p>{% endif %}
+  </div>
+  {% endif %}
+  <form method="post">
+    {% csrf_token %}
+    {{ confirm_form.non_field_errors }}
+    {{ confirm_form.document_id }}
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:4px 20px;">
+      {% for field in confirm_form %}
+        {% if field.name != "document_id" %}
+          <p>
+            {{ field.label_tag }}
+            {{ field }}
+            {% for error in field.errors %}<span class="error">{{ error }}</span>{% endfor %}
+          </p>
+        {% endif %}
+      {% endfor %}
+    </div>
+    <button class="primary-action" type="submit">Confirmar CRLV e atualizar veículo</button>
+    <a class="secondary-action" href="{% url 'vehicle_dossier' vehicle.id %}">Cancelar</a>
   </form>
   {% endif %}
 </section>

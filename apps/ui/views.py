@@ -396,7 +396,35 @@ def vehicle_crlv(request, pk):
         upload_form = CRLVUploadForm(request.POST, request.FILES)
         if upload_form.is_valid():
             document, preview = stage_crlv_document(vehicle=vehicle, file_obj=upload_form.cleaned_data["file"], user=request.user)
-            confirm_form = CRLVConfirmForm(initial={"document_id": document.id, "plate": preview["plate"] or (current.plate if current else ""), "renavam": preview["renavam"] or vehicle.renavam, "chassi": preview.get("chassi", "") or vehicle.chassi, "exercise": preview["exercise"]})
+            aliases = {
+                "CHEV": "Chevrolet", "GM": "Chevrolet",
+                "VW": "Volkswagen", "MB": "Mercedes-Benz", "M.BENZ": "Mercedes-Benz",
+            }
+            brand_value = str(preview.get("brand_raw", "") or vehicle.brand.name if vehicle.brand else "").strip()
+            brand_value = aliases.get(brand_value.upper(), brand_value)
+            confirm_form = CRLVConfirmForm(initial={
+                "document_id": document.id,
+                "plate": preview.get("plate") or (current.plate if current else ""),
+                "renavam": preview.get("renavam") or vehicle.renavam,
+                "chassi": preview.get("chassi") or vehicle.chassi,
+                "exercise": preview.get("exercise") or vehicle.crlv_exercise,
+                "brand": brand_value or "",
+                "model": preview.get("model_raw") or (vehicle.model.name if vehicle.model else ""),
+                "version": preview.get("version") or vehicle.version,
+                "manufacture_year": preview.get("manufacture_year") or vehicle.manufacture_year,
+                "model_year": preview.get("model_year") or vehicle.model_year,
+                "color": preview.get("color") or vehicle.color,
+                "fuel": preview.get("fuel") or vehicle.fuel,
+                "category": preview.get("category") or vehicle.category,
+                "vehicle_type": preview.get("vehicle_type") or vehicle.vehicle_type,
+                "motor": preview.get("motor") or vehicle.motor,
+                "power_cylinder": preview.get("power_cylinder") or vehicle.power_cylinder,
+                "gross_weight": preview.get("gross_weight") or vehicle.gross_weight,
+                "cmt": preview.get("cmt") or vehicle.cmt,
+                "axles": preview.get("axles") or vehicle.axles,
+                "seating": preview.get("seating") or vehicle.seating,
+                "bodywork": preview.get("bodywork") or vehicle.bodywork,
+            })
     elif request.method == "POST":
         confirm_form = CRLVConfirmForm(request.POST)
         if confirm_form.is_valid():
@@ -416,7 +444,12 @@ def vehicle_crlv(request, pk):
                     entity_id=document.id,
                     action="ANEXO DE CRLV PARA CONFERÊNCIA",
                 ).order_by("-created_at").first()
-                extracted_data = extraction_audit.new_values if extraction_audit else {}
+                extracted_data = dict(extraction_audit.new_values or {}) if extraction_audit else {}
+                extracted_data.update({
+                    "reviewed": True,
+                    "source": "CRLV",
+                    "form_values": {k: (str(v) if hasattr(v, "pk") else v) for k, v in data.items()},
+                })
                 confirm_crlv(vehicle=vehicle, document=document, user=request.user, extracted_data=extracted_data, **data)
             except (Document.DoesNotExist, ValueError) as exc:
                 confirm_form.add_error(None, str(exc))
@@ -1462,15 +1495,34 @@ def vehicle_create(request):
                     file_obj=upload_form.cleaned_data["file"],
                     user=request.user,
                 )
+                aliases = {
+                    "CHEV": "Chevrolet", "GM": "Chevrolet",
+                    "VW": "Volkswagen", "MB": "Mercedes-Benz", "M.BENZ": "Mercedes-Benz",
+                }
+                brand_value = str(preview.get("brand_raw", "") or "").strip()
+                brand_value = aliases.get(brand_value.upper(), brand_value)
                 confirm_form = CRLVVehicleCreateForm(initial={
                     "document_id": document.id,
                     "plate": preview.get("plate", ""),
                     "renavam": preview.get("renavam", ""),
                     "chassi": preview.get("chassi", ""),
                     "exercise": preview.get("exercise"),
-                    "brand": preview.get("brand_raw", ""),
-                    "model": " ".join(x for x in [preview.get("model_raw", ""), preview.get("version", "")] if x).strip(),
+                    "brand": brand_value,
+                    "model": preview.get("model_raw", ""),
+                    "version": preview.get("version", ""),
+                    "manufacture_year": preview.get("manufacture_year"),
+                    "model_year": preview.get("model_year"),
                     "color": preview.get("color", ""),
+                    "fuel": preview.get("fuel", ""),
+                    "category": preview.get("category", ""),
+                    "vehicle_type": preview.get("vehicle_type", ""),
+                    "motor": preview.get("motor", ""),
+                    "power_cylinder": preview.get("power_cylinder", ""),
+                    "gross_weight": preview.get("gross_weight", ""),
+                    "cmt": preview.get("cmt", ""),
+                    "axles": preview.get("axles", ""),
+                    "seating": preview.get("seating", ""),
+                    "bodywork": preview.get("bodywork", ""),
                 })
             except ValueError as exc:
                 upload_form.add_error("file", str(exc))

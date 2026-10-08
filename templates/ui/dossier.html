@@ -89,7 +89,12 @@
         <ul style="list-style:none;padding:0;line-height:2;">
             <li><strong>Marca:</strong> {{ vehicle.brand.name|default:"-" }}</li>
             <li><strong>Modelo:</strong> {{ vehicle.model.name|default:"-" }}</li>
+            <li><strong>Versão:</strong> {{ vehicle.version|default:"-" }}</li>
+            <li><strong>Ano fabricação / modelo:</strong> {{ vehicle.manufacture_year|default:"-" }} / {{ vehicle.model_year|default:"-" }}</li>
             <li><strong>Cor:</strong> {{ vehicle.color|default:"-" }}</li>
+            <li><strong>Combustível:</strong> {{ vehicle.fuel|default:"-" }}</li>
+            <li><strong>Categoria:</strong> {{ vehicle.category|default:"-" }}</li>
+            <li><strong>Espécie / tipo:</strong> {{ vehicle.vehicle_type|default:"-" }}</li>
             <li><strong>RENAVAM:</strong> {{ vehicle.renavam|default:"-" }}</li>
             <li><strong>Chassi:</strong> {{ vehicle.chassi|default:"-" }}</li>
             <li><strong>CRLV confirmado:</strong> {{ vehicle.crlv_exercise|default:"-" }}</li>
@@ -113,8 +118,13 @@
         <div><strong>Combustível:</strong> {{ latest_crlv.extracted_data.fuel|default:"-" }}</div>
         <div><strong>Categoria:</strong> {{ latest_crlv.extracted_data.category|default:"-" }}</div>
         <div><strong>Espécie / tipo:</strong> {{ latest_crlv.extracted_data.vehicle_type|default:"-" }}</div>
-        <div><strong>Motor:</strong> {{ latest_crlv.extracted_data.motor|default:"-" }}</div>
-        <div><strong>Carroceria:</strong> {{ latest_crlv.extracted_data.bodywork|default:"-" }}</div>
+        <div><strong>Motor:</strong> {{ vehicle.motor|default:"-" }}</div>
+        <div><strong>Potência / cilindrada:</strong> {{ vehicle.power_cylinder|default:"-" }}</div>
+        <div><strong>PBT:</strong> {{ vehicle.gross_weight|default:"-" }}</div>
+        <div><strong>CMT:</strong> {{ vehicle.cmt|default:"-" }}</div>
+        <div><strong>Eixos:</strong> {{ vehicle.axles|default:"-" }}</div>
+        <div><strong>Lotação:</strong> {{ vehicle.seating|default:"-" }}</div>
+        <div><strong>Carroceria:</strong> {{ vehicle.bodywork|default:"-" }}</div>
         <div style="grid-column:1/-1;"><strong>Proprietário:</strong> {{ latest_crlv.extracted_data.owner_name|default:"-" }} — {{ latest_crlv.extracted_data.owner_document|default:"-" }}</div>
         <div style="grid-column:1/-1;"><strong>Observações:</strong> {{ latest_crlv.extracted_data.observation|default:"-" }}</div>
     </div>
