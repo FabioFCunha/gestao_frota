@@ -17,6 +17,8 @@ class DossierActionsTests(TestCase):
         self.user = get_user_model().objects.create_user(
             username="dossier-test",
             email="dossier-test@example.com",
+            first_name="Dossier",
+            last_name="Teste",
             password="test-only",
         )
         self.user.user_permissions.add(*Permission.objects.filter(
@@ -107,10 +109,7 @@ class DossierActionsTests(TestCase):
         self.assertEqual(len(item.checklist["items"]), 8)
         self.assertEqual(item.inspector_name, self.user.username)
         self.assertEqual(item.created_by, self.user)
-        self.assertEqual(
-            response.url,
-            reverse("vehicle_dossier", kwargs={"pk": self.vehicle.pk}),
-        )
+        self.assertEqual(response.url, reverse("inspection_list"))
         self.assertFalse(VehicleInspection.objects.filter(vehicle=self.other).exists())
 
     def test_other_sector_and_inactive_vehicle_are_blocked(self):
