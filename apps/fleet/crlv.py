@@ -326,9 +326,18 @@ def _extract_linearized_layout_values(compact):
             if len(candidate) >= 8:
                 data["motor"] = candidate
 
-    if "cmt" not in data:
+    # No leiaute linearizado, o CMT aparece semanticamente após o
+    # identificador do motor e antes da lotação. Nunca aceitar identificadores
+    # longos (RENAVAM/CRV) como CMT.
+    cmt_semantic = re.search(
+        r"\bL[A-Z0-9*]{6,24}\b\s+(\d+(?:\.\d+)?)\s+\*?\s+\d{1,2}P\b",
+        compact,
+    )
+    if cmt_semantic:
+        data["cmt"] = cmt_semantic.group(1)
+    elif "cmt" not in data:
         cmt_match = re.search(r"\bCMT\b.*?\b(\d+(?:\.\d+)?)\b", compact)
-        if cmt_match:
+        if cmt_match and len(re.sub(r"\D", "", cmt_match.group(1))) <= 4:
             data["cmt"] = cmt_match.group(1)
 
     if "axles" not in data:
