@@ -186,7 +186,7 @@ def _extract_renavam(text):
             r"\s+20\d{2}\s+20\d{2}\s+20\d{2}\b",
             upper,
         )
-        if match and not _cpf_valid(match.group(1)):
+        if match:
             return match.group(1), [match.group(1)]
     contextual = re.findall(r"RENAVAM\D{0,500}([0-9][0-9 .-]{9,14})", upper)
     contextual_digits = []
