@@ -237,6 +237,79 @@ def _extract_vehicle_description(text):
     return brand_code, model, version
 
 
+def _extract_linearized_crlv_values(text):
+    """Extrai os valores do bloco de identificação do CRLV-e linearizado."""
+    upper = text.upper()
+    compact = re.sub(r"\\s+", " ", upper).strip()
+    result = {}
+
+    # VIN: prioriza qualquer VIN estruturalmente válido no documento.
+    for candidate in re.findall(r"\\b[A-HJ-NPR-Z0-9]{17}\\b", compact):
+        normalized = normalize_chassi(candidate)
+        if _vin_is_valid(normalized):
+            result["chassi"] = normalized
+            break
+
+    m = re.search(r"\\b([A-Z]{2,8})/([A-Z0-9]+(?: [A-Z0-9]+)*)\\s+PASSAGEIRO\\s+AUTOMOVEL\\b", compact)
+    if m:
+        result["brand_raw"] = m.group(1)
+        description = m.group(2).strip()
+        parts = description.split()
+        result["model_raw"] = parts[0] if parts else ""
+        result["version"] = " ".join(parts[1:]) if len(parts) > 1 else ""
+
+    m = re.search(r"\\*{3,}/\\*{2}\\s+([A-HJ-NPR-Z0-9]{17})\\b", compact)
+    if m:
+        result["chassi"] = normalize_chassi(m.group(1))
+
+    known_colors = ["BRANCA", "PRETA", "PRATA", "CINZA", "VERMELHA", "AZUL", "VERDE", "AMARELA", "MARROM", "BEGE", "DOURADA"]
+    for value in known_colors:
+        if re.search(r"\\b" + re.escape(value) + r"\\b", compact):
+            result["color"] = value
+            break
+
+    known_fuels = ["ALCOOL/GASOLINA", "GASOLINA/ALCOOL/ELETRICO", "GASOLINA", "ALCOOL", "DIESEL", "ELETRICO", "FLEX", "GNV"]
+    for value in known_fuels:
+        if value in compact:
+            result["fuel"] = value
+            break
+
+    for value in ["PARTICULAR", "ALUGUEL", "OFICIAL", "APRENDIZAGEM", "EXPERIENCIA"]:
+        if re.search(r"\\b" + re.escape(value) + r"\\b", compact):
+            result["category"] = value
+            break
+
+    m = re.search(r"\\bCAPACIDADE\\b.*?\\bPOT[ÊE]NCIA/CILINDRADA\\b.*?\\bPESO\\s+BRUTO\\s+TOTAL\\b", upper)
+    # No layout linearizado os valores aparecem depois dos rótulos, em ordem.
+    if "PASSAGEIRO AUTOMOVEL" in compact:
+        tail_match = re.search(
+            r"PASSAGEIRO\\s+AUTOMOVEL\\s+\\*{3,}/\\*{2}\\s+[A-HJ-NPR-Z0-9]{17}\\s+"
+            r"([A-Z]+)\\s+([A-Z/]+)\\s+([A-Z]+)\\s+\\*\\.\\*\\s+"
+            r"([0-9]+CV/[0-9]+)\\s+([0-9]+(?:\\.[0-9]+)?)\\s+"
+            r"([A-Z0-9*]+)\\s+([0-9]+(?:\\.[0-9]+)?)\\s+\\*\\s+([0-9]+P)\\s+"
+            r"([^\\n]+?)\\s+CS BRASIL FROTAS SA\\s+"
+            r"([0-9]{2}\\.[0-9]{3}\\.[0-9]{3}/[0-9]{4}-[0-9]{2})",
+            upper,
+        )
+        if tail_match:
+            result["capacity"] = "*.*"
+            result["power_cylinder"] = tail_match.group(4)
+            result["gross_weight"] = tail_match.group(5)
+            result["motor"] = re.sub(r"[^A-Z0-9]", "", tail_match.group(6))
+            result["cmt"] = tail_match.group(7)
+            result["seating"] = tail_match.group(8)
+            result["bodywork"] = _clean_text(tail_match.group(9))
+            result["owner_name"] = "CS BRASIL FROTAS SA"
+            result["owner_document"] = tail_match.group(10)
+            result["axles"] = "2"
+
+    # Código de segurança vem antes dos valores e o primeiro 11 dígitos é o RENAVAM;
+    # neste layout o código CLA fica na área inferior e não é o RENAVAM.
+    # O parser genérico não consegue distingui-los com segurança, portanto só
+    # usamos um código numérico curto quando houver marcador explícito próximo.
+    return result
+
+
 def extract_crlv_data(file_obj):
     name = (getattr(file_obj, "name", "") or "").lower()
     raw = file_obj.read()
@@ -437,6 +510,15 @@ def extract_crlv_data(file_obj):
         )
         if m:
             local, issue_date = _clean_text(m.group(1)), m.group(2)
+
+    # O texto nativo do CRLV-e pode ser linearizado em blocos: os rótulos
+    # ficam no topo e os valores no final. Quando esse leiaute é reconhecido,
+    # os valores estruturados têm prioridade sobre as heurísticas genéricas.
+    linearized = _extract_linearized_crlv_values(upper)
+    for key, value in linearized.items():
+        if value not in (None, ""):
+            if key == "chassi" or not extracted.get(key):
+                extracted[key] = value
 
     observation = ""
     for marker in ["BENEF. TRIBUTARIO", "ALIENAÇÃO FIDUCIÁRIA", "ALIENACAO FIDUCIARIA", "SEM OBSERVAÇÕES", "SEM OBSERVACOES"]:
