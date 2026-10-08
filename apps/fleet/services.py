@@ -1249,6 +1249,9 @@ def stage_crlv_document(*, vehicle, file_obj, user):
     typ,_=DocumentType.objects.get_or_create(name='CRLV',defaults={'active':True}); status,_=DocumentStatus.objects.get_or_create(name='Ativo',defaults={'active':True})
     doc=Document.objects.create(title=f'CRLV - {file_obj.name}',document_type=typ,status=status,created_by=user)
     DocumentVersion.objects.create(document=doc,file=file_obj,original_filename=file_obj.name,file_extension=ext,mime_type=mimetypes.guess_type(file_obj.name)[0] or 'application/octet-stream',file_size=file_obj.size,uploaded_by=user)
+    # DocumentVersion pode consumir o ponteiro do UploadedFile durante o save.
+    # O extrator precisa receber o arquivo desde o início, não a posição EOF.
+    file_obj.seek(0)
     link_document(document=doc,obj=vehicle,user=user); data=extract_crlv_data(file_obj)
     AuditLog.objects.create(user=user,module='crlv',action='ANEXO DE CRLV PARA CONFERÊNCIA',entity_type='document',entity_id=doc.id,new_values={'vehicle_id':str(vehicle.id),**data})
     return doc,data
@@ -1310,6 +1313,9 @@ def stage_crlv_document_for_creation(*, file_obj, user):
         file_size=file_obj.size,
         uploaded_by=user,
     )
+    # O save do FileField pode deixar o UploadedFile no fim do stream.
+    # Reposicionamos antes da leitura do CRLV para não extrair um arquivo vazio.
+    file_obj.seek(0)
     data = extract_crlv_data(file_obj)
     AuditLog.objects.create(
         user=user,
