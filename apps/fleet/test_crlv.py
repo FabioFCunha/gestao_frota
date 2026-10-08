@@ -62,13 +62,13 @@ class CRLVTests(TestCase):
         with self.assertRaisesMessage(ValueError, 'não pertence'):
             confirm_crlv(vehicle=self.vehicle, document=document, plate='ZZZ1Z99', renavam='', exercise=2026, user=self.user)
 
-    def _document_type(self):
+    def _document_type(self, name="T"):
         from apps.fleet.models import DocumentType
-        return DocumentType.objects.create(name='T').id
+        return DocumentType.objects.get_or_create(name=name)[0].id
 
-    def _document_status(self):
+    def _document_status(self, name="S"):
         from apps.fleet.models import DocumentStatus
-        return DocumentStatus.objects.create(name='S').id
+        return DocumentStatus.objects.get_or_create(name=name)[0].id
 
     def test_alerts_cover_missing_calendar_and_prior_year(self):
         today = date(2027, 1, 20)
@@ -151,8 +151,9 @@ class CRLVTests(TestCase):
         self.assertIn('value="90048500446"', html)
         self.assertIn('value="9BGEA48H0TG145235"', html)
         self.assertIn('value="2025"', html)
-        self.assertIn('value="CHEV"', html)
-        self.assertIn('value="ONIX 10TMT HB"', html)
+        self.assertIn('value="Chevrolet"', html)
+        self.assertIn('value="ONIX"', html)
+        self.assertIn('value="10TMT HB"', html)
         self.assertIn('value="BRANCA"', html)
 
     @patch("apps.fleet.crlv.extract_crlv_data")
@@ -172,6 +173,121 @@ class CRLVTests(TestCase):
         )
         self.assertEqual(extracted["bytes_read"], len(b"%PDF-1.4 CRLV TEST DATA"))
         self.assertTrue(document.versions.exists())
+
+    def test_create_vehicle_from_crlv_persists_technical_mapping_and_document_snapshot(self):
+        document, _ = stage_crlv_document_for_creation(
+            file_obj=SimpleUploadedFile("crlv.pdf", b"%PDF placeholder", content_type="application/pdf"),
+            user=self.user,
+        )
+        vehicle, record = create_vehicle_from_crlv(
+            document=document,
+            plate="XYZ1A23",
+            renavam="12345678901",
+            chassi="9BWZZZ377VT004251",
+            exercise=2026,
+            brand="CHEV",
+            model="ONIX",
+            version="10TMT HB",
+            manufacture_year=2025,
+            model_year=2026,
+            color="BRANCA",
+            fuel="ALCOOL/GASOLINA",
+            category="PARTICULAR",
+            vehicle_type="PASSAGEIRO AUTOMOVEL",
+            motor="L4G252585140",
+            power_cylinder="115CV/1000",
+            gross_weight="1.4",
+            cmt="1.4",
+            axles="2",
+            seating="05P",
+            bodywork="NÃO APLICAVEL",
+            sector=self.sector,
+            status=self.status,
+            user=self.user,
+            extracted_data={
+                "crv_number": "254508272509",
+                "owner_name": "CS BRASIL FROTAS SA",
+                "owner_document": "27.595.780/0025-93",
+                "location": "RIO DE JANEIRO RJ",
+                "issue_date": "20/10/2025",
+                "observation": "BENEF. TRIBUTARIO 30/09/2026",
+            },
+        )
+        vehicle.refresh_from_db()
+        self.assertEqual(vehicle.brand.name, "Chevrolet")
+        self.assertEqual(vehicle.model.name, "ONIX")
+        self.assertEqual(vehicle.version, "10TMT HB")
+        self.assertEqual(vehicle.manufacture_year, 2025)
+        self.assertEqual(vehicle.model_year, 2026)
+        self.assertEqual(vehicle.fuel, "ALCOOL/GASOLINA")
+        self.assertEqual(vehicle.axles, "2")
+        self.assertEqual(record.crv_number, "254508272509")
+        self.assertEqual(record.owner_name, "CS BRASIL FROTAS SA")
+        self.assertEqual(record.owner_document, "27.595.780/0025-93")
+        self.assertEqual(record.extracted_data["observation"], "BENEF. TRIBUTARIO 30/09/2026")
+
+    def test_confirm_crlv_updates_technical_data_and_preserves_previous_record(self):
+        document1 = Document.objects.create(
+            title="crlv-2025",
+            document_type_id=self._document_type("CRLV"),
+            status_id=self._document_status("Ativo"),
+            created_by=self.user,
+        )
+        from apps.fleet.models import DocumentVersion, VehicleCRLV
+        DocumentVersion.objects.create(
+            document=document1,
+            file=SimpleUploadedFile("old.pdf", b"%PDF old"),
+            original_filename="old.pdf",
+            file_extension="pdf",
+            mime_type="application/pdf",
+            file_size=8,
+            uploaded_by=self.user,
+        )
+        from apps.fleet.services import link_document
+        link_document(document=document1, obj=self.vehicle, user=self.user)
+        VehicleCRLV.objects.create(
+            vehicle=self.vehicle,
+            document=document1,
+            plate="ABC1D23",
+            exercise=2025,
+            extracted_data={"version": "OLD"},
+            confirmed_by=self.user,
+        )
+        document2 = Document.objects.create(
+            title="crlv-2026",
+            document_type_id=document1.document_type_id,
+            status_id=document1.status_id,
+            created_by=self.user,
+        )
+        link_document(document=document2, obj=self.vehicle, user=self.user)
+        confirm_crlv(
+            vehicle=self.vehicle,
+            document=document2,
+            plate="ABC1D23",
+            renavam="98765432100",
+            exercise=2026,
+            brand="CHEV",
+            model="ONIX",
+            version="10TMT HB",
+            manufacture_year=2025,
+            model_year=2026,
+            color="BRANCA",
+            fuel="ALCOOL/GASOLINA",
+            user=self.user,
+            extracted_data={
+                "crv_number": "254508272509",
+                "owner_name": "CS BRASIL FROTAS SA",
+            },
+        )
+        self.vehicle.refresh_from_db()
+        self.assertEqual(self.vehicle.brand.name, "Chevrolet")
+        self.assertEqual(self.vehicle.model.name, "ONIX")
+        self.assertEqual(self.vehicle.version, "10TMT HB")
+        self.assertEqual(self.vehicle.model_year, 2026)
+        self.assertEqual(self.vehicle.crlv_exercise, 2026)
+        self.assertEqual(self.vehicle.crlvs.count(), 2)
+        self.assertEqual(self.vehicle.crlvs.get(document=document1).exercise, 2025)
+        self.assertEqual(self.vehicle.crlvs.get(document=document2).owner_name, "CS BRASIL FROTAS SA")
 
     def test_create_vehicle_from_crlv_preserves_document_history(self):
         document, extracted = stage_crlv_document_for_creation(
