@@ -82,19 +82,15 @@ def extract_chassi(text):
     contextual = r"(?:CHASSI|VIN|IDENTIFICA[CÇ][AÃ]O DO VE[IÍ]CULO|N[º°O]\s*CHASSI)"
     for match in re.finditer(contextual, upper):
         window = upper[match.end():match.end() + 1200]
-        candidates = re.findall(r"\b([A-HJ-NPR-Z0-9][A-HJ-NPR-Z0-9 ._-]{15,24}[A-HJ-NPR-Z0-9])\b", window)
+        candidates = re.findall(r"\b([A-Z0-9][A-Z0-9 ._-]{15,24}[A-Z0-9])\b", window)
         for candidate in candidates:
             normalized = normalize_chassi(candidate)
             if normalized and any(ch.isdigit() for ch in normalized):
                 return normalized
 
-    # CRLV-e padrão contém um único VIN de 17 posições. O fallback global
-    # exige formato de VIN para evitar capturar hashes/assinaturas.
-    for candidate in re.findall(r"\b[A-HJ-NPR-Z0-9]{17}\b", upper):
-        normalized = normalize_chassi(candidate)
-        if normalized and any(ch.isdigit() for ch in normalized):
-            return normalized
-    return ""
+    # Sem contexto explícito de CHASSI/VIN, não inferimos um chassi.
+    # Isso evita transformar hashes, IDs, códigos de assinatura ou outros
+    # números de 17 caracteres em VINs válidos.
 
 
 def _plate_candidates(text):
