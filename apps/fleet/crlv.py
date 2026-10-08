@@ -28,6 +28,30 @@ def normalize_chassi(value):
     return value.replace("O", "0").replace("Q", "0").replace("I", "1")
 
 
+def _vin_check_digit(value):
+    """Retorna o dígito de controle VIN segundo a ISO 3779."""
+    transliteration = {
+        **{str(i): i for i in range(10)},
+        "A": 1, "B": 2, "C": 3, "D": 4, "E": 5, "F": 6, "G": 7, "H": 8,
+        "J": 1, "K": 2, "L": 3, "M": 4, "N": 5, "P": 7, "R": 9,
+        "S": 2, "T": 3, "U": 4, "V": 5, "W": 6, "X": 7, "Y": 8, "Z": 9,
+    }
+    weights = [8, 7, 6, 5, 4, 3, 2, 10, 0, 8, 7, 6, 5, 4, 3, 2]
+    try:
+        total = sum(transliteration[ch] * weight for ch, weight in zip(value, weights))
+    except KeyError:
+        return ""
+    remainder = total % 11
+    return "X" if remainder == 10 else str(remainder)
+
+
+def _vin_is_valid(value):
+    value = normalize_chassi(value)
+    if not value:
+        return False
+    return value[8] == _vin_check_digit(value)
+
+
 def _clean_text(value):
     value = str(value or "").replace("\xa0", " ")
     return re.sub(r"[ \t\r\f\v]+", " ", value).strip()
@@ -77,20 +101,34 @@ def _cpf_valid(value):
 
 
 def extract_chassi(text):
-    """Extrai VIN/CHASSI mesmo quando o PDF separa rótulos e valores."""
+    """Extrai o VIN priorizando candidatos válidos no contexto de CHASSI."""
     upper = text.upper()
     contextual = r"(?:CHASSI|VIN|IDENTIFICA[CÇ][AÃ]O DO VE[IÍ]CULO|N[º°O]\s*CHASSI)"
     for match in re.finditer(contextual, upper):
-        window = upper[match.end():match.end() + 1200]
+        # PDFs/OCR de CRLV-e podem linearizar as colunas: o rótulo CHASSI
+        # aparece antes de vários valores. Por isso ampliamos a janela, mas
+        # nunca aceitamos cegamente o primeiro bloco de 17 caracteres.
+        window = upper[match.end():match.end() + 5000]
         candidates = re.findall(r"\b([A-Z0-9][A-Z0-9 ._-]{15,24}[A-Z0-9])\b", window)
+
+        normalized_candidates = []
         for candidate in candidates:
             normalized = normalize_chassi(candidate)
             if normalized and any(ch.isdigit() for ch in normalized):
-                return normalized
+                if normalized not in normalized_candidates:
+                    normalized_candidates.append(normalized)
 
-    # Sem contexto explícito de CHASSI/VIN, não inferimos um chassi.
-    # Isso evita transformar hashes, IDs, códigos de assinatura ou outros
-    # números de 17 caracteres em VINs válidos.
+        # Um VIN válido pelo dígito de controle tem prioridade absoluta.
+        for candidate in normalized_candidates:
+            if _vin_is_valid(candidate):
+                return candidate
+
+        # Se o documento não permitir validar o dígito de controle (por
+        # exemplo, OCR com erro), mantemos o primeiro candidato contextual
+        # como fallback. Não existe fallback global sem CHASSI/VIN.
+        if normalized_candidates:
+            return normalized_candidates[0]
+
     return ""
 
 
