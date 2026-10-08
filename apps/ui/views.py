@@ -394,8 +394,17 @@ def vehicle_crlv(request, pk):
         confirm_form = CRLVConfirmForm(request.POST)
         if confirm_form.is_valid():
             try:
-                document = Document.objects.get(pk=confirm_form.cleaned_data["document_id"])
-                confirm_crlv(vehicle=vehicle, document=document, user=request.user, extracted_data={}, **confirm_form.cleaned_data)
+                data = confirm_form.cleaned_data.copy()
+                document_id = data.pop("document_id")
+                document = Document.objects.get(pk=document_id)
+                from django.contrib.contenttypes.models import ContentType
+                vehicle_type = ContentType.objects.get_for_model(Vehicle)
+                if (
+                    document.document_type.name.casefold() != "crlv"
+                    or not document.relations.filter(content_type=vehicle_type, object_id=vehicle.id).exists()
+                ):
+                    raise ValueError("O documento informado não é um CRLV vinculado a este veículo.")
+                confirm_crlv(vehicle=vehicle, document=document, user=request.user, extracted_data={}, **data)
             except (Document.DoesNotExist, ValueError) as exc:
                 confirm_form.add_error(None, str(exc))
             else:

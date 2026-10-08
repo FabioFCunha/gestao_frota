@@ -25,9 +25,21 @@ class CRLVTests(TestCase):
         self.user = get_user_model().objects.create_user(username='crlv', password='x')
         self.user.user_permissions.add(Permission.objects.get(codename='change_vehicle'))
         self.status = VehicleStatus.objects.create(name='Operacional')
-        self.sector = Sector.objects.create(name='ADM', slug='adm-test')
+        self.sector = Sector.objects.create(name='ADM', slug='adm')
+        self.user.sectors.add(self.sector)
         self.vehicle = Vehicle.objects.create(status=self.status, sector=self.sector)
         VehiclePlate.objects.create(vehicle=self.vehicle, plate='ABC1D23', kind='CURRENT')
+
+    @patch('apps.fleet.crlv.extract_crlv_data', return_value={'plate': 'ABC1D23', 'renavam': '12345678901', 'exercise': 2026, 'text_extracted': True})
+    def test_interface_upload_then_confirmation(self, _extract):
+        self.client.force_login(self.user)
+        upload = SimpleUploadedFile('crlv.pdf', b'%PDF-1.4 placeholder', content_type='application/pdf')
+        response = self.client.post(f'/veiculos/{self.vehicle.id}/crlv/', {'step': 'upload', 'file': upload})
+        self.assertEqual(response.status_code, 200)
+        document = Document.objects.get(document_type__name='CRLV')
+        response = self.client.post(f'/veiculos/{self.vehicle.id}/crlv/', {'document_id': document.id, 'plate': 'ABC1D23', 'renavam': '12345678901', 'exercise': 2026})
+        self.assertRedirects(response, f'/veiculos/{self.vehicle.id}/')
+        self.assertTrue(self.vehicle.crlvs.exists())
 
     @patch('apps.fleet.crlv.extract_crlv_data', return_value={'plate': 'ABC1D23', 'renavam': '12345678901', 'exercise': 2026, 'text_extracted': True})
     def test_stage_and_confirm_updates_vehicle_and_history(self, _extract):
