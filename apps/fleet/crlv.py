@@ -179,10 +179,10 @@ def _extract_renavam(text):
 
     # No CRLV-e linearizado, o RENAVAM aparece imediatamente antes da
     # placa no bloco de identificação. Isso evita confundi-lo com o CRV.
-    plates = re.findall(r"\\b[A-Z]{3}[0-9][A-Z0-9][0-9]{2}\\b", upper)
+    plates = re.findall(r"\b[A-Z]{3}[0-9][A-Z0-9][0-9]{2}\b", upper)
     for plate in plates:
         match = re.search(
-            r"\\b(\\d{11})\\s+" + re.escape(plate) +
+            r"\b(\d{11})\s+" + re.escape(plate) +
             r"\\s+20\\d{2}\\s+20\\d{2}\\s+20\\d{2}\\b",
             upper,
         )
@@ -605,7 +605,10 @@ def extract_crlv_data(file_obj):
     power_cc = power_cc or linearized.get("power_cylinder", "")
     gross_weight = gross_weight or linearized.get("gross_weight", "")
     motor = motor or linearized.get("motor", "")
-    cmt = cmt or linearized.get("cmt", "")
+    if not re.fullmatch(r"\d+(?:\.\d+)?", cmt or "") or len(re.sub(r"\D", "", cmt or "")) > 4:
+        cmt = linearized.get("cmt", "") or cmt
+    else:
+        cmt = cmt or linearized.get("cmt", "")
     axles = axles or linearized.get("axles", "")
     seating = seating if seating and seating != "ANO" else linearized.get("seating", "")
     body = body if body and "INFORMAÇÕES DO SEGURO" not in body else linearized.get("bodywork", "")
