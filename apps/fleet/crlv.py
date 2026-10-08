@@ -55,6 +55,31 @@ def _vin_is_valid(value):
 def _clean_text(value):
     value = str(value or "").replace("\xa0", " ")
     return re.sub(r"[ \t\r\f\v]+", " ", value).strip()
+\n\ndef _extract_between_labels(text, label, next_labels=(), *, max_len=200):
+    """Extrai o conteúdo de um campo mesmo quando o PDF lineariza as colunas."""
+    upper = text.upper()
+    match = re.search(label + r"\s*[:.-]?\s*", upper)
+    if not match:
+        return ""
+    start = match.end()
+    end = min(len(upper), start + max_len)
+    if next_labels:
+        next_match = re.search(
+            r"(?:" + "|".join(next_labels) + r")\s*[:.-]?\s*",
+            upper[start:end],
+        )
+        if next_match:
+            end = start + next_match.start()
+    return _clean_text(upper[start:end]).strip(" :.-")
+
+
+def _first_token(value):
+    value = _clean_text(value)
+    if not value:
+        return ""
+    return value.split()[0]
+
+
 
 
 def _all_text(raw, name):
@@ -189,17 +214,23 @@ def _extract_labeled_or_known(text, label, known):
 
 
 def _extract_vehicle_description(text):
-    upper = text.upper()
-    match = re.search(r"\b([A-Z]{1,4})\s*/\s*([A-Z0-9][A-Z0-9 ._-]{2,80})", upper)
+    section = _extract_between_labels(
+        text,
+        r"MARCA\s*/\s*MODELO\s*/\s*VERS[AÃ]O",
+        [r"PLACA\s+ANTERIOR\s*/\s*UF", r"CHASSI", r"COR\s+PREDOMINANTE"],
+        max_len=180,
+    )
+    if not section:
+        return "", "", ""
+
+    match = re.match(r"([A-Z]{1,6})\s*/\s*(.+)", section)
     if not match:
         return "", "", ""
+
     brand_code = match.group(1).strip()
     description = _clean_text(match.group(2))
-    # Para não consumir o próximo campo do documento, limita a descrição à
-    # primeira linha/padrão plausível.
-    description = re.split(r"\s+(?:ESP[ÉE]CIE|PASSAGEIRO|CARGA|ESPECIAL)\b", description)[0].strip()
     parts = description.split()
-    model = " ".join(parts[:1]) if parts else ""
+    model = parts[0] if parts else ""
     version = " ".join(parts[1:]) if len(parts) > 1 else ""
     return brand_code, model, version
 
@@ -269,55 +300,89 @@ def extract_crlv_data(file_obj):
     colors = ["BRANCA", "PRETA", "PRATA", "CINZA", "VERMELHA", "AZUL", "VERDE", "AMARELA", "MARROM", "BEGE", "DOURADA"]
     fuels = ["ALCOOL/GASOLINA", "GASOLINA/ALCOOL/ELETRICO", "GASOLINA", "ALCOOL", "DIESEL", "ELETRICO", "FLEX", "GNV"]
     categories = ["PARTICULAR", "ALUGUEL", "OFICIAL", "APRENDIZAGEM", "EXPERIENCIA"]
-    color = _extract_labeled_or_known(upper, r"COR PREDOMINANTE", colors)
-    fuel = _extract_labeled_or_known(upper, r"COMBUST[IÍ]VEL", fuels)
-    category = _extract_labeled_or_known(upper, r"CATEGORIA", categories)
 
-    vehicle_type = first([
-        r"ESP[ÉE]CIE\s*/\s*TIPO\s*[:.-]?\s*([^\n]{3,80})",
-    ])
-    for value in ["PASSAGEIRO AUTOMOVEL", "CARGA CAMINHONETE", "ESPECIAL CAMINHAO", "MISTO UTILITARIO"]:
-        if value in upper:
-            vehicle_type = value
-            break
+    color = _extract_between_labels(
+        upper, r"COR\s+PREDOMINANTE", [r"ESP[ÉE]CIE\s*/\s*TIPO", r"COMBUST[IÍ]VEL"]
+    )
+    if color not in colors:
+        color = next((value for value in colors if value in color or value in upper), "")
+    fuel = _extract_between_labels(
+        upper, r"COMBUST[IÍ]VEL", [r"C[ÓO]DIGO\s+DE\s+SEGURAN[CÇ]A", r"CATEGORIA"]
+    )
+    if fuel not in fuels:
+        fuel = next((value for value in fuels if value in fuel), "")
+    category = _extract_between_labels(
+        upper, r"CATEGORIA", [r"CAPACIDADE", r"ESP[ÉE]CIE\s*/\s*TIPO"]
+    )
+    if category not in categories:
+        category = next((value for value in categories if value in category), "")
 
-    crv = first([
-        r"N[ÚU]MERO DO CRV\s*[:.-]?\s*(\d{10,14})",
-        r"N[ÚU]MERO CRV\s*[:.-]?\s*(\d{10,14})",
-    ])
+    vehicle_type = _extract_between_labels(
+        upper, r"ESP[ÉE]CIE\s*/\s*TIPO",
+        [r"COMBUST[IÍ]VEL", r"PLACA\s+ANTERIOR\s*/\s*UF", r"CHASSI"],
+        max_len=100,
+    )
+    if "PASSAGEIRO AUTOMOVEL" in upper:
+        vehicle_type = "PASSAGEIRO AUTOMOVEL"
+
+    crv = _extract_between_labels(
+        upper, r"N[ÚU]MERO\s+DO\s+CRV",
+        [r"MARCA\s*/\s*MODELO\s*/\s*VERS[AÃ]O"],
+        max_len=30,
+    )
+    crv_match = re.search(r"\b\d{10,14}\b", crv)
+    crv = crv_match.group(0) if crv_match else ""
     if not crv:
         twelve = re.findall(r"\b\d{12}\b", upper)
         if twelve:
             crv = twelve[0]
 
-    security_cla = first([r"C[ÓO]DIGO DE SEGURAN[CÇ]A DO CLA\s*[:.-]?\s*(\d{11})"])
-    if not security_cla:
-        security_candidates = [x for x in re.findall(r"\b\d{11}\b", upper) if x != renavam and not _cpf_valid(x)]
-        if security_candidates:
-            security_cla = security_candidates[-1]
+    security_cla = _extract_between_labels(
+        upper, r"C[ÓO]DIGO\s+DE\s+SEGURAN[CÇ]A\s+DO\s+CLA",
+        [r"CAT", r"QR\s*CODE"],
+        max_len=40,
+    )
+    security_match = re.search(r"\b\d{8,12}\b", security_cla)
+    security_cla = security_match.group(0) if security_match else ""
 
-    power_cc = first([r"POT[ÊE]NCIA/CILINDRADA\s*[:.-]?\s*([^\n]{3,40})"])
-    gross_weight = first([r"PESO BRUTO TOTAL\s*[:.-]?\s*([^\n]{1,20})"])
-    capacity = first([r"CAPACIDADE\s*[:.-]?\s*([^\n]{1,20})"])
-    motor = first([r"MOTOR\s*[:.-]?\s*([A-Z0-9*.-]{4,30})"])
-    cmt = first([r"\bCMT\s*[:.-]?\s*([^\n]{1,20})"])
-    axles = first([r"\bEIXOS\s*[:.-]?\s*([0-9*]{1,3})"])
-    seating = first([r"\bLOTA[CÇ][AÃ]O\s*[:.-]?\s*([0-9]{1,2}P?)"])
-    body = first([r"CARROCERIA\s*[:.-]?\s*([^\n]{2,60})"])
+    power_cc = _extract_between_labels(
+        upper, r"POT[ÊE]NCIA/CILINDRADA",
+        [r"PESO\s+BRUTO\s+TOTAL", r"MOTOR"],
+        max_len=60,
+    )
+    gross_weight = _first_token(_extract_between_labels(
+        upper, r"PESO\s+BRUTO\s+TOTAL", [r"CMT", r"EIXOS"], max_len=30
+    ))
+    capacity = _first_token(_extract_between_labels(
+        upper, r"CAPACIDADE", [r"POT[ÊE]NCIA/CILINDRADA"], max_len=30
+    ))
+    motor = _first_token(_extract_between_labels(
+        upper, r"MOTOR", [r"CARROCERIA", r"CMT"], max_len=60
+    ))
+    cmt = _first_token(_extract_between_labels(
+        upper, r"\bCMT", [r"EIXOS"], max_len=30
+    ))
+    axles = _first_token(_extract_between_labels(
+        upper, r"\bEIXOS", [r"LOTA[CÇ][AÃ]O"], max_len=20
+    ))
+    seating = _first_token(_extract_between_labels(
+        upper, r"LOTA[CÇ][AÃ]O", [r"CARROCERIA"], max_len=20
+    ))
+    body = _extract_between_labels(
+        upper, r"CARROCERIA",
+        [r"NOME", r"LOCAL\s+DATA", r"OBSERVA[CÇ][OÕ]ES"],
+        max_len=80,
+    )
 
-    cnpj = first([r"CPF\s*/\s*CNPJ\s*[:.-]?\s*([0-9./-]{11,20})"])
-    owner = ""
-    if cnpj:
-        pos = upper.find(cnpj)
-        before = upper[max(0, pos - 160):pos]
-        lines = [x.strip() for x in re.split(r"\n+", before) if x.strip()]
-        if lines:
-            owner = lines[-1]
-            owner = re.sub(r"^(?:NOME|LOCAL|DATA)\s*", "", owner).strip()
-    if not owner:
-        m = re.search(r"NOME\s+([A-Z][A-Z .&'-]{3,100})\s+CPF", upper)
-        if m:
-            owner = _clean_text(m.group(1))
+    cnpj = _extract_between_labels(
+        upper, r"CPF\s*/\s*CNPJ", [r"MENSAGENS\s+SENATRAN", r"LOCAL\s+DATA"], max_len=30
+    )
+    cnpj_match = re.search(r"\d{2}[.\d/-]{8,18}\d", cnpj)
+    cnpj = cnpj_match.group(0) if cnpj_match else ""
+    owner = _extract_between_labels(
+        upper, r"NOME", [r"CPF\s*/\s*CNPJ", r"LOCAL\s+DATA"], max_len=120
+    )
+    owner = _clean_text(owner)
 
     local = ""
     issue_date = ""
