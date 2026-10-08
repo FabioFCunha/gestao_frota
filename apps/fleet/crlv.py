@@ -511,15 +511,6 @@ def extract_crlv_data(file_obj):
         if m:
             local, issue_date = _clean_text(m.group(1)), m.group(2)
 
-    # O texto nativo do CRLV-e pode ser linearizado em blocos: os rótulos
-    # ficam no topo e os valores no final. Quando esse leiaute é reconhecido,
-    # os valores estruturados têm prioridade sobre as heurísticas genéricas.
-    linearized = _extract_linearized_crlv_values(upper)
-    for key, value in linearized.items():
-        if value not in (None, ""):
-            if key == "chassi" or not extracted.get(key):
-                extracted[key] = value
-
     observation = ""
     for marker in ["BENEF. TRIBUTARIO", "ALIENAÇÃO FIDUCIÁRIA", "ALIENACAO FIDUCIARIA", "SEM OBSERVAÇÕES", "SEM OBSERVACOES"]:
         if marker in upper:
@@ -561,4 +552,13 @@ def extract_crlv_data(file_obj):
         "text_extracted": bool(text.strip()),
         "raw_text": text,
     }
+    # O texto nativo do CRLV-e pode ser linearizado em blocos: os rótulos
+    # ficam no topo e os valores no final. Quando esse leiaute é reconhecido,
+    # os valores estruturados têm prioridade sobre as heurísticas genéricas.
+    linearized = _extract_linearized_crlv_values(upper)
+    for key, value in linearized.items():
+        if value not in (None, ""):
+            if key == "chassi" or not extracted.get(key):
+                extracted[key] = value
+
     return extracted
