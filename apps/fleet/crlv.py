@@ -558,7 +558,6 @@ def extract_crlv_data(file_obj):
     linearized = _extract_linearized_crlv_values(upper)
     for key, value in linearized.items():
         if value not in (None, ""):
-            if key == "chassi" or not extracted.get(key):
-                extracted[key] = value
+            extracted[key] = value
 
     return extracted
