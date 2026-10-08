@@ -79,6 +79,7 @@ class CRLVTests(TestCase):
         all_text.return_value = """
         CÓDIGO RENAVAM PLACA EXERCÍCIO ANO FABRICAÇÃO ANO MODELO NÚMERO DO CRV
         01455165457 TTO8A04 2025 2025 2026 254508272509 90048500446 ***
+        CÓDIGO INTERNO LE1A00RC0DEEBA1XE
         MARCA / MODELO / VERSÃO CHEV/ONIX 10TMT HB
         ESPÉCIE / TIPO PASSAGEIRO AUTOMOVEL
         PLACA ANTERIOR / UF *******/** CHASSI 9BGEA48H0TG145235
@@ -100,6 +101,38 @@ class CRLVTests(TestCase):
         self.assertEqual(data["fuel"], "ALCOOL/GASOLINA")
         self.assertEqual(data["owner_document"], "27.595.780/0025-93")
         self.assertTrue(data["raw_text"])
+
+    @patch("apps.fleet.crlv.extract_crlv_data")
+    def test_vehicle_create_crlv_form_is_prefilled_with_extracted_data(self, extract):
+        extract.return_value = {
+            "plate": "TTO8A04",
+            "renavam": "90048500446",
+            "chassi": "9BGEA48H0TG145235",
+            "exercise": 2025,
+            "brand_raw": "CHEV",
+            "model_raw": "ONIX",
+            "version": "10TMT HB",
+            "color": "BRANCA",
+            "text_extracted": True,
+            "raw_text": "CRLV",
+        }
+        self.client.force_login(self.user)
+        upload = SimpleUploadedFile(
+            "crlv.pdf", b"%PDF-1.4 CRLV TEST DATA", content_type="application/pdf"
+        )
+        response = self.client.post(
+            "/veiculos/novo/",
+            {"step": "upload", "file": upload},
+        )
+        self.assertEqual(response.status_code, 200)
+        html = response.content.decode("utf-8")
+        self.assertIn('value="TTO8A04"', html)
+        self.assertIn('value="90048500446"', html)
+        self.assertIn('value="9BGEA48H0TG145235"', html)
+        self.assertIn('value="2025"', html)
+        self.assertIn('value="CHEV"', html)
+        self.assertIn('value="ONIX 10TMT HB"', html)
+        self.assertIn('value="BRANCA"', html)
 
     @patch("apps.fleet.crlv.extract_crlv_data")
     def test_stage_crlv_rewinds_uploaded_file_after_document_save(self, extract):
