@@ -16,7 +16,7 @@ class CRLVUploadForm(forms.Form):
         if f.name.rsplit('.',1)[-1].lower() not in {'pdf','jpg','jpeg','png'}: raise forms.ValidationError('Envie PDF, JPG ou PNG.')
         return f
 class CRLVConfirmForm(forms.Form):
-    document_id=forms.UUIDField(widget=forms.HiddenInput()); plate=forms.CharField(max_length=8,widget=forms.TextInput(attrs=INPUT)); renavam=forms.CharField(max_length=20,required=False,widget=forms.TextInput(attrs=INPUT)); exercise=forms.IntegerField(min_value=2000,max_value=2100,widget=forms.NumberInput(attrs=INPUT))
+    document_id=forms.UUIDField(widget=forms.HiddenInput()); plate=forms.CharField(max_length=8,widget=forms.TextInput(attrs=INPUT)); renavam=forms.CharField(max_length=20,required=False,widget=forms.TextInput(attrs=INPUT)); chassi=forms.CharField(max_length=17,required=False,widget=forms.TextInput(attrs=INPUT)); exercise=forms.IntegerField(min_value=2000,max_value=2100,widget=forms.NumberInput(attrs=INPUT))
 class LicensingCalendarForm(forms.ModelForm):
     class Meta:
         from apps.fleet.models import LicensingCalendar

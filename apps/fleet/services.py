@@ -1253,22 +1253,27 @@ def stage_crlv_document(*, vehicle, file_obj, user):
     return doc,data
 
 @transaction.atomic
-def confirm_crlv(*, vehicle, document, plate, renavam, exercise, user, extracted_data=None):
-    from .models import VehicleCRLV, AuditLog
-    from .crlv import normalize_plate, normalize_renavam
-    plate=normalize_plate(plate); renavam=normalize_renavam(renavam)
+def confirm_crlv(*, vehicle, document, plate, renavam, chassi='', exercise, user, extracted_data=None):
+    from .models import VehicleCRLV, AuditLog, Vehicle, VehicleHistory
+    from .crlv import normalize_plate, normalize_renavam, normalize_chassi
+    plate=normalize_plate(plate); renavam=normalize_renavam(renavam); raw_chassi = str(chassi or '').strip(); chassi=normalize_chassi(raw_chassi)
+    if raw_chassi and not chassi: raise ValueError('O chassi informado deve conter exatamente 17 caracteres alfanuméricos válidos.')
     try: exercise=int(exercise)
     except (TypeError,ValueError): raise ValueError('Informe o exercício do CRLV.')
     current={normalize_plate(p) for p in vehicle.plate_history.filter(kind='CURRENT',ends_on__isnull=True).values_list('plate',flat=True)}
     if plate not in current: raise ValueError('A placa do CRLV não pertence a este veículo.')
     if VehicleCRLV.objects.filter(document=document).exists(): raise ValueError('Este CRLV já foi confirmado.')
-    old={'renavam':vehicle.renavam,'crlv_exercise':vehicle.crlv_exercise}
+    old={'renavam':vehicle.renavam,'crlv_exercise':vehicle.crlv_exercise,'chassi':vehicle.chassi}
     if renavam:
         if Vehicle.objects.exclude(pk=vehicle.pk).filter(renavam=renavam).exists(): raise ValueError('Este RENAVAM já pertence a outro veículo.')
         vehicle.renavam=renavam
-    vehicle.crlv_exercise=max(filter(None,[vehicle.crlv_exercise,exercise])); vehicle.save(update_fields=['renavam','crlv_exercise','updated_at'])
-    record=VehicleCRLV.objects.create(vehicle=vehicle,document=document,plate=plate,renavam=renavam,exercise=exercise,extracted_data=extracted_data or {},confirmed_by=user)
-    new={'renavam':vehicle.renavam,'crlv_exercise':vehicle.crlv_exercise,'document_id':str(document.id)}
+    if chassi:
+        if Vehicle.objects.exclude(pk=vehicle.pk).filter(chassi=chassi).exists(): raise ValueError('Este chassi já pertence a outro veículo.')
+        if vehicle.chassi and vehicle.chassi != chassi: raise ValueError('O veículo já possui um chassi diferente cadastrado.')
+        vehicle.chassi=chassi
+    vehicle.crlv_exercise=max(filter(None,[vehicle.crlv_exercise,exercise])); vehicle.save(update_fields=['renavam','chassi','crlv_exercise','updated_at'])
+    record=VehicleCRLV.objects.create(vehicle=vehicle,document=document,plate=plate,renavam=renavam,chassi=chassi,exercise=exercise,extracted_data=extracted_data or {},confirmed_by=user)
+    new={'renavam':vehicle.renavam,'chassi':vehicle.chassi,'crlv_exercise':vehicle.crlv_exercise,'document_id':str(document.id)}
     VehicleHistory.objects.create(vehicle=vehicle,field='crlv',old_value=old,new_value=new,reason=f'CRLV exercício {exercise} confirmado',changed_by=user)
     AuditLog.objects.create(user=user,module='crlv',action='CONFIRMAÇÃO DE CRLV',entity_type='vehicle',entity_id=vehicle.id,old_values=old,new_values=new)
     return record
@@ -1498,8 +1503,7 @@ def get_operational_alerts(filters: dict) -> dict:
     # - intervalo de 10.000 km;
     # - alerta nos ultimos 3.000 km;
     # - somente Revisao + Concluida + KM informado estabelece o ciclo.
-    from .models import Vehicle
-
+    
     revisoes_vencidas = []
 
     qs_vehicles = Vehicle.objects.prefetch_related('plate_history')

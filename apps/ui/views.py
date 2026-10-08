@@ -396,7 +396,7 @@ def vehicle_crlv(request, pk):
         upload_form = CRLVUploadForm(request.POST, request.FILES)
         if upload_form.is_valid():
             document, preview = stage_crlv_document(vehicle=vehicle, file_obj=upload_form.cleaned_data["file"], user=request.user)
-            confirm_form = CRLVConfirmForm(initial={"document_id": document.id, "plate": preview["plate"] or (current.plate if current else ""), "renavam": preview["renavam"] or vehicle.renavam, "exercise": preview["exercise"]})
+            confirm_form = CRLVConfirmForm(initial={"document_id": document.id, "plate": preview["plate"] or (current.plate if current else ""), "renavam": preview["renavam"] or vehicle.renavam, "chassi": preview.get("chassi", "") or vehicle.chassi, "exercise": preview["exercise"]})
     elif request.method == "POST":
         confirm_form = CRLVConfirmForm(request.POST)
         if confirm_form.is_valid():

@@ -10,9 +10,9 @@
     {{ upload_form.as_p }}<button class="primary-action" type="submit">Anexar CRLV</button>
   </form>
   {% else %}
-  {% if preview %}<div class="alert alert-info">Extração: placa {{ preview.plate|default:"não identificada" }}, RENAVAM {{ preview.renavam|default:"não identificado" }}, exercício {{ preview.exercise|default:"não identificado" }}. {% if preview.plate and preview.plate != current_plate %}<strong>Placa divergente: a confirmação será bloqueada.</strong>{% endif %}</div>{% endif %}
+  {% if preview %}<div class="alert alert-info">Extração: placa {{ preview.plate|default:"não identificada" }}, RENAVAM {{ preview.renavam|default:"não identificado" }}, CHASSI {{ preview.chassi|default:"não identificado" }}, exercício {{ preview.exercise|default:"não identificado" }}. {% if preview.plate and preview.plate != current_plate %}<strong>Placa divergente: a confirmação será bloqueada.</strong>{% endif %}</div>{% endif %}
   <form method="post">{% csrf_token %}
-    {{ confirm_form.non_field_errors }}{{ confirm_form.document_id }}{{ confirm_form.plate.as_field_group }}{{ confirm_form.renavam.as_field_group }}{{ confirm_form.exercise.as_field_group }}
+    {{ confirm_form.non_field_errors }}{{ confirm_form.document_id }}{{ confirm_form.plate.as_field_group }}{{ confirm_form.renavam.as_field_group }}{{ confirm_form.chassi.as_field_group }}{{ confirm_form.exercise.as_field_group }}
     <button class="primary-action" type="submit">Confirmar CRLV</button> <a class="secondary-action" href="{% url 'vehicle_dossier' vehicle.id %}">Cancelar</a>
   </form>
   {% endif %}
