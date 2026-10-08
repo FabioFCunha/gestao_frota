@@ -38,7 +38,8 @@ class CRLVTests(TestCase):
         self.assertEqual(response.status_code, 200)
         document = Document.objects.get(document_type__name='CRLV')
         response = self.client.post(f'/veiculos/{self.vehicle.id}/crlv/', {'document_id': document.id, 'plate': 'ABC1D23', 'renavam': '12345678901', 'exercise': 2026})
-        self.assertRedirects(response, f'/veiculos/{self.vehicle.id}/')
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], f'/veiculos/{self.vehicle.id}/')
         self.assertTrue(self.vehicle.crlvs.exists())
 
     @patch('apps.fleet.crlv.extract_crlv_data', return_value={'plate': 'ABC1D23', 'renavam': '12345678901', 'exercise': 2026, 'text_extracted': True})
