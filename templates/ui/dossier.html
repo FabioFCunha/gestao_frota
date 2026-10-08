@@ -95,7 +95,6 @@
             <li><strong>CRLV confirmado:</strong> {{ vehicle.crlv_exercise|default:"-" }}</li>
             <li><strong>Blindado:</strong> {% if vehicle.armored %}SIM{% else %}NÃO{% endif %}</li>
         </ul>
-        {% if perms.fleet.change_vehicle or request.user.is_system_creator %}<a class="primary-action" href="{% url 'vehicle_crlv' vehicle.id %}">Anexar CRLV</a>{% endif %}
     </article>
 </section>
 
