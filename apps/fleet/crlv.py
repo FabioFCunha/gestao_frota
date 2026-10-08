@@ -176,6 +176,18 @@ def _plate_candidates(text):
 
 def _extract_renavam(text):
     upper = text.upper()
+
+    # No CRLV-e linearizado, o RENAVAM aparece imediatamente antes da
+    # placa no bloco de identificação. Isso evita confundi-lo com o CRV.
+    plates = re.findall(r"\\b[A-Z]{3}[0-9][A-Z0-9][0-9]{2}\\b", upper)
+    for plate in plates:
+        match = re.search(
+            r"\\b(\\d{11})\\s+" + re.escape(plate) +
+            r"\\s+20\\d{2}\\s+20\\d{2}\\s+20\\d{2}\\b",
+            upper,
+        )
+        if match and not _cpf_valid(match.group(1)):
+            return match.group(1), [match.group(1)]
     contextual = re.findall(r"RENAVAM\D{0,500}([0-9][0-9 .-]{9,14})", upper)
     contextual_digits = []
     for value in contextual:
