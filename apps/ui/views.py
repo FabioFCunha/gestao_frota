@@ -795,6 +795,8 @@ def driver_list(request):
 def maintenance_list(request):
     from apps.fleet.models import Vehicle, VehicleMileage, Maintenance
     from apps.fleet.services import get_vehicle_revision_status
+    from apps.fleet.sector_scope import apply_sector_scope, allowed_sector_slugs
+    requested_sector = request.GET.get("sector")
 
     qs = (
         Vehicle.objects
@@ -807,6 +809,7 @@ def maintenance_list(request):
             'maintenances__workshop',
         )
     )
+    qs = apply_sector_scope(qs, request.user, requested_sector)
 
     q = request.GET.get('q', '')
     if q:
@@ -885,6 +888,8 @@ def maintenance_list(request):
         "vehicles_data": vehicles_data,
         "q": q,
         "revision_action_form": RevisionActionForm(),
+        "requested_sector": requested_sector,
+        "show_sector_filter": (allowed_sector_slugs(request.user) is None or len(allowed_sector_slugs(request.user)) > 1),
     }
     return render(request, "ui/maintenance_list.html", context)
 

@@ -1,4 +1,5 @@
 {% extends 'ui/base.html' %}
+{% load l10n %}
 {% block title %}Controle de Revisões | Gestão de Frotas{% endblock %}
 {% block heading %}Controle de Revisões{% endblock %}
 
@@ -7,6 +8,13 @@
     <div>
         <form method="get" action="" style="display:flex;gap:10px;flex-wrap:wrap;">
             <input type="text" name="q" value="{{ q }}" placeholder="Buscar por placa ou modelo..." style="padding:10px;width:400px;max-width:100%;border-radius:4px;border:1px solid #ccc;" />
+            {% if show_sector_filter %}
+            <select name="sector" class="form-input" aria-label="Setor" style="width:190px;">
+                <option value="" {% if not requested_sector %}selected{% endif %}>Todos os setores</option>
+                <option value="adm" {% if requested_sector == 'adm' %}selected{% endif %}>ADM</option>
+                <option value="lei-seca" {% if requested_sector == 'lei-seca' %}selected{% endif %}>Lei Seca</option>
+            </select>
+            {% endif %}
             <button type="submit" class="primary-action">Buscar</button>
         </form>
     </div>
@@ -78,10 +86,10 @@
                                     class="secondary-action revision-edit"
                                     data-id="{{ v.id }}"
                                     data-plate="{{ v.plate }}"
-                                    data-km="{{ v.km_atual|default_if_none:'' }}"
-                                    data-remaining="{{ v.km_faltando|default_if_none:'' }}"
-                                    data-interval="{{ v.revision_interval_km }}"
-                                    data-next="{{ v.km_prox_revisao|default_if_none:'' }}"
+                                    data-km="{{ v.km_atual|default_if_none:''|unlocalize }}"
+                                    data-remaining="{{ v.km_faltando|default_if_none:''|unlocalize }}"
+                                    data-interval="{{ v.revision_interval_km|unlocalize }}"
+                                    data-next="{{ v.km_prox_revisao|default_if_none:''|unlocalize }}"
                                     data-status="{{ v.revisao_status }}"
                                     data-active-id="{% if v.active_revision %}{{ v.active_revision.id }}{% endif %}"
                                     data-revision-id="{{ v.last_revision_id|default:'' }}"
