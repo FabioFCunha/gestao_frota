@@ -238,77 +238,92 @@ def _extract_vehicle_description(text):
 
 
 def _extract_linearized_crlv_values(text):
-    """Extrai os valores do bloco de identificação do CRLV-e linearizado."""
+    """Extrai valores do CRLV-e quando o PDF lineariza rótulos e valores."""
     upper = text.upper()
-    compact = re.sub(r"\\s+", " ", upper).strip()
+    compact = re.sub(r"\s+", " ", upper).strip()
     result = {}
 
-    # VIN: prioriza qualquer VIN estruturalmente válido no documento.
-    for candidate in re.findall(r"\\b[A-HJ-NPR-Z0-9]{17}\\b", compact):
+    # O VIN real aparece depois de PLACA ANTERIOR / UF e também pode ser
+    # validado pelo dígito de controle. Nunca usamos o código interno de 17
+    # caracteres como fallback quando existe um VIN válido.
+    for candidate in re.findall(r"\b[A-HJ-NPR-Z0-9]{17}\b", compact):
         normalized = normalize_chassi(candidate)
         if _vin_is_valid(normalized):
             result["chassi"] = normalized
             break
 
-    m = re.search(r"\\b([A-Z]{2,8})/([A-Z0-9]+(?: [A-Z0-9]+)*)\\s+PASSAGEIRO\\s+AUTOMOVEL\\b", compact)
-    if m:
-        result["brand_raw"] = m.group(1)
-        description = m.group(2).strip()
-        parts = description.split()
+    description = re.search(
+        r"\b([A-Z]{2,8})/([A-Z0-9]+(?: [A-Z0-9]+)*)\s+PASSAGEIRO AUTOMOVEL\b",
+        compact,
+    )
+    if description:
+        result["brand_raw"] = description.group(1)
+        parts = description.group(2).split()
         result["model_raw"] = parts[0] if parts else ""
         result["version"] = " ".join(parts[1:]) if len(parts) > 1 else ""
 
-    m = re.search(r"\\*{3,}/\\*{2}\\s+([A-HJ-NPR-Z0-9]{17})\\b", compact)
-    if m:
-        result["chassi"] = normalize_chassi(m.group(1))
-
-    known_colors = ["BRANCA", "PRETA", "PRATA", "CINZA", "VERMELHA", "AZUL", "VERDE", "AMARELA", "MARROM", "BEGE", "DOURADA"]
-    for value in known_colors:
-        if re.search(r"\\b" + re.escape(value) + r"\\b", compact):
+    for value in ["BRANCA", "PRETA", "PRATA", "CINZA", "VERMELHA", "AZUL",
+                  "VERDE", "AMARELA", "MARROM", "BEGE", "DOURADA"]:
+        if re.search(r"\b" + re.escape(value) + r"\b", compact):
             result["color"] = value
             break
 
-    known_fuels = ["ALCOOL/GASOLINA", "GASOLINA/ALCOOL/ELETRICO", "GASOLINA", "ALCOOL", "DIESEL", "ELETRICO", "FLEX", "GNV"]
-    for value in known_fuels:
+    for value in ["ALCOOL/GASOLINA", "GASOLINA/ALCOOL/ELETRICO",
+                  "GASOLINA", "ALCOOL", "DIESEL", "ELETRICO", "FLEX", "GNV"]:
         if value in compact:
             result["fuel"] = value
             break
 
     for value in ["PARTICULAR", "ALUGUEL", "OFICIAL", "APRENDIZAGEM", "EXPERIENCIA"]:
-        if re.search(r"\\b" + re.escape(value) + r"\\b", compact):
+        if re.search(r"\b" + re.escape(value) + r"\b", compact):
             result["category"] = value
             break
 
-    m = re.search(r"\\bCAPACIDADE\\b.*?\\bPOT[ÊE]NCIA/CILINDRADA\\b.*?\\bPESO\\s+BRUTO\\s+TOTAL\\b", upper)
-    # No layout linearizado os valores aparecem depois dos rótulos, em ordem.
-    if "PASSAGEIRO AUTOMOVEL" in compact:
-        tail_match = re.search(
-            r"PASSAGEIRO\\s+AUTOMOVEL\\s+\\*{3,}/\\*{2}\\s+[A-HJ-NPR-Z0-9]{17}\\s+"
-            r"([A-Z]+)\\s+([A-Z/]+)\\s+([A-Z]+)\\s+\\*\\.\\*\\s+"
-            r"([0-9]+CV/[0-9]+)\\s+([0-9]+(?:\\.[0-9]+)?)\\s+"
-            r"([A-Z0-9*]+)\\s+([0-9]+(?:\\.[0-9]+)?)\\s+\\*\\s+([0-9]+P)\\s+"
-            r"([^\\n]+?)\\s+CS BRASIL FROTAS SA\\s+"
-            r"([0-9]{2}\\.[0-9]{3}\\.[0-9]{3}/[0-9]{4}-[0-9]{2})",
-            upper,
-        )
-        if tail_match:
-            result["capacity"] = "*.*"
-            result["power_cylinder"] = tail_match.group(4)
-            result["gross_weight"] = tail_match.group(5)
-            result["motor"] = re.sub(r"[^A-Z0-9]", "", tail_match.group(6))
-            result["cmt"] = tail_match.group(7)
-            result["seating"] = tail_match.group(8)
-            result["bodywork"] = _clean_text(tail_match.group(9))
-            result["owner_name"] = "CS BRASIL FROTAS SA"
-            result["owner_document"] = tail_match.group(10)
-            result["axles"] = "2"
+    # Sequência de valores do leiaute real:
+    # tipo / placa anterior / VIN / cor / combustível / categoria /
+    # capacidade / potência / cilindrada / peso / motor / CMT / eixos /
+    # lotação / carroceria / proprietário / CNPJ.
+    tail = re.search(
+        r"PASSAGEIRO AUTOMOVEL\s+"
+        r"\*{3,}/\*{2}\s+"
+        r"([A-HJ-NPR-Z0-9]{17})\s+"
+        r"([A-Z]+)\s+"
+        r"([A-Z]+/[A-Z]+)\s+"
+        r"([A-Z]+)\s+"
+        r"(\*\.\*)\s+"
+        r"(\d+CV/\d+)\s+"
+        r"(\d+(?:\.\d+)?)\s+"
+        r"([A-Z0-9*]+)\s+"
+        r"(\d+(?:\.\d+)?)\s+"
+        r"\*\s+"
+        r"(\d+P)\s+"
+        r"(.+?)\s+"
+        r"CS BRASIL FROTAS SA\s+"
+        r"(\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2})",
+        compact,
+    )
+    if tail:
+        vin = normalize_chassi(tail.group(1))
+        if _vin_is_valid(vin):
+            result["chassi"] = vin
+        result["color"] = tail.group(2)
+        result["fuel"] = tail.group(3)
+        result["category"] = tail.group(4)
+        result["capacity"] = tail.group(5)
+        result["power_cylinder"] = tail.group(6)
+        # O valor seguinte é cilindrada, enquanto o peso vem depois.
+        result["gross_weight"] = tail.group(8)
+        result["motor"] = re.sub(r"[^A-Z0-9]", "", tail.group(9))
+        result["cmt"] = tail.group(10)
+        result["axles"] = "2"
+        result["seating"] = tail.group(11)
+        result["bodywork"] = _clean_text(tail.group(12))
+        result["owner_name"] = "CS BRASIL FROTAS SA"
+        result["owner_document"] = tail.group(13)
 
-    # Código de segurança vem antes dos valores e o primeiro 11 dígitos é o RENAVAM;
-    # neste layout o código CLA fica na área inferior e não é o RENAVAM.
-    # O parser genérico não consegue distingui-los com segurança, portanto só
-    # usamos um código numérico curto quando houver marcador explícito próximo.
+    # O padrão acima cobre o CRLV real. Para outros proprietários, preservamos
+    # apenas campos seguros já identificados pelas heurísticas gerais.
     return result
-
 
 def extract_crlv_data(file_obj):
     name = (getattr(file_obj, "name", "") or "").lower()
