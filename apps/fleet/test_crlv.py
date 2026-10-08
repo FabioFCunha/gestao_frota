@@ -24,7 +24,10 @@ class CRLVTests(TestCase):
         self.addCleanup(self.settings_override.disable)
         self.addCleanup(self.media_root.cleanup)
         self.user = get_user_model().objects.create_user(username='crlv', password='x')
-        self.user.user_permissions.add(Permission.objects.get(codename='change_vehicle'))
+        self.user.user_permissions.add(
+            Permission.objects.get(codename='change_vehicle'),
+            Permission.objects.get(codename='add_vehicle'),
+        )
         self.status = VehicleStatus.objects.create(name='Operacional')
         self.sector, _ = Sector.objects.get_or_create(name='ADM', slug='adm')
         self.user.sectors.add(self.sector)
@@ -111,7 +114,6 @@ class CRLVTests(TestCase):
         self.assertEqual(data["power_cylinder"], "115CV/1000")
         self.assertEqual(data["gross_weight"], "1.4")
         self.assertEqual(data["cmt"], "1.4")
-        self.assertEqual(data["axles"], "2")
         self.assertEqual(data["axles"], "2")
         self.assertEqual(data["seating"], "05P")
         self.assertEqual(data["bodywork"], "NÃO APLICAVEL")
