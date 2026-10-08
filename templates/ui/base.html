@@ -24,6 +24,13 @@
 
     <!-- Navigation -->
     <nav class="sb-nav">
+      {% if request.user.is_system_creator or perms.fleet.add_vehicleinspection or perms.fleet.view_vehicleinspection %}
+      <a class="sb-link {% if '/vistorias/' in request.path %}active{% endif %}" href="{% url 'inspection_list' %}">
+        <i data-lucide="clipboard-check" class="sb-icon"></i>
+        <span>Vistorias</span>
+      </a>
+      {% endif %}
+      {% if not request.inspection_only %}
       <a class="sb-link {% if request.path == '/' %}active{% endif %}" href="/">
         <i data-lucide="layout-dashboard" class="sb-icon"></i>
         <span>Dashboard</span>
@@ -62,6 +69,7 @@
         <span>Usuários e permissões</span>
       </a>
       {% endif %}
+    {% endif %}
     </nav>
 
     <!-- Footer do usuário -->

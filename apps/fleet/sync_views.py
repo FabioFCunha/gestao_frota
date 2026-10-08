@@ -31,6 +31,7 @@ class BDTSyncAPIView(APIView):
         worker = BDTSyncWorker(serializer.validated_data)
         
         # Centraliza o mapping de IDs de operacao
-        resumo = worker.run(managements_map={49: "Lei Seca"})
+        resumo = worker.run(managements_map={49: "Lei Seca", 125: "SEGOV - ADM"})
 
         return Response(resumo, status=status.HTTP_200_OK)
+

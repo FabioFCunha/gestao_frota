@@ -214,7 +214,9 @@
 <!-- ORDENS DE SAÍDA -->
 <section class="grid">
     <article class="panel" style="grid-column:1/-1;">
-        <div class="panel-title"><div><h3>🚗 Ordens de saída</h3></div><a class="secondary-action" href="{% url 'exit_order_create' %}?vehicle={{ vehicle.id }}">Nova OS de saída</a></div>
+        <div class="panel-title"><div><h3>🚗 Ordens de saída</h3></div>{% if vehicle.active %}{% if perms.fleet.add_vehicleexitorder or request.user.is_system_creator %}
+<a class="primary-action" href="{% url 'exit_order_create' %}?vehicle={{ vehicle.id }}">Nova OS de saída</a>
+{% endif %}{% endif %}</div>
         {% if pending_exit_order %}<div class="alert alert-warning"><strong>Pendente de retorno:</strong> {{ pending_exit_order.number }} — {{ pending_exit_order.driver.name }}, saída em {{ pending_exit_order.departed_at|date:"d/m/Y H:i" }}, destino {{ pending_exit_order.destination }}. Aberta por {{ pending_exit_order.opened_by.get_full_name|default:pending_exit_order.opened_by.username }}. {% if pending_exit_order.id|stringformat:"s" in can_close_exit_order_ids %}<a href="{% url 'exit_order_return' pending_exit_order.id %}">Registrar retorno</a>{% endif %}</div>{% endif %}
         {% if exit_orders %}<table><thead><tr><th>OS</th><th>Estado</th><th>Motorista</th><th>Saída</th><th>Destino</th><th></th></tr></thead><tbody>{% for order in exit_orders %}<tr><td>{{ order.number }}</td><td><span class="tag">{{ order.get_state_display }}</span></td><td>{{ order.driver.name }}</td><td>{{ order.departed_at|date:"d/m/Y H:i" }}</td><td>{{ order.destination }}</td><td><a href="{% url 'exit_order_detail' order.id %}">Detalhes</a></td></tr>{% endfor %}</tbody></table><p style="margin-top:12px"><a href="{% url 'exit_order_list' %}?vehicle={{ vehicle.id }}">Ver todas as ordens desta viatura</a></p>{% else %}<div class="empty">Nenhuma ordem de saída registrada.</div>{% endif %}
     </article>
@@ -223,7 +225,10 @@
 <!-- MANUTENÇÕES -->
 <section class="grid">
     <article class="panel" style="grid-column:1/-1;">
-        <div class="panel-title"><div><h3>⚒ Manutenções</h3></div></div>
+        <div class="panel-title"><div><h3>⚒ Manutenções</h3></div>
+{% if vehicle.active %}{% if perms.fleet.add_maintenance or request.user.is_system_creator %}
+<a class="primary-action" href="{% url 'maintenance_create' %}?vehicle={{ vehicle.id }}">Nova manutenção</a>
+{% endif %}{% endif %}</div>
         {% if maintenances %}
         <table>
             <thead><tr><th>TIPO</th><th>SERVIÇO</th><th>OFICINA</th><th>SITUAÇÃO</th><th>KM ENTRADA</th><th>KM RETORNO</th><th>ENVIADO</th><th>RETORNO</th></tr></thead>
@@ -257,7 +262,9 @@
 <!-- MULTAS E VISTORIAS -->
 <section class="grid">
     <article class="panel">
-        <div class="panel-title"><div><h3>⚑ Multas</h3></div><a class="primary-action" href="{% url 'fine_create' %}?vehicle={{ vehicle.id }}">Nova multa</a></div>
+        <div class="panel-title"><div><h3>⚑ Multas</h3></div>{% if vehicle.active %}{% if perms.fleet.add_vehiclefine or request.user.is_system_creator %}
+<a class="primary-action" href="{% url 'fine_create' %}?vehicle={{ vehicle.id }}">Nova multa</a>
+{% endif %}{% endif %}</div>
         {% if fines %}
         <table>
             <thead><tr><th>AUTO</th><th>SITUAÇÃO</th><th>DATA</th></tr></thead>
@@ -273,13 +280,24 @@
     </article>
 
     <article class="panel">
-        <div class="panel-title"><div><h3>🔍 Vistorias</h3></div></div>
+        <div class="panel-title"><div><h3>🔍 Vistorias</h3></div>
+{% if vehicle.active %}{% if perms.fleet.add_vehicleinspection or request.user.is_system_creator %}
+<a class="primary-action" href="{% url 'inspection_create' vehicle.id %}">Nova vistoria</a>
+{% endif %}{% endif %}</div>
         {% if inspections %}
         <table>
             <thead><tr><th>TIPO</th><th>SITUAÇÃO</th><th>KM</th><th>DATA</th></tr></thead>
             <tbody>
                 {% for i in inspections %}
-                <tr><td>{{ i.type.name }}</td><td><span class="tag">{{ i.status.name }}</span></td><td>{{ i.mileage|default:"-" }}</td><td>{{ i.date|date:"d/m/Y" }}</td></tr>
+                <tr>
+  <td>
+    {{ i.type.name }}
+    {% include "ui/inspection_checklist.html" with inspection=i only %}
+  </td>
+  <td><span class="tag">{{ i.status.name }}</span></td>
+  <td>{{ i.mileage|default:"-" }}</td>
+  <td>{{ i.date|date:"d/m/Y" }}</td>
+</tr>
                 {% endfor %}
             </tbody>
         </table>

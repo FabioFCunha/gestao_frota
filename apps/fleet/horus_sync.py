@@ -30,19 +30,44 @@ class SyncStats:
 
 class HorusBDTSyncer:
     """
-    Agente Windows standalone que sincroniza BDTs da Lei Seca.
+    Agente Windows standalone que sincroniza BDTs de uma gestão do Hórus.
     Conecta-se ao Hórus (PostgreSQL local), extrai dados incrementais
     e envia via HTTPS POST para a VPS do Gestão de Frotas.
     """
 
-    def __init__(self, dry_run=False, limit=None):
+    def __init__(
+        self, dry_run=False, limit=None, *, management_id=None,
+        state_file=None, lookback_days=None,
+    ):
         self.dry_run = dry_run
         self.limit = limit
-        self.state_file = Path(os.getenv("HORUS_SYNC_STATE_FILE", ".bdt_horus_sync_state.json"))
+        if limit is not None and limit < 1:
+            raise ValueError("O limite do lote deve ser maior que zero.")
 
-        # Horus Configs
-        self.management_id = int(os.getenv("HORUS_LEI_SECA_MANAGEMENT_ID", "49"))
-        self.lookback_days = int(os.getenv("HORUS_BDT_LOOKBACK_DAYS", "90"))
+        configured_management = int(os.getenv("HORUS_LEI_SECA_MANAGEMENT_ID", "49"))
+        self.management_id = int(
+            management_id if management_id is not None else configured_management
+        )
+        if self.management_id < 1:
+            raise ValueError("O ID da gestão deve ser maior que zero.")
+        self.management_name = {49: "Lei Seca", 125: "SEGOV - ADM"}.get(
+            self.management_id, f"Gestão {self.management_id}"
+        )
+        configured_state = Path(os.getenv("HORUS_SYNC_STATE_FILE", ".bdt_horus_sync_state.json"))
+        # Preserve the existing Lei Seca watermark. Other managements never
+        # reuse it, even when the runner exports the original state path.
+        self.state_file = Path(state_file) if state_file is not None else (
+            configured_state if self.management_id == 49 else
+            configured_state.with_name(
+                f"{configured_state.stem}.management-{self.management_id}{configured_state.suffix}"
+            )
+        )
+        self.lookback_days = int(
+            lookback_days if lookback_days is not None else
+            os.getenv("HORUS_BDT_LOOKBACK_DAYS", "90")
+        )
+        if self.lookback_days < 1:
+            raise ValueError("A janela histórica deve ser maior que zero.")
 
         # API Configs
         # A read-only dry run must remain possible when the outbound secret is
@@ -79,9 +104,18 @@ class HorusBDTSyncer:
             try:
                 with open(self.state_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                    dt = datetime.fromisoformat(data["last_sync_updated_at"])
-                    last_id = data.get("last_sync_id", "00000000-0000-0000-0000-000000000000")
-                    return dt, last_id
+            except (OSError, ValueError) as exc:
+                raise RuntimeError("Estado de sincronização inválido; arquivo preservado.") from exc
+            if not isinstance(data, dict):
+                raise RuntimeError("Estado de sincronização inválido; arquivo preservado.")
+            if data.get("management_id", 49) != self.management_id:
+                raise RuntimeError(
+                    "O cursor pertence a outra gestão. Use um arquivo de estado separado."
+                )
+            try:
+                dt = datetime.fromisoformat(data["last_sync_updated_at"])
+                last_id = data.get("last_sync_id", "00000000-0000-0000-0000-000000000000")
+                return dt, last_id
             except Exception as e:
                 logger.warning(f"Falha ao ler estado local. Fazendo sync completo de {self.lookback_days} dias. Erro: {e}")
 
@@ -101,6 +135,7 @@ class HorusBDTSyncer:
                 prefix=f"{self.state_file.name}.", suffix=".tmp", delete=False,
             ) as f:
                 json.dump({
+                    "management_id": self.management_id,
                     "last_sync_updated_at": max_updated_at.isoformat(),
                     "last_sync_id": str(max_id),
                 }, f)
@@ -242,6 +277,7 @@ class HorusBDTSyncer:
         conn = self._connect()
         try:
             last_updated_at, last_id = self._load_cursor()
+            print(f"Gestão: {self.management_id} — {self.management_name} | Estado: {self.state_file}")
             print(f"Buscando BDTs com atualizações > {last_updated_at} (ou id > {last_id})")
 
             bdts = self._fetch_bdts(conn, last_updated_at, last_id)
@@ -271,6 +307,11 @@ class HorusBDTSyncer:
                 )
 
             if self.dry_run:
+                for fleet in fleets:
+                    print(f"Viatura de origem: {fleet['plate']} | ID Hórus: {fleet['id']}")
+                for user in users:
+                    name = f"{user.get('first_name') or ''} {user.get('last_name') or ''}".strip()
+                    print(f"Motorista de origem: {name} | ID Hórus: {user['id']}")
                 print("Dry Run finalizado. Nenhum dado enviado para a VPS.")
                 return self.stats
 
@@ -281,7 +322,7 @@ class HorusBDTSyncer:
                     "external_id": f["id"],
                     "plate": f["plate"],
                     "special_plate": f["special_plate"] or "",
-                    "management_name": "Lei Seca"
+                    "management_name": self.management_name
                 }
                 resp = self._post_data("vehicles", v_payload)
                 self._require_response(resp, "vehicles", 1, vehicle_id=f["id"])
@@ -326,3 +367,4 @@ class HorusBDTSyncer:
 
         finally:
             conn.close()
+

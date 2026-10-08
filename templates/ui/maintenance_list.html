@@ -1,4 +1,5 @@
 {% extends 'ui/base.html' %}
+{% load l10n %}
 {% block title %}Controle de Revisões | Gestão de Frotas{% endblock %}
 {% block heading %}Controle de Revisões{% endblock %}
 
@@ -7,6 +8,15 @@
     <div>
         <form method="get" action="" style="display:flex;gap:10px;flex-wrap:wrap;">
             <input type="text" name="q" value="{{ q }}" placeholder="Buscar por placa ou modelo..." style="padding:10px;width:400px;max-width:100%;border-radius:4px;border:1px solid #ccc;" />
+
+            {% if show_sector_filter %}
+            <select name="sector" class="form-input" aria-label="Setor"
+                    style="width:190px;">
+                <option value="" {% if not requested_sector %}selected{% endif %}>Todos os setores</option>
+                <option value="adm" {% if requested_sector == 'adm' %}selected{% endif %}>ADM</option>
+                <option value="lei-seca" {% if requested_sector == 'lei-seca' %}selected{% endif %}>Lei Seca</option>
+            </select>
+            {% endif %}
             <button type="submit" class="primary-action">Buscar</button>
         </form>
     </div>
@@ -24,6 +34,7 @@
                     <th>VEÍCULO (PLACA)</th>
                     <th>MARCA/MODELO</th>
                     <th>KM ATUAL</th>
+                    <th>REGRA DE REVISÃO</th>
                     <th>PRÓX. REVISÃO</th>
                     <th>FALTAM</th>
                     <th>STATUS</th>
@@ -35,9 +46,10 @@
                 <tr>
                     <td><strong>{{ v.plate }}</strong></td>
                     <td>{{ v.brand_model }}</td>
-                    <td>{{ v.km_atual }} km</td>
+                    <td>{% if v.km_atual is not None %}{{ v.km_atual }} km{% else %}Não informado{% endif %}</td>
+                    <td>A cada {{ v.revision_interval_km }} km</td>
                     <td>
-                        {% if v.km_prox_revisao %}
+                        {% if v.km_prox_revisao is not None %}
                             {{ v.km_prox_revisao }} km
                         {% else %}
                             —
@@ -61,6 +73,8 @@
                             <span class="tag" style="background:#ffe8e9;color:#df4b54;">VENCIDA</span>
                         {% elif v.revisao_status == 'PROXIMA' %}
                             <span class="tag" style="background:#fff1dc;color:#e98914;">PRÓXIMA</span>
+                        {% elif v.revisao_status == 'SEM_QUILOMETRAGEM' %}
+                            <span class="tag" style="background:#f3f4f6;color:#6b7280;">KM NÃO INFORMADO</span>
                         {% elif v.revisao_status == 'SEM_HISTORICO' %}
                             <span class="tag" style="background:#f3f4f6;color:#6b7280;">SEM HISTÓRICO</span>
                         {% else %}
@@ -74,14 +88,16 @@
                                     class="secondary-action revision-edit"
                                     data-id="{{ v.id }}"
                                     data-plate="{{ v.plate }}"
-                                    data-km="{{ v.km_atual }}"
-                                    data-next="{{ v.km_prox_revisao|default:'' }}"
+                                    data-km="{{ v.km_atual|default_if_none:""|unlocalize }}"
+                                    data-next="{{ v.km_prox_revisao|default_if_none:""|unlocalize }}"
+                                    data-remaining="{{ v.km_faltando|default_if_none:''|unlocalize }}"
+                                    data-interval="{{ v.revision_interval_km|unlocalize }}"
                                     data-status="{{ v.revisao_status }}"
                                     data-active-id="{% if v.active_revision %}{{ v.active_revision.id }}{% endif %}"
                                     data-revision-id="{{ v.last_revision_id|default:'' }}"
                                     data-sent-date="{% if v.active_revision %}{{ v.active_revision.entered_at|date:'Y-m-d' }}{% else %}{{ v.last_revision_entered_at|date:'Y-m-d' }}{% endif %}"
                                     data-return-date="{% if v.active_revision %}{{ v.active_revision.exited_at|date:'Y-m-d' }}{% else %}{{ v.last_revision_exited_at|date:'Y-m-d' }}{% endif %}"
-                                    data-completion-km="{% if v.active_revision %}{{ v.active_revision.completion_mileage|default:'' }}{% else %}{{ v.last_revision_completion_mileage|default:'' }}{% endif %}"
+                                    data-completion-km="{% if v.active_revision %}{{ v.active_revision.completion_mileage|default_if_none:""|unlocalize }}{% else %}{{ v.last_revision_completion_mileage|default_if_none:""|unlocalize }}{% endif %}"
                                     data-workshop="{% if v.active_revision and v.active_revision.workshop %}{{ v.active_revision.workshop.id }}{% else %}{{ v.last_revision.workshop.id|default:'' }}{% endif %}"
                                     data-workshop-name="{% if v.active_revision %}{{ v.active_revision.workshop_name|default:'' }}{% else %}{{ v.last_revision_workshop_name|default:'' }}{% endif %}"
                                     data-service="{% if v.active_revision %}{{ v.active_revision.service|default:'' }}{% else %}{{ v.last_revision_service|default:'' }}{% endif %}">
@@ -112,7 +128,9 @@
         <div style="background:#f8fafc;border-radius:10px;padding:14px;margin-bottom:18px;">
             <div style="display:flex;gap:24px;flex-wrap:wrap;">
                 <div><small>KM atual</small><strong id="revision-current-km" style="display:block;font-size:1.2rem;">—</strong></div>
+                <div><small>Regra de revisão</small><strong id="revision-interval" style="display:block;">—</strong></div>
                 <div><small>Próxima revisão</small><strong id="revision-next-km" style="display:block;font-size:1.2rem;">—</strong></div>
+                <div><small>Faltam</small><strong id="revision-remaining-km" style="display:block;font-size:1.2rem;">—</strong></div>
                 <div><small>Situação</small><strong id="revision-status" style="display:block;">—</strong></div>
             </div>
         </div>
@@ -139,10 +157,19 @@
                     <div>
                         <label style="font-weight:bold;display:block;margin-bottom:5px;">{{ revision_action_form.workshop.label }}</label>
                         {{ revision_action_form.workshop }}
+                        
+                        <button type="button" id="workshop-add"
+                                class="table-action" style="margin-top:8px;">
+                            + Nova oficina
+                        </button>
+                        <span id="workshop-add-message" role="status"></span>
+                        
+
                     </div>
                     <div>
                         <label style="font-weight:bold;display:block;margin-bottom:5px;">{{ revision_action_form.workshop_name.label }}</label>
                         {{ revision_action_form.workshop_name }}
+                        <small style="display:block;margin-top:4px;">Se a oficina não estiver na lista, digite o nome aqui.</small>
                     </div>
                 </div>
 
@@ -154,7 +181,7 @@
                 <div id="completion-block" style="margin-top:15px;">
                     <label style="font-weight:bold;display:block;margin-bottom:5px;">{{ revision_action_form.completion_mileage.label }}</label>
                     {{ revision_action_form.completion_mileage }}
-                    <small style="color:#64748b;">Quando houver retorno, esta KM passa a ser a nova referência para +10.000 km.</small>
+                    <small id="revision-km-rule" style="color:#64748b;"></small>
                 </div>
 
                 <div id="status-block" style="margin-top:15px;">
@@ -198,6 +225,19 @@
     const notes = document.getElementById('id_notes');
     const help = document.getElementById('revision-help');
     let currentVehicleId = '';
+    let revisionInterval = 10000;
+    let savedNext = '';
+    const formatKm = value => Number(value).toLocaleString('pt-BR');
+
+    function updateNextPreview() {
+        const raw = completionInput.value.trim();
+        const value = Number(raw);
+        if (returnDate.value && raw !== '' && Number.isInteger(value) && value >= 0) {
+            nextKm.textContent = formatKm(value + revisionInterval) + ' km (após salvar)';
+        } else {
+            nextKm.textContent = savedNext !== '' ? formatKm(savedNext) + ' km' : 'Sem referência';
+        }
+    }
 
     function resetFields() {
         sentDate.value = '';
@@ -216,15 +256,26 @@
         const id = button.dataset.id;
         currentVehicleId = id;
         const plate = button.dataset.plate;
-        const km = button.dataset.km || '0';
+        const km = button.dataset.km || '';
         const next = button.dataset.next || '';
         const currentStatus = button.dataset.status || '';
         const activeId = button.dataset.activeId || '';
         const revisionId = button.dataset.revisionId || '';
 
         title.textContent = 'Revisão — ' + plate;
-        currentKm.textContent = km + ' km';
-        nextKm.textContent = next ? next + ' km' : 'Sem referência';
+        revisionInterval = Number(button.dataset.interval);
+        savedNext = next;
+        document.getElementById('revision-interval').textContent =
+            'A cada ' + formatKm(revisionInterval) + ' km';
+        document.getElementById('revision-km-rule').textContent =
+            'Com retorno, o KM informado será a referência para mais ' +
+            formatKm(revisionInterval) + ' km.';
+        currentKm.textContent = km !== '' ? formatKm(km) + ' km' : 'Não informado';
+        nextKm.textContent = next !== '' ? formatKm(next) + ' km' : 'Sem referência';
+        const remaining = button.dataset.remaining || '';
+        document.getElementById('revision-remaining-km').textContent =
+            remaining !== '' ? formatKm(remaining) + ' km' : 'Sem quilometragem registrada';
+
         status.textContent = activeId ? 'EM REVISÃO' : currentStatus;
         form.action = '/manutencoes/' + id + '/revisao/';
         maintenanceId.value = activeId || revisionId;
@@ -246,9 +297,10 @@
             help.textContent = 'Use para veículos que já passaram por revisão, mas ainda não tiveram o histórico informado no sistema. Se não houver retorno, o veículo ficará EM REVISÃO.';
         } else {
             document.getElementById('revision-submit').textContent = returnDate.value ? 'Salvar revisão' : 'Salvar como EM REVISÃO';
-            help.textContent = 'Edite as datas, oficina e quilometragem. Com data de retorno, a KM informada será a nova referência e a próxima revisão será +10.000 km. Sem retorno, o card permanece EM REVISÃO.';
+            help.textContent = 'Edite as datas, oficina e quilometragem. Com data de retorno, a KM informada será a nova referência e a próxima revisão seguirá o intervalo exibido acima. Sem retorno, o card permanece EM REVISÃO.';
         }
 
+        updateNextPreview();
         modal.style.display = 'flex';
         sentDate.focus();
     }
@@ -263,7 +315,9 @@
         });
     });
 
+    completionInput.addEventListener('input', updateNextPreview);
     returnDate.addEventListener('change', function () {
+        updateNextPreview();
         document.getElementById('revision-submit').textContent = returnDate.value ? 'Salvar revisão' : 'Salvar como EM REVISÃO';
     });
 
@@ -303,4 +357,59 @@
     });
 })();
 </script>
+
+<script>
+(function () {
+    const button = document.getElementById('workshop-add');
+    if (!button) return;
+    const select = document.getElementById('id_workshop');
+    const message = document.getElementById('workshop-add-message');
+
+    button.addEventListener('click', async function () {
+        const name = window.prompt('Nome da nova oficina:');
+        if (name === null || !name.trim()) return;
+        const csrf = button.closest('form').querySelector(
+            '[name="csrfmiddlewaretoken"]'
+        );
+        button.disabled = true;
+        message.textContent = ' Salvando...';
+        try {
+            const response = await fetch(
+                "{% url 'workshop_quick_create' %}",
+                {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: {'X-CSRFToken': csrf.value},
+                    body: new URLSearchParams({name: name.trim()})
+                }
+            );
+            if (!response.ok) {
+                let detail = 'Não foi possível cadastrar a oficina.';
+                try {
+                    const error = await response.json();
+                    detail = error.error || detail;
+                } catch (_) {}
+                throw new Error(detail);
+            }
+            const data = await response.json();
+            let option = Array.from(select.options).find(
+                item => item.value === data.id
+            );
+            if (!option) {
+                option = new Option(data.name, data.id);
+                select.add(option);
+            }
+            select.value = data.id;
+            document.getElementById('id_workshop_name').value = '';
+            select.dispatchEvent(new Event('change', {bubbles: true}));
+            message.textContent = ' Oficina cadastrada e selecionada.';
+        } catch (error) {
+            message.textContent = ' ' + error.message;
+        } finally {
+            button.disabled = false;
+        }
+    });
+})();
+</script>
 {% endblock %}
+

@@ -38,6 +38,19 @@
 
 
 
+
+{% if show_sector_filter %}
+<form method="get" style="display:flex;gap:12px;align-items:center;margin:16px 0;">
+    <label for="dashboard-sector">Setor:</label>
+    <select id="dashboard-sector" name="sector" class="form-input" style="width:190px;">
+        <option value="" {% if not requested_sector %}selected{% endif %}>Todos os setores</option>
+        <option value="adm" {% if requested_sector == 'adm' %}selected{% endif %}>ADM</option>
+        <option value="lei-seca" {% if requested_sector == 'lei-seca' %}selected{% endif %}>Lei Seca</option>
+    </select>
+    <button type="submit" class="primary-action">Aplicar</button>
+</form>
+{% endif %}
+
 <section class="fd-hero">
     <div class="fd-hero-left">
         <span class="fd-eyebrow">CENTRAL DA FROTA</span>
@@ -233,12 +246,16 @@
                     <span>{% if v.mileage is not None %}{{ v.mileage }} km{% else %}Sem quilometragem registrada{% endif %}</span>
                 </div>
                 {% if v.revision_info %}
+                    <div class="vc-detail-item" title="Intervalo da revisão preventiva">
+                        <span class="vc-detail-icon">🔧</span>
+                        <span>Revisão a cada {{ v.revision_info.interval_km }} km</span>
+                    </div>
                     {% if v.revision_info.status == "SEM_HISTORICO" %}
                     <div class="vc-detail-item" title="Nenhuma revisão concluída e referência inicial ainda não definida">
                         <span class="vc-detail-icon">⚠️</span>
                         <span style="color: #b45309;">Sem histórico de revisão</span>
                     </div>
-                    {% elif v.revision_info.status != "SEM_QUILOMETRAGEM" %}
+                    {% else %}
                     {% if v.revision_info.km_prox_revisao is not None %}
                     <div class="vc-detail-item" title="Próxima Revisão">
                         <span class="vc-detail-icon">🔧</span>
@@ -258,6 +275,8 @@
                             {% endif %}
                         </span>
                     </div>
+                    {% else %}
+                    <div class="vc-detail-item">Faltam: sem quilometragem registrada</div>
                     {% endif %}
                     {% endif %}
                 {% endif %}
@@ -365,5 +384,6 @@
 })();
 </script>
 {% endblock %}
+
 
 

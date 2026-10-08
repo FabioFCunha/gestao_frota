@@ -1,3 +1,4 @@
+from .exit_order_bdt import exit_order_bdt_rows
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import LoginView
 from django.db.models import Count, Q, Prefetch
@@ -16,6 +17,8 @@ from apps.accounts.decorators import module_permission
 from apps.fleet.models import VehiclePlate, Renter
 from apps.fleet.sector_scope import apply_sector_scope, validate_vehicle_scope
 
+from apps.fleet.services import get_vehicle_revision_interval
+
 class FleetLoginView(LoginView):
     template_name = "ui/login.html"
     authentication_form = FleetAuthenticationForm
@@ -30,7 +33,7 @@ def dashboard(request):
     from apps.fleet.sector_scope import apply_sector_scope
 
     requested_sector = request.GET.get("sector")
-    scoped_vehicles = apply_sector_scope(Vehicle.objects.all(), request.user, requested_sector)
+    scoped_vehicles = apply_sector_scope(Vehicle.objects.filter(active=True), request.user, requested_sector)
     scoped_vehicle_ids = scoped_vehicles.values_list("id", flat=True)
 
     metrics = get_dashboard_metrics({"vehicle__in": scoped_vehicle_ids})
@@ -165,6 +168,7 @@ def dashboard(request):
                 "status": revision["status"],
                 "km_prox_revisao": revision["next_revision_km"],
                 "km_faltando": revision["km_remaining"],
+                "interval_km": revision["interval_km"],
                 "ultrapassado": max(0, -revision["km_remaining"]) if revision["km_remaining"] is not None else 0
             }
         else:
@@ -195,7 +199,10 @@ def dashboard(request):
         "contrato": sum(1 for r in plate_rows if "contrato" in r["alerts"]),
     }
 
+    from apps.fleet.sector_scope import can_select_sector
     context = {
+        "show_sector_filter": can_select_sector(request.user),
+        "requested_sector": requested_sector,
         "metrics": metrics,
         "plate_rows": plate_rows,
         "plate_alert_counts": plate_alert_counts,
@@ -256,7 +263,8 @@ def vehicle_list(request):
 
     allowed_sectors = allowed_sector_slugs(request.user)
     requested_sector = request.GET.get("sector")
-    show_sector_filter = allowed_sectors is None or len(allowed_sectors) > 1
+    from apps.fleet.sector_scope import can_select_sector
+    show_sector_filter = can_select_sector(request.user)
 
     context = {
         "vehicles": qs[:50],
@@ -687,33 +695,44 @@ def contract_detail(request, pk):
 @login_required
 @module_permission("fleet.view_driver")
 def driver_list(request):
-    from apps.fleet.models import Driver
+    from apps.fleet.models import Driver, VehicleDriverAssignment
     from django.db.models import Prefetch
-    from apps.fleet.models import VehicleDriverAssignment
-
-    active_assignments = VehicleDriverAssignment.objects.filter(is_active=True).select_related(
-        'vehicle__brand', 'vehicle__model'
-    ).prefetch_related('vehicle__plate_history')
-
-    status = request.GET.get('status', 'active')
-    qs = Driver.objects.prefetch_related(
-        Prefetch('vehicle_assignments', queryset=active_assignments, to_attr='active_assignments')
-    ).order_by('name')
-
     from django.utils.timezone import now
+    from apps.fleet.driver_scope import (
+        apply_driver_sector_scope, apply_driver_vehicle_scope,
+        can_show_driver_sector_filter,
+    )
 
-    if status == 'inactive':
+    requested_sector = request.GET.get("sector")
+    active_assignments = apply_driver_vehicle_scope(
+        VehicleDriverAssignment.objects.filter(is_active=True),
+        request.user, requested_sector, lookup="vehicle__sector__slug",
+    ).select_related("vehicle__brand", "vehicle__model").prefetch_related("vehicle__plate_history")
+
+    status = request.GET.get("status", "active")
+    qs = apply_driver_sector_scope(
+        Driver.objects.all(), request.user, requested_sector,
+    ).prefetch_related(
+        "sectors",
+        Prefetch("vehicle_assignments", queryset=active_assignments, to_attr="active_assignments"),
+    ).order_by("name")
+
+    if status == "inactive":
         qs = qs.filter(active=False)
-    elif status == 'cnh_vencida':
+    elif status == "cnh_vencida":
         qs = qs.filter(active=True, cnh_expiration__lt=now().date())
     else:
         qs = qs.filter(active=True)
 
-    q = request.GET.get('q', '')
+    q = request.GET.get("q", "")
     if q:
         qs = qs.filter(Q(name__icontains=q) | Q(phone__icontains=q))
 
-    context = {"drivers": qs, "q": q, "status": status, "today": now().date()}
+    context = {
+        "drivers": qs, "q": q, "status": status, "today": now().date(),
+        "requested_sector": requested_sector,
+        "show_sector_filter": can_show_driver_sector_filter(request.user),
+    }
     return render(request, "ui/driver_list.html", context)
 
 
@@ -722,9 +741,12 @@ def driver_list(request):
 def maintenance_list(request):
     from apps.fleet.models import Vehicle, VehicleMileage, Maintenance
     from apps.fleet.services import get_vehicle_revision_status
+    from apps.fleet.sector_scope import apply_sector_scope, can_select_sector
+
+    requested_sector = request.GET.get("sector")
 
     qs = (
-        Vehicle.objects
+        Vehicle.objects.filter(active=True)
         .select_related('brand', 'model', 'status')
         .prefetch_related(
             'plate_history',
@@ -734,6 +756,8 @@ def maintenance_list(request):
             'maintenances__workshop',
         )
     )
+
+    qs = apply_sector_scope(qs, request.user, requested_sector)
 
     q = request.GET.get('q', '')
     if q:
@@ -775,7 +799,9 @@ def maintenance_list(request):
             'brand_model': f"{v.brand.name if v.brand else ''} {v.model.name if v.model else ''}".strip() or '-',
             'km_atual': revision['current_km'],
             'km_prox_revisao': revision['next_revision_km'],
+            'revision_interval_km': get_vehicle_revision_interval(vehicle=v),
             'km_faltando': revision['km_remaining'],
+            'revision_interval_km': revision['interval_km'],
             'revisao_status': revision['status'],
             'last_revision_km': revision['last_revision_km'],
             'has_history': revision['has_history'],
@@ -809,6 +835,8 @@ def maintenance_list(request):
 
     context = {
         "vehicles_data": vehicles_data,
+        "requested_sector": requested_sector,
+        "show_sector_filter": can_select_sector(request.user),
         "q": q,
         "revision_action_form": RevisionActionForm(),
     }
@@ -822,6 +850,7 @@ def revision_action(request, pk):
     from apps.fleet.models import Vehicle, Maintenance, MaintenanceType, MaintenanceStatus
     from apps.fleet.services import (
         get_vehicle_revision_status,
+        get_vehicle_revision_interval,
         open_maintenance,
         complete_maintenance,
         change_vehicle_status,
@@ -1042,7 +1071,7 @@ def revision_action(request, pk):
         else:
             messages.success(
                 request,
-                f'Revisão registrada. Próxima revisão calculada em {completion_mileage + 10000:,} km.'.replace(',', '.')
+                f'Revisão registrada. Próxima revisão calculada em {completion_mileage + get_vehicle_revision_interval(vehicle=vehicle):,} km.'.replace(',', '.')
             )
         return redirect('maintenance_list')
 
@@ -1097,7 +1126,7 @@ def revision_action(request, pk):
         if return_date:
             messages.success(
                 request,
-                f'Histórico atualizado. Próxima revisão: {last_revision_km + 10000:,} km.'.replace(',', '.')
+                f'Histórico atualizado. Próxima revisão: {last_revision_km + get_vehicle_revision_interval(vehicle=vehicle):,} km.'.replace(',', '.')
             )
         else:
             messages.success(request, 'Histórico salvo sem data de retorno. O veículo permanece EM REVISÃO.')
@@ -1135,15 +1164,20 @@ def fine_list(request):
 @login_required
 @module_permission("fleet.add_driver")
 def driver_create(request):
+    from urllib.parse import urlencode
+    requested_sector = request.GET.get("sector")
+    list_url = reverse("driver_list")
+    if requested_sector in {"adm", "lei-seca"}:
+        list_url += "?" + urlencode({"sector": requested_sector})
     if request.method == 'POST':
-        form = DriverForm(request.POST)
+        form = DriverForm(request.POST, user=request.user, requested_sector=requested_sector)
         if form.is_valid():
             form.save()
             messages.success(request, 'Motorista cadastrado com sucesso!')
-            return redirect('driver_list')
+            return redirect(list_url)
     else:
-        form = DriverForm()
-    return render(request, 'ui/form.html', {'form': form, 'title': 'Cadastrar Motorista', 'back_url': 'driver_list'})
+        form = DriverForm(user=request.user, requested_sector=requested_sector)
+    return render(request, 'ui/form.html', {'form': form, 'title': 'Cadastrar Motorista', 'back_url': 'driver_list', 'back_url_url': list_url})
 
 
 @login_required
@@ -1151,16 +1185,25 @@ def driver_create(request):
 def driver_edit(request, pk):
     from apps.fleet.models import Driver
 
-    driver = get_object_or_404(Driver, pk=pk)
+    from apps.fleet.driver_scope import apply_driver_sector_scope
+    from urllib.parse import urlencode
+    requested_sector = request.GET.get("sector")
+    list_url = reverse("driver_list")
+    if requested_sector in {"adm", "lei-seca"}:
+        list_url += "?" + urlencode({"sector": requested_sector})
+    driver = get_object_or_404(
+        apply_driver_sector_scope(Driver.objects.all(), request.user, requested_sector),
+        pk=pk,
+    )
     if request.method == 'POST':
-        form = DriverForm(request.POST, instance=driver)
+        form = DriverForm(request.POST, instance=driver, user=request.user, requested_sector=requested_sector)
         if form.is_valid():
             form.save()
             messages.success(request, 'Dados do motorista atualizados com sucesso!')
-            return redirect('driver_list')
+            return redirect(list_url)
     else:
-        form = DriverForm(instance=driver)
-    return render(request, 'ui/form.html', {'form': form, 'title': f'Editar Motorista: {driver.name}', 'back_url': 'driver_list'})
+        form = DriverForm(instance=driver, user=request.user, requested_sector=requested_sector)
+    return render(request, 'ui/form.html', {'form': form, 'title': f'Editar Motorista: {driver.name}', 'back_url': 'driver_list', 'back_url_url': list_url})
 
 
 @login_required
@@ -1169,10 +1212,27 @@ def driver_assign_vehicle(request, pk):
     from apps.fleet.models import Driver
     from apps.fleet.services import assign_driver_to_vehicle
 
-    driver = get_object_or_404(Driver, pk=pk)
+    from apps.fleet.driver_scope import apply_driver_sector_scope
+    from urllib.parse import urlencode
+    requested_sector = request.GET.get("sector")
+    list_url = reverse("driver_list")
+    if requested_sector in {"adm", "lei-seca"}:
+        list_url += "?" + urlencode({"sector": requested_sector})
+    driver = get_object_or_404(
+        apply_driver_sector_scope(Driver.objects.all(), request.user, requested_sector),
+        pk=pk,
+    )
+
+    from apps.fleet.driver_scope import apply_driver_vehicle_scope
+
+    def scope_vehicle_choices(form):
+        form.fields["vehicle"].queryset = apply_driver_vehicle_scope(
+            form.fields["vehicle"].queryset, request.user, requested_sector,
+        ).filter(sector__in=driver.sectors.all())
+        return form
 
     if request.method == 'POST':
-        form = DriverVehicleAssignmentForm(request.POST)
+        form = scope_vehicle_choices(DriverVehicleAssignmentForm(request.POST))
 
         if form.is_valid():
             try:
@@ -1193,9 +1253,9 @@ def driver_assign_vehicle(request, pk):
                     request,
                     'Veículo vinculado ao motorista com sucesso!'
                 )
-                return redirect('driver_list')
+                return redirect(list_url)
     else:
-        form = DriverVehicleAssignmentForm()
+        form = scope_vehicle_choices(DriverVehicleAssignmentForm())
 
     return render(
         request,
@@ -1203,7 +1263,7 @@ def driver_assign_vehicle(request, pk):
         {
             'form': form,
             'title': f'Vincular veículo: {driver.name}',
-            'back_url': 'driver_list',
+            'back_url': 'driver_list', 'back_url_url': list_url,
         },
     )
 
@@ -1443,6 +1503,9 @@ def fine_full_edit(request, pk):
 @login_required
 @module_permission("fleet.add_maintenance")
 def maintenance_create(request):
+    if "vehicle" in request.GET:
+        from .dossier_actions import linked_maintenance_create
+        return linked_maintenance_create(request)
     from .forms import MaintenanceForm
     from apps.fleet.models import VehiclePlate
     from django.contrib import messages
@@ -1673,6 +1736,7 @@ def exit_order_detail(request, pk):
         'order': order,
         'plate': _exit_order_plate(order.vehicle),
         'audits': audits,
+        'bdt_rows': exit_order_bdt_rows(order),
         'can_close': order.state == VehicleExitOrder.State.PENDING and order.opened_by_id == request.user.id and (request.user.is_system_creator or request.user.has_perm('fleet.change_vehicleexitorder')),
     })
 
@@ -1699,3 +1763,30 @@ def exit_order_return(request, pk):
     else:
         form = VehicleExitOrderReturnForm()
     return render(request, 'ui/exit_order_return_form.html', {'form': form, 'order': order, 'plate': _exit_order_plate(order.vehicle)})
+
+
+
+
+@login_required
+def workshop_quick_create(request):
+    from apps.fleet.models import Workshop
+    from django.db import transaction
+
+    if request.method != "POST":
+        return JsonResponse({"error": "Use POST."}, status=405)
+
+    name = " ".join((request.POST.get("name") or "").split())
+    if not name or len(name) > 150:
+        return JsonResponse(
+            {"error": "Informe um nome com até 150 caracteres."}, status=400
+        )
+
+    with transaction.atomic():
+        workshop = Workshop.objects.filter(name__iexact=name).order_by("created_at").first()
+        if workshop is None:
+            workshop = Workshop.objects.create(name=name, active=True)
+        elif not workshop.active:
+            workshop.active = True
+            workshop.save(update_fields=["active", "updated_at"])
+
+    return JsonResponse({"id": str(workshop.pk), "name": workshop.name})
