@@ -114,11 +114,12 @@ def _plate_candidates(text):
 
 def _extract_renavam(text):
     upper = text.upper()
-    contextual = re.findall(r"RENAVAM\D{0,80}([0-9][0-9 .-]{9,14})", upper)
+    contextual = re.findall(r"RENAVAM\D{0,500}([0-9][0-9 .-]{9,14})", upper)
+    contextual_digits = []
     for value in contextual:
         digits = normalize_renavam(value)
-        if len(digits) == 11 and not _cpf_valid(digits):
-            return digits, [digits]
+        if len(digits) == 11 and not _cpf_valid(digits) and digits not in contextual_digits:
+            contextual_digits.append(digits)
 
     candidates = []
     for value in re.findall(r"\b\d{11}\b", upper):
@@ -126,9 +127,14 @@ def _extract_renavam(text):
             candidates.append(value)
 
     # PDFs linearizados frequentemente colocam o valor do RENAVAM longe
-    # do rótulo. Mantemos todos os candidatos para conferência e escolhemos
-    # o último não-CPF, que cobre o leiaute usado pela frota atual.
-    return (candidates[-1] if candidates else ""), candidates
+    # do rótulo e podem expor outro código de 11 dígitos no mesmo bloco.
+    # Mantemos todos os candidatos para conferência e escolhemos o último
+    # não-CPF, cobrindo o leiaute usado pela frota atual.
+    merged = []
+    for value in contextual_digits + candidates:
+        if value not in merged:
+            merged.append(value)
+    return (merged[-1] if merged else ""), merged
 
 
 def _extract_labeled_or_known(text, label, known):
