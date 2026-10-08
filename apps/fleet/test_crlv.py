@@ -1,0 +1,61 @@
+from datetime import date, timedelta
+from io import BytesIO
+import tempfile
+from unittest.mock import patch
+
+from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Permission
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import TestCase
+from django.test import override_settings
+from rest_framework.test import APIClient
+
+from apps.fleet.models import (Document, LicensingCalendar, Sector, Vehicle, VehiclePlate,
+                               VehicleStatus)
+from apps.fleet.services import confirm_crlv, get_crlv_alerts, stage_crlv_document
+
+
+class CRLVTests(TestCase):
+    def setUp(self):
+        self.media_root = tempfile.TemporaryDirectory()
+        self.settings_override = override_settings(MEDIA_ROOT=self.media_root.name)
+        self.settings_override.enable()
+        self.addCleanup(self.settings_override.disable)
+        self.addCleanup(self.media_root.cleanup)
+        self.user = get_user_model().objects.create_user(username='crlv', password='x')
+        self.user.user_permissions.add(Permission.objects.get(codename='change_vehicle'))
+        self.status = VehicleStatus.objects.create(name='Operacional')
+        self.sector = Sector.objects.create(name='ADM', slug='adm-test')
+        self.vehicle = Vehicle.objects.create(status=self.status, sector=self.sector)
+        VehiclePlate.objects.create(vehicle=self.vehicle, plate='ABC1D23', kind='CURRENT')
+
+    @patch('apps.fleet.crlv.extract_crlv_data', return_value={'plate': 'ABC1D23', 'renavam': '12345678901', 'exercise': 2026, 'text_extracted': True})
+    def test_stage_and_confirm_updates_vehicle_and_history(self, _extract):
+        upload = SimpleUploadedFile('crlv.pdf', b'%PDF-1.4 placeholder', content_type='application/pdf')
+        document, extracted = stage_crlv_document(vehicle=self.vehicle, file_obj=upload, user=self.user)
+        confirm_crlv(vehicle=self.vehicle, document=document, user=self.user, **{k: extracted[k] for k in ('plate', 'renavam', 'exercise')}, extracted_data=extracted)
+        self.vehicle.refresh_from_db()
+        self.assertEqual(self.vehicle.renavam, '12345678901')
+        self.assertEqual(self.vehicle.crlv_exercise, 2026)
+        self.assertTrue(document.relations.filter(object_id=self.vehicle.id).exists())
+        self.assertEqual(self.vehicle.crlvs.count(), 1)
+
+    def test_other_vehicle_plate_is_blocked(self):
+        document = Document.objects.create(title='x', document_type_id=self._document_type(), status_id=self._document_status(), created_by=self.user)
+        with self.assertRaisesMessage(ValueError, 'não pertence'):
+            confirm_crlv(vehicle=self.vehicle, document=document, plate='ZZZ1Z99', renavam='', exercise=2026, user=self.user)
+
+    def _document_type(self):
+        from apps.fleet.models import DocumentType
+        return DocumentType.objects.create(name='T').id
+
+    def _document_status(self):
+        from apps.fleet.models import DocumentStatus
+        return DocumentStatus.objects.create(name='S').id
+
+    def test_alerts_cover_missing_calendar_and_prior_year(self):
+        today = date(2027, 1, 20)
+        LicensingCalendar.objects.create(exercise=2026, plate_final=3, due_date=date(2026, 12, 20), created_by=self.user)
+        alerts = get_crlv_alerts(Vehicle.objects.filter(pk=self.vehicle.pk), today=today)
+        self.assertEqual(alerts['overdue'][0]['exercise'], 2026)
+        self.assertEqual(alerts['calendar_missing'][0]['exercise'], 2027)

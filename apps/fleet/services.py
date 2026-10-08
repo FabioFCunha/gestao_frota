@@ -1,5 +1,6 @@
 import re
 
+from django.conf import settings
 from django.db import transaction
 from django.db import models
 from .models import AuditLog, Driver, Maintenance, VehicleHistory, VehicleStatus, VehicleDriverAssignment, VehicleCustody, Vehicle
@@ -11,11 +12,17 @@ REVISION_INTERVAL_KM = 10_000
 REVISION_ALERT_KM = 3_000
 
 
+def get_vehicle_revision_interval(*, vehicle):
+    """Intervalo preventivo por marca, em quilômetros."""
+    brand_name = getattr(getattr(vehicle, "brand", None), "name", "") or ""
+    return 12_000 if brand_name.strip().casefold() == "byd" else REVISION_INTERVAL_KM
+
+
 def get_vehicle_revision_status(*, vehicle):
     """
     Calcula a situação da revisão preventiva do veículo.
 
-    A próxima revisão é sempre 10.000 km após a última revisão
+    A próxima revisão é 12.000 km para BYD e 10.000 km para as demais marcas após a última revisão
     efetivamente concluída e registrada com quilometragem.
 
     Apenas manutenções:
@@ -29,6 +36,8 @@ def get_vehicle_revision_status(*, vehicle):
     referência ``[KM_PROX_REVISAO]`` armazenada nas observações do veículo.
     """
     from .models import MaintenanceType, MaintenanceStatus, VehicleMileage
+
+    interval_km = get_vehicle_revision_interval(vehicle=vehicle)
 
     revision_type = MaintenanceType.objects.filter(
         name__iexact="Revisão",
@@ -90,7 +99,7 @@ def get_vehicle_revision_status(*, vehicle):
             if last_revision.completion_mileage is not None
             else last_revision.mileage
         )
-        next_revision_km = last_revision_km + REVISION_INTERVAL_KM
+        next_revision_km = last_revision_km + interval_km
         has_history = True
     else:
         legacy_reference = re.search(
@@ -103,7 +112,7 @@ def get_vehicle_revision_status(*, vehicle):
             has_history = False
         elif vehicle.revision_reference_km is not None:
             last_revision_km = vehicle.revision_reference_km
-            next_revision_km = last_revision_km + REVISION_INTERVAL_KM
+            next_revision_km = last_revision_km + interval_km
             has_history = False
         elif current_mileage is None:
             return {
@@ -120,6 +129,7 @@ def get_vehicle_revision_status(*, vehicle):
                 "km_remaining": None,
                 "status": "SEM_QUILOMETRAGEM",
                 "has_history": False,
+                "interval_km": interval_km,
             }
 
         else:
@@ -140,13 +150,16 @@ def get_vehicle_revision_status(*, vehicle):
                 "km_remaining": None,
                 "status": "SEM_HISTORICO",
                 "has_history": False,
+                "interval_km": interval_km,
                 "reference_initialization_required": True,
             }
 
-    km_remaining = next_revision_km - current_mileage
+    km_remaining = next_revision_km - current_mileage if current_mileage is not None else None
 
     if active_revision:
         status = "EM_REVISAO"
+    elif km_remaining is None:
+        status = "SEM_QUILOMETRAGEM"
     elif km_remaining <= 0:
         status = "DEVIDA"
     elif km_remaining <= REVISION_ALERT_KM:
@@ -170,6 +183,7 @@ def get_vehicle_revision_status(*, vehicle):
         "km_remaining": km_remaining,
         "status": status,
         "has_history": has_history,
+        "interval_km": interval_km,
     }
 
 
@@ -238,9 +252,12 @@ def _next_exit_order_number():
 @transaction.atomic
 def open_vehicle_exit_order(*, vehicle_id, driver, departed_at, destination, reason, notes, user):
     from django.db import IntegrityError
+    from .sector_scope import validate_vehicle_scope
     from .models import VehicleExitOrder
 
     vehicle = Vehicle.objects.select_for_update().get(pk=vehicle_id)
+    validate_vehicle_scope(user, vehicle)
+    vehicle = Vehicle.objects.select_for_update().get(pk=vehicle.pk)
     ensure_vehicle_active(vehicle)
     if VehicleExitOrder.objects.filter(vehicle=vehicle, state=VehicleExitOrder.State.PENDING).exists():
         raise ValueError("Esta viatura já possui uma OS pendente de retorno.")
@@ -470,6 +487,9 @@ def assign_driver_to_vehicle(
     custody_ended_on=None,
 ):
     from django.utils import timezone
+    from .sector_scope import validate_vehicle_scope
+
+    validate_vehicle_scope(user, vehicle)
 
     sei_number = (sei_number or "").strip()
     ensure_vehicle_active(vehicle)
@@ -489,7 +509,13 @@ def assign_driver_to_vehicle(
             "A data final da vigência do SEI não pode ser anterior à data inicial."
         )
 
-    current_assignment = vehicle.driver_assignments.filter(is_active=True).first()
+    open_custody = VehicleCustody.objects.select_for_update().filter(vehicle=vehicle, ended_on__isnull=True).first()
+    current_assignment = vehicle.driver_assignments.select_for_update().filter(is_active=True).first()
+
+    if open_custody:
+        if current_assignment and current_assignment.driver_id == driver.id:
+            return current_assignment
+        raise ValueError("O veículo está acautelado. Use a transferência com data e hora explícitas.")
 
     if current_assignment and current_assignment.driver_id == driver.id:
         return current_assignment
@@ -508,14 +534,6 @@ def assign_driver_to_vehicle(
             update_fields=["is_active", "ends_on", "updated_at"]
         )
 
-        VehicleCustody.objects.filter(
-            assignment=current_assignment,
-            ended_on__isnull=True,
-        ).update(
-            ended_on=now.date(),
-            updated_at=now,
-        )
-
     new_assignment = VehicleDriverAssignment.objects.create(
         vehicle=vehicle,
         driver=driver,
@@ -526,13 +544,13 @@ def assign_driver_to_vehicle(
     )
 
     if sei_number:
-        VehicleCustody.objects.create(
-            assignment=new_assignment,
-            sei_number=sei_number,
-            started_on=custody_started_on,
-            ended_on=custody_ended_on,
-            notes=notes,
+        custody = VehicleCustody.objects.create(
+            assignment=new_assignment, vehicle=vehicle, sei_number=sei_number,
+            started_on=custody_started_on, ended_on=custody_ended_on,
+            notes=notes, created_by=user,
         )
+        new_assignment.custody = custody
+        new_assignment.save(update_fields=["custody", "updated_at"])
 
     new_value = {"id": str(driver.id), "name": driver.name}
 
@@ -559,10 +577,121 @@ def assign_driver_to_vehicle(
     return new_assignment
 
 
+def _lock_custody_context(custody):
+    """Shared lock order: vehicle, custody, active assignment."""
+    vehicle = Vehicle.objects.select_for_update().get(pk=custody.vehicle_id)
+    custody = VehicleCustody.objects.select_for_update().get(pk=custody.pk, vehicle=vehicle)
+    assignment = VehicleDriverAssignment.objects.select_for_update().filter(vehicle=vehicle, is_active=True).first()
+    return vehicle, custody, assignment
+
+
+def get_open_vehicle_custody(vehicle):
+    return VehicleCustody.objects.filter(vehicle=vehicle, ended_on__isnull=True).first()
+
+
+@transaction.atomic
+def start_vehicle_custody(*, vehicle, driver, sei_number, started_on, user, notes=""):
+    from django.utils import timezone
+    sei_number = (sei_number or "").strip()
+    if not sei_number or not started_on:
+        raise ValueError("SEI e data de início são obrigatórios.")
+    if not driver.active:
+        raise ValueError("O responsável deve ser um motorista ativo.")
+    if started_on > timezone.localdate():
+        raise ValueError("A data de início não pode ser futura.")
+    vehicle = Vehicle.objects.select_for_update().get(pk=vehicle.pk)
+    ensure_vehicle_active(vehicle)
+    if VehicleCustody.objects.select_for_update().filter(vehicle=vehicle, ended_on__isnull=True).exists():
+        raise ValueError("A viatura já possui acautelamento aberto.")
+    current = VehicleDriverAssignment.objects.select_for_update().filter(
+        vehicle=vehicle,
+        is_active=True,
+    ).first()
+
+    if current and current.driver_id != driver.id:
+        current.is_active, current.ends_on = False, timezone.now()
+        current.save(update_fields=["is_active", "ends_on", "updated_at"])
+        current = None
+
+    # N?o reutilizar um assignment que j? pertenceu a uma cust?dia.
+    # O v?nculo hist?rico da cust?dia anterior deve permanecer preservado.
+    if current and current.custody_id is not None:
+        current.is_active, current.ends_on = False, timezone.now()
+        current.save(update_fields=["is_active", "ends_on", "updated_at"])
+        current = None
+
+    assignment = current or VehicleDriverAssignment.objects.create(
+        vehicle=vehicle,
+        driver=driver,
+        starts_on=timezone.now(),
+        is_active=True,
+        assigned_by=user,
+        notes=notes,
+    )
+    custody = VehicleCustody.objects.create(assignment=assignment, vehicle=vehicle, sei_number=sei_number, started_on=started_on, notes=notes, created_by=user)
+    assignment.custody = custody
+    assignment.save(update_fields=["custody", "updated_at"])
+    VehicleHistory.objects.create(vehicle=vehicle, field="custody", old_value=None, new_value={"sei": sei_number}, reason=notes, changed_by=user)
+    AuditLog.objects.create(user=user, module="acautelamentos", action="INÍCIO", entity_type="vehicle_custody", entity_id=custody.id, old_values=None, new_values={"sei": sei_number, "assignment_id": str(assignment.id)}, reason=notes)
+    return custody
+
+
+@transaction.atomic
+def transfer_vehicle_custody(*, custody, new_driver, user, transferred_at, notes=""):
+    from django.utils import timezone
+    if transferred_at is None or timezone.is_naive(transferred_at):
+        raise ValueError("A transferência exige data, hora e fuso horário explícitos.")
+    vehicle, custody, current = _lock_custody_context(custody)
+    if custody.ended_on or not new_driver.active:
+        raise ValueError("Acautelamento encerrado ou responsável inativo.")
+    if not current or current.custody_id != custody.id or current.driver_id == new_driver.id:
+        raise ValueError("Responsável atual inválido para transferência.")
+    if transferred_at > timezone.now() or timezone.localtime(transferred_at).date() < custody.started_on or transferred_at < current.starts_on:
+        raise ValueError("Data da transferência inválida.")
+    current.is_active, current.ends_on = False, transferred_at
+    current.save(update_fields=["is_active", "ends_on", "updated_at"])
+    assignment = VehicleDriverAssignment.objects.create(vehicle=vehicle, driver=new_driver, custody=custody,
+        starts_on=transferred_at, is_active=True, notes=(notes or "").strip(), assigned_by=user)
+    VehicleHistory.objects.create(vehicle=vehicle, field="driver", old_value={"id": str(current.driver_id)}, new_value={"id": str(new_driver.id)}, reason=notes, changed_by=user)
+    AuditLog.objects.create(user=user, module="acautelamentos", action="TRANSFERÊNCIA", entity_type="vehicle_custody", entity_id=custody.id, old_values={"assignment_id": str(current.id)}, new_values={"assignment_id": str(assignment.id), "transferred_at": transferred_at.isoformat()}, reason=notes)
+    return assignment
+
+
+@transaction.atomic
+def end_vehicle_custody(*, custody, user, ended_on, assignment_ended_at, notes=""):
+    from django.utils import timezone
+    if assignment_ended_at is None or timezone.is_naive(assignment_ended_at):
+        raise ValueError("O encerramento exige data, hora e fuso do responsável.")
+    vehicle, custody, current = _lock_custody_context(custody)
+    if custody.ended_on or ended_on < custody.started_on or ended_on > timezone.localdate():
+        raise ValueError("Data de encerramento inválida.")
+    if timezone.localtime(assignment_ended_at).date() != ended_on or assignment_ended_at > timezone.now():
+        raise ValueError("Horário de encerramento inválido.")
+    if current and current.custody_id not in (None, custody.id):
+        raise ValueError("O responsável ativo pertence a outro acautelamento.")
+    if current and current.custody_id == custody.id:
+        if assignment_ended_at < current.starts_on:
+            raise ValueError("O horário antecede a responsabilidade atual.")
+        current.is_active, current.ends_on = False, assignment_ended_at
+        current.save(update_fields=["is_active", "ends_on", "updated_at"])
+    custody.ended_on, custody.ended_by = ended_on, user
+    if notes:
+        custody.notes = f"{custody.notes}\n[Encerramento] {notes}".strip()
+        custody.save(update_fields=["ended_on", "ended_by", "notes", "updated_at"])
+    else:
+        custody.save(update_fields=["ended_on", "ended_by", "updated_at"])
+    VehicleHistory.objects.create(vehicle=vehicle, field="custody", old_value={"ended_on": None}, new_value={"ended_on": ended_on.isoformat()}, reason=notes, changed_by=user)
+    AuditLog.objects.create(user=user, module="acautelamentos", action="ENCERRAMENTO", entity_type="vehicle_custody", entity_id=custody.id, old_values={"ended_on": None}, new_values={"ended_on": ended_on.isoformat()}, reason=notes)
+    return custody
+
+
 @transaction.atomic
 def unassign_driver_from_vehicle(*, vehicle: Vehicle, user, notes: str = ""):
     from django.utils import timezone
-    current_assignment = vehicle.driver_assignments.filter(is_active=True).first()
+    vehicle = Vehicle.objects.select_for_update().get(pk=vehicle.pk)
+    if VehicleCustody.objects.select_for_update().filter(vehicle=vehicle, ended_on__isnull=True).exists():
+        raise ValueError("A viatura está acautelada; transfira ou encerre antes de desvincular.")
+    current_assignment = vehicle.driver_assignments.select_for_update().filter(is_active=True).first()
     
     if not current_assignment:
         return None
@@ -655,6 +784,8 @@ def change_vehicle_plate(*, vehicle: Vehicle, plate: str, kind: str, user, reaso
 @transaction.atomic
 def record_vehicle_mileage(*, vehicle: Vehicle, mileage: int, user, origin: str = "MANUAL", notes: str = "", is_correction: bool = False, external_id: str = ""):
     from .models import VehicleMileage
+    from .sector_scope import validate_vehicle_scope
+    validate_vehicle_scope(user, vehicle)
     from .models import AuditLog
     
     if mileage is None or int(mileage) < 0:
@@ -704,6 +835,8 @@ def record_vehicle_mileage(*, vehicle: Vehicle, mileage: int, user, origin: str 
 @transaction.atomic
 def record_vehicle_inspection(*, vehicle: Vehicle, type, status, user, inspector_name: str = "", mileage: int = None, notes: str = "", date=None):
     from .models import VehicleInspection, AuditLog
+    from .sector_scope import validate_vehicle_scope
+    validate_vehicle_scope(user, vehicle)
     from django.utils import timezone
     
     ensure_vehicle_active(vehicle)
@@ -743,6 +876,8 @@ def record_vehicle_inspection(*, vehicle: Vehicle, type, status, user, inspector
 @transaction.atomic
 def create_vehicle_fine(*, vehicle: Vehicle, auto_number: str, agency: str, status, date, user, process_number: str = "", amount=None, due_date=None, notes: str = ""):
     from .models import VehicleFine, AuditLog, SEIProcessStatus
+    from .sector_scope import validate_vehicle_scope
+    validate_vehicle_scope(user, vehicle)
     
     ensure_vehicle_active(vehicle)
     fine = VehicleFine.objects.create(
@@ -1098,6 +1233,61 @@ def link_document(*, document, obj, user):
         
     return relation
 
+@transaction.atomic
+def stage_crlv_document(*, vehicle, file_obj, user):
+    from .models import Document, DocumentVersion, DocumentStatus, DocumentType, AuditLog
+    from .crlv import extract_crlv_data
+    import mimetypes
+    ext=file_obj.name.rsplit('.',1)[-1].lower() if '.' in file_obj.name else ''
+    if ext not in {'pdf','jpg','jpeg','png'}: raise ValueError('CRLV deve ser PDF, JPG ou PNG.')
+    if file_obj.size > getattr(settings,'DOCUMENT_MAX_UPLOAD_SIZE',10*1024*1024): raise ValueError('O arquivo excede o limite permitido.')
+    typ,_=DocumentType.objects.get_or_create(name='CRLV',defaults={'active':True}); status,_=DocumentStatus.objects.get_or_create(name='Ativo',defaults={'active':True})
+    doc=Document.objects.create(title=f'CRLV - {file_obj.name}',document_type=typ,status=status,created_by=user)
+    DocumentVersion.objects.create(document=doc,file=file_obj,original_filename=file_obj.name,file_extension=ext,mime_type=mimetypes.guess_type(file_obj.name)[0] or 'application/octet-stream',file_size=file_obj.size,uploaded_by=user)
+    link_document(document=doc,obj=vehicle,user=user); data=extract_crlv_data(file_obj)
+    AuditLog.objects.create(user=user,module='crlv',action='ANEXO DE CRLV PARA CONFERÊNCIA',entity_type='document',entity_id=doc.id,new_values={'vehicle_id':str(vehicle.id),**data})
+    return doc,data
+
+@transaction.atomic
+def confirm_crlv(*, vehicle, document, plate, renavam, exercise, user, extracted_data=None):
+    from .models import VehicleCRLV, AuditLog
+    from .crlv import normalize_plate, normalize_renavam
+    plate=normalize_plate(plate); renavam=normalize_renavam(renavam)
+    try: exercise=int(exercise)
+    except (TypeError,ValueError): raise ValueError('Informe o exercício do CRLV.')
+    current={normalize_plate(p) for p in vehicle.plate_history.filter(kind='CURRENT',ends_on__isnull=True).values_list('plate',flat=True)}
+    if plate not in current: raise ValueError('A placa do CRLV não pertence a este veículo.')
+    if VehicleCRLV.objects.filter(document=document).exists(): raise ValueError('Este CRLV já foi confirmado.')
+    old={'renavam':vehicle.renavam,'crlv_exercise':vehicle.crlv_exercise}
+    if renavam:
+        if Vehicle.objects.exclude(pk=vehicle.pk).filter(renavam=renavam).exists(): raise ValueError('Este RENAVAM já pertence a outro veículo.')
+        vehicle.renavam=renavam
+    vehicle.crlv_exercise=max(filter(None,[vehicle.crlv_exercise,exercise])); vehicle.save(update_fields=['renavam','crlv_exercise','updated_at'])
+    record=VehicleCRLV.objects.create(vehicle=vehicle,document=document,plate=plate,renavam=renavam,exercise=exercise,extracted_data=extracted_data or {},confirmed_by=user)
+    new={'renavam':vehicle.renavam,'crlv_exercise':vehicle.crlv_exercise,'document_id':str(document.id)}
+    VehicleHistory.objects.create(vehicle=vehicle,field='crlv',old_value=old,new_value=new,reason=f'CRLV exercício {exercise} confirmado',changed_by=user)
+    AuditLog.objects.create(user=user,module='crlv',action='CONFIRMAÇÃO DE CRLV',entity_type='vehicle',entity_id=vehicle.id,old_values=old,new_values=new)
+    return record
+
+def get_crlv_alerts(vehicles, today=None):
+    from .models import LicensingCalendar
+    from .crlv import normalize_plate
+    from django.utils import timezone
+    from datetime import timedelta
+    today=today or timezone.localdate(); calendar={(x.exercise,x.plate_final):x.due_date for x in LicensingCalendar.objects.all()}
+    result={'overdue':[],'due_soon':[],'pending_in_time':[],'calendar_missing':[]}
+    for vehicle in vehicles.prefetch_related('plate_history'):
+        plate=next((normalize_plate(p.plate) for p in vehicle.plate_history.all() if p.kind=='CURRENT' and p.ends_on is None),'')
+        if not plate or not plate[-1].isdigit(): continue
+        for exercise in range(2000,today.year+1):
+            due=calendar.get((exercise,int(plate[-1])))
+            item={'vehicle_id':str(vehicle.id),'plate':plate,'exercise':exercise,'due_date':due,'dossier_url':f'/veiculos/{vehicle.id}/','calendar_url':'/calendario-licenciamento-rj/'}
+            if due is None:
+                if exercise==today.year: result['calendar_missing'].append(item)
+            elif (vehicle.crlv_exercise or 0)<exercise:
+                result['overdue' if due<today else 'due_soon' if due<=today+timedelta(days=30) else 'pending_in_time'].append(item)
+    return result
+
 
 def get_dashboard_metrics(filters: dict) -> dict:
     from .models import (
@@ -1114,7 +1304,9 @@ def get_dashboard_metrics(filters: dict) -> dict:
     base = filters.get("base")
     renter = filters.get("renter")
     status = filters.get("status")
+    vehicle_ids = filters.get("vehicle__in")
     
+    if vehicle_ids is not None: v_qs = v_qs.filter(id__in=vehicle_ids)
     if unit: v_qs = v_qs.filter(unit_id=unit)
     if base: v_qs = v_qs.filter(base_id=base)
     if renter: v_qs = v_qs.filter(renter_id=renter)
@@ -1217,6 +1409,7 @@ def get_operational_alerts(filters: dict) -> dict:
     from datetime import timedelta
     
     today = timezone.now().date()
+    vehicle_ids = filters.get("vehicle__in")
     
     # Fetch threshold from DB
     try:
@@ -1231,17 +1424,25 @@ def get_operational_alerts(filters: dict) -> dict:
         administrative_status__iexact="VIGENTE",
         ends_on__lte=warning_date,
         ends_on__gte=today
-    ).values("id", "number", "ends_on")
+    )
+    if vehicle_ids is not None:
+        expiring_contracts = expiring_contracts.filter(vehicles__in=vehicle_ids).distinct()
+    expiring_contracts = expiring_contracts.values("id", "number", "ends_on")
     
     expired_contracts = Contract.objects.filter(
         administrative_status__iexact="VIGENTE",
         ends_on__lt=today
-    ).values("id", "number", "ends_on")
+    )
+    if vehicle_ids is not None:
+        expired_contracts = expired_contracts.filter(vehicles__in=vehicle_ids).distinct()
+    expired_contracts = expired_contracts.values("id", "number", "ends_on")
     
     # 2. Open Maintenances
     open_maintenances = Maintenance.objects.filter(
         status__name__in=["Aberta", "Em andamento"]
-    ).select_related('vehicle').values("id", "vehicle__plate_history__plate", "status__name", "entered_at")
+    )
+    if vehicle_ids is not None:
+        open_maintenances = open_maintenances.filter(vehicle_id__in=vehicle_ids).select_related('vehicle').values("id", "vehicle__plate_history__plate", "status__name", "entered_at")
     
     # 3. Pending Fines
     from django.db.models import Prefetch
@@ -1249,7 +1450,9 @@ def get_operational_alerts(filters: dict) -> dict:
 
     pending_fines_qs = VehicleFine.objects.filter(
         status__name__in=["Pendente", "Em análise", "Em recurso"]
-    ).select_related('vehicle', 'status').prefetch_related(
+    )
+    if vehicle_ids is not None:
+        pending_fines_qs = pending_fines_qs.filter(vehicle_id__in=vehicle_ids).select_related('vehicle', 'status').prefetch_related(
         Prefetch(
             'vehicle__driver_assignments',
             queryset=VehicleDriverAssignment.objects.filter(is_active=True).select_related('driver'),
@@ -1282,7 +1485,9 @@ def get_operational_alerts(filters: dict) -> dict:
     # 5. Pending Inspections (Reprovadas ou Com ressalvas)
     pending_inspections = VehicleInspection.objects.filter(
         status__name__in=["Reprovada", "Com ressalvas"]
-    ).select_related('vehicle').values("id", "vehicle__plate_history__plate", "status__name", "date")
+    )
+    if vehicle_ids is not None:
+        pending_inspections = pending_inspections.filter(vehicle_id__in=vehicle_ids).select_related('vehicle').values("id", "vehicle__plate_history__plate", "status__name", "date")
 
     # 6. Revisoes preventivas
     # Regra oficial WW Trans:
@@ -1294,6 +1499,8 @@ def get_operational_alerts(filters: dict) -> dict:
     revisoes_vencidas = []
 
     qs_vehicles = Vehicle.objects.prefetch_related('plate_history')
+    if vehicle_ids is not None:
+        qs_vehicles = qs_vehicles.filter(id__in=vehicle_ids)
 
     for v in qs_vehicles:
         revision = get_vehicle_revision_status(vehicle=v)
@@ -1384,3 +1591,67 @@ def set_vehicle_active(*, vehicle: Vehicle, active: bool, user, reason: str = ""
 def ensure_vehicle_active(vehicle: Vehicle):
     if not vehicle.active:
         raise ValueError("A viatura está inativa e não aceita novos lançamentos.")
+
+
+@transaction.atomic
+def change_vehicle_position(*, vehicle: Vehicle, sector, active: bool, user, reason: str):
+    """Altera a alocação setorial e a situação operacional da viatura em uma única operação auditada."""
+    from .models import AuditLog, VehicleHistory
+
+    reason = (reason or "").strip()
+    if len(reason) < 5:
+        raise ValueError("Informe o motivo da alteração.")
+    if sector is None or sector.slug not in {"adm", "lei-seca"}:
+        raise ValueError("Setor de destino inválido.")
+
+    old_sector = vehicle.sector
+    old_active = vehicle.active
+    old_sector_id = vehicle.sector_id
+    new_sector_id = sector.id
+    active_changed = old_active != active
+
+    if old_sector_id == new_sector_id and not active_changed:
+        raise ValueError("Nenhuma alteração foi informada.")
+
+    vehicle.sector = sector
+    vehicle.active = active
+    vehicle.save(update_fields=["sector", "active", "updated_at"])
+
+    if old_sector_id != new_sector_id:
+        VehicleHistory.objects.create(
+            vehicle=vehicle,
+            field="sector",
+            old_value={"id": str(old_sector.id), "name": old_sector.name, "slug": old_sector.slug} if old_sector else None,
+            new_value={"id": str(sector.id), "name": sector.name, "slug": sector.slug},
+            reason=reason,
+            changed_by=user,
+        )
+
+    if active_changed:
+        VehicleHistory.objects.create(
+            vehicle=vehicle,
+            field="active",
+            old_value={"active": old_active},
+            new_value={"active": active},
+            reason=reason,
+            changed_by=user,
+        )
+
+    AuditLog.objects.create(
+        user=user,
+        module="veículos",
+        action="MOVIMENTAÇÃO DE VIATURA",
+        entity_type="vehicle",
+        entity_id=vehicle.id,
+        old_values={
+            "sector": {"id": str(old_sector.id), "name": old_sector.name, "slug": old_sector.slug} if old_sector else None,
+            "active": old_active,
+        },
+        new_values={
+            "sector": {"id": str(sector.id), "name": sector.name, "slug": sector.slug},
+            "active": active,
+        },
+        reason=reason,
+    )
+    return vehicle
+

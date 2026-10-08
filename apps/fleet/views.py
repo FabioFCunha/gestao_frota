@@ -5,14 +5,15 @@ from rest_framework.views import APIView
 from django.db import models
 from django.core.paginator import Paginator
 from django.utils import timezone
-from .models import BDT, Maintenance, Vehicle, VehicleCustody, VehicleDriverAssignment
+from .models import BDT, Maintenance, Vehicle, VehicleCustody, VehicleDriverAssignment, LicensingCalendar, Document
 from .utils import normalize_km
 from .serializers import (
     DocumentSerializer, MaintenanceSerializer, SEIProcessSerializer,
     VehicleCustodySerializer, VehicleFineSerializer, VehicleHistorySerializer,
-    VehicleInspectionSerializer, VehicleSerializer,
+    VehicleInspectionSerializer, VehicleSerializer, LicensingCalendarSerializer, VehicleCRLVSerializer,
 )
 from .bdt_serializers import BDTSerializer
+from .sector_scope import apply_sector_scope, validate_vehicle_scope
 
 class DashboardAPIView(APIView):
     def get(self, request):
@@ -26,12 +27,20 @@ class DashboardAPIView(APIView):
             "renter": request.query_params.get("rental_company"),
             "status": request.query_params.get("vehicle_status"),
         }
+
+        from .sector_scope import apply_sector_scope
+        scoped_vehicle_ids = apply_sector_scope(
+            Vehicle.objects.all(),
+            request.user,
+            request.query_params.get("sector"),
+        ).values_list("id", flat=True)
         
         # Remove empty filters
         filters = {k: v for k, v in filters.items() if v}
         
         from .services import get_dashboard_metrics, get_operational_alerts
         
+        filters["vehicle__in"] = scoped_vehicle_ids
         metrics = get_dashboard_metrics(filters)
         alerts = get_operational_alerts(filters)
         
@@ -56,6 +65,11 @@ class VehicleViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = super().get_queryset()
+        queryset = apply_sector_scope(
+            queryset,
+            self.request.user,
+            self.request.query_params.get("sector"),
+        )
         activity = self.request.query_params.get("active", "true").lower()
         if activity in {"false", "0", "inactive"}:
             return queryset.filter(active=False)
@@ -69,6 +83,31 @@ class VehicleViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["get"])
     def history(self, request, pk=None):
         return Response(VehicleHistorySerializer(self.get_object().history.order_by("-created_at"), many=True).data)
+
+    @action(detail=True, methods=['post'], url_path='crlv/attach')
+    def attach_crlv(self, request, pk=None):
+        from rest_framework.exceptions import PermissionDenied, ValidationError
+        from .services import stage_crlv_document
+        vehicle=self.get_object()
+        if not (request.user.is_system_creator or request.user.has_perm('fleet.change_vehicle')): raise PermissionDenied('Permissão negada.')
+        file_obj=request.FILES.get('file')
+        if not file_obj: raise ValidationError('O arquivo do CRLV é obrigatório.')
+        try: document, extracted=stage_crlv_document(vehicle=vehicle,file_obj=file_obj,user=request.user)
+        except ValueError as exc: raise ValidationError(str(exc))
+        return Response({'document_id':str(document.id),'extracted':extracted,'divergences':{'renavam':{'existing':vehicle.renavam,'extracted':extracted['renavam']},'exercise':{'existing':vehicle.crlv_exercise,'extracted':extracted['exercise']}}})
+
+    @action(detail=True, methods=['post'], url_path='crlv/confirm')
+    def confirm_crlv(self, request, pk=None):
+        from rest_framework.exceptions import PermissionDenied, ValidationError
+        from .services import confirm_crlv
+        vehicle=self.get_object()
+        if not (request.user.is_system_creator or request.user.has_perm('fleet.change_vehicle')): raise PermissionDenied('Permissão negada.')
+        try:
+            document=Document.objects.get(pk=request.data.get('document_id'))
+            if not document.relations.filter(content_type__model='vehicle',object_id=vehicle.id).exists(): raise ValueError('O documento não está vinculado a este veículo.')
+            record=confirm_crlv(vehicle=vehicle,document=document,plate=request.data.get('plate'),renavam=request.data.get('renavam',''),exercise=request.data.get('exercise'),user=request.user,extracted_data=request.data.get('extracted_data',{}))
+        except (Document.DoesNotExist,ValueError) as exc: raise ValidationError(str(exc))
+        return Response(VehicleCRLVSerializer(record).data,status=201)
 
     @action(detail=True, methods=["get"])
     def mileage_history(self, request, pk=None):
@@ -199,6 +238,14 @@ class VehicleViewSet(viewsets.ModelViewSet):
 
 class MaintenanceViewSet(viewsets.ModelViewSet):
     queryset = Maintenance.objects.select_related("vehicle", "status", "type", "workshop").filter(vehicle__active=True)
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        return apply_sector_scope(queryset, self.request.user, self.request.query_params.get("sector"), "vehicle__sector")
+
+    def perform_create(self, serializer):
+        validate_vehicle_scope(self.request.user, serializer.validated_data.get("vehicle"), self.request.query_params.get("sector"))
+        serializer.save()
     serializer_class = MaintenanceSerializer
     filterset_fields = ["vehicle", "status", "type", "workshop"]
 
@@ -231,12 +278,18 @@ from .serializers import VehicleInspectionSerializer
 
 class VehicleInspectionViewSet(viewsets.ModelViewSet):
     queryset = VehicleInspection.objects.select_related("vehicle", "type", "status").filter(vehicle__active=True)
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        return apply_sector_scope(queryset, self.request.user, self.request.query_params.get("sector"), "vehicle__sector")
     serializer_class = VehicleInspectionSerializer
     filterset_fields = ["vehicle", "type", "status"]
 
     def perform_create(self, serializer):
         from .services import record_vehicle_inspection
         
+        validate_vehicle_scope(self.request.user, serializer.validated_data.get("vehicle"), self.request.query_params.get("sector"))
+
         # intercept to use the service
         try:
             record_vehicle_inspection(
@@ -266,6 +319,10 @@ from .serializers import VehicleFineSerializer
 
 class VehicleFineViewSet(viewsets.ModelViewSet):
     queryset = VehicleFine.objects.select_related("vehicle", "status").filter(vehicle__active=True)
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        return apply_sector_scope(queryset, self.request.user, self.request.query_params.get("sector"), "vehicle__sector")
     serializer_class = VehicleFineSerializer
     filterset_fields = {"vehicle": ["exact"], "status": ["exact"], "date": ["exact", "gte", "lte"], "auto_number": ["exact", "icontains"]}
 
@@ -274,6 +331,8 @@ class VehicleFineViewSet(viewsets.ModelViewSet):
             from rest_framework.exceptions import PermissionDenied
             raise PermissionDenied("Permissão negada.")
             
+        validate_vehicle_scope(self.request.user, serializer.validated_data.get("vehicle"), self.request.query_params.get("sector"))
+
         from .services import create_vehicle_fine
         
         try:
@@ -323,6 +382,18 @@ class SEIProcessViewSet(viewsets.ModelViewSet):
     queryset = SEIProcess.objects.select_related("status").all()
     serializer_class = SEIProcessSerializer
     filterset_fields = {"status": ["exact"], "sei_number": ["exact", "icontains"], "title": ["icontains"], "opening_date": ["exact", "gte", "lte"]}
+
+    def get_queryset(self):
+        from django.contrib.contenttypes.models import ContentType
+        qs = super().get_queryset()
+        vehicle_ct = ContentType.objects.get_for_model(Vehicle)
+        allowed_vehicle_ids = apply_sector_scope(
+            Vehicle.objects.all(), self.request.user, self.request.query_params.get("sector")
+        ).values_list("id", flat=True)
+        return qs.filter(
+            relations__content_type=vehicle_ct,
+            relations__object_id__in=allowed_vehicle_ids,
+        ).distinct()
 
     def perform_create(self, serializer):
         if not self.request.user.has_perm("fleet.add_seiprocess"):
@@ -376,13 +447,21 @@ class DocumentViewSet(viewsets.ModelViewSet):
     filterset_fields = {"document_type": ["exact"], "status": ["exact"], "document_date": ["exact", "gte", "lte"]}
 
     def get_queryset(self):
+        from django.contrib.contenttypes.models import ContentType
         qs = super().get_queryset()
+        vehicle_ct = ContentType.objects.get_for_model(Vehicle)
+        allowed_vehicle_ids = apply_sector_scope(
+            Vehicle.objects.all(), self.request.user, self.request.query_params.get("sector")
+        ).values_list("id", flat=True)
+        qs = qs.filter(
+            relations__content_type=vehicle_ct,
+            relations__object_id__in=allowed_vehicle_ids,
+        ).distinct()
         status_name = self.request.query_params.get("status_name")
         if status_name:
             qs = qs.filter(status__name=status_name)
-        else:
-            if self.action == "list":
-                qs = qs.exclude(status__name="Arquivado")
+        elif self.action == "list":
+            qs = qs.exclude(status__name="Arquivado")
         return qs
 
     def perform_create(self, serializer):
@@ -471,22 +550,98 @@ class DocumentViewSet(viewsets.ModelViewSet):
         response['Content-Disposition'] = f'attachment; filename="{version.original_filename}"'
         return response
 
+class LicensingCalendarViewSet(viewsets.ModelViewSet):
+    queryset=LicensingCalendar.objects.all(); serializer_class=LicensingCalendarSerializer
+    filterset_fields={'exercise':['exact'],'plate_final':['exact']}
+    def perform_create(self, serializer):
+        if not (self.request.user.is_system_creator or self.request.user.has_perm('fleet.add_licensingcalendar')):
+            from rest_framework.exceptions import PermissionDenied; raise PermissionDenied('Permissão negada.')
+        serializer.save(created_by=self.request.user)
+    def perform_update(self, serializer):
+        if not (self.request.user.is_system_creator or self.request.user.has_perm('fleet.change_licensingcalendar')):
+            from rest_framework.exceptions import PermissionDenied; raise PermissionDenied('Permissão negada.')
+        serializer.save()
+    def perform_destroy(self, instance):
+        from rest_framework.exceptions import PermissionDenied; raise PermissionDenied('Calendários anteriores são preservados.')
+
 
 class VehicleCustodyViewSet(viewsets.ModelViewSet):
     queryset = VehicleCustody.objects.select_related("vehicle", "created_by").all()
-    serializer_class = VehicleCustodySerializer
-    filterset_fields = {
-        "vehicle": ["exact"],
-        "kind": ["exact"],
-        "starts_on": ["exact", "gte", "lte"],
-        "ends_on": ["exact", "isnull"],
-    }
 
-    def perform_create(self, serializer):
-        serializer.save(created_by=self.request.user)
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        return apply_sector_scope(queryset, self.request.user, self.request.query_params.get("sector"), "vehicle__sector")
+    serializer_class = VehicleCustodySerializer
+    filterset_fields = {"vehicle": ["exact"], "sei_number": ["exact", "icontains"], "started_on": ["exact", "gte", "lte"], "ended_on": ["exact", "isnull"]}
+
+    def _require(self, permission):
+        if not (self.request.user.is_superuser or self.request.user.has_perm(permission)):
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Permissão insuficiente para acautelamento.")
+
+    def create(self, request, *args, **kwargs):
+        from datetime import datetime
+        from rest_framework import status
+        from rest_framework.exceptions import ValidationError
+        from django.shortcuts import get_object_or_404
+        from .services import start_vehicle_custody
+        self._require("fleet.add_vehiclecustody")
+        vehicle = get_object_or_404(Vehicle, pk=request.data.get("vehicle"))
+        validate_vehicle_scope(request.user, vehicle, request.query_params.get("sector"))
+        from .models import Driver
+        driver = get_object_or_404(Driver, pk=request.data.get("responsible"))
+        try:
+            start_vehicle_custody(vehicle=vehicle, driver=driver, user=request.user,
+                sei_number=request.data.get("sei_number", ""),
+                started_on=datetime.fromisoformat(request.data.get("started_on")).date(),
+                notes=request.data.get("notes", ""))
+        except (TypeError, ValueError) as exc:
+            raise ValidationError(str(exc))
+        custody = VehicleCustody.objects.get(vehicle=vehicle, ended_on__isnull=True)
+        return Response(self.get_serializer(custody).data, status=status.HTTP_201_CREATED)
 
     def perform_destroy(self, instance):
         from rest_framework.exceptions import PermissionDenied
         raise PermissionDenied(
             "Registros de acautelamento não podem ser excluídos fisicamente."
         )
+
+    def update(self, request, *args, **kwargs):
+        from rest_framework.exceptions import PermissionDenied
+        raise PermissionDenied("Use transferência ou encerramento.")
+
+    partial_update = update
+
+    @action(detail=True, methods=["post"])
+    def transfer(self, request, pk=None):
+        from datetime import datetime
+        from django.shortcuts import get_object_or_404
+        from rest_framework.exceptions import ValidationError
+        from .models import Driver
+        from .services import transfer_vehicle_custody
+        self._require("fleet.change_vehiclecustody")
+        custody = self.get_object()
+        try:
+            moment = datetime.fromisoformat(request.data.get("transferred_at"))
+            assignment = transfer_vehicle_custody(custody=custody,
+                new_driver=get_object_or_404(Driver, pk=request.data.get("new_responsible")),
+                user=request.user, transferred_at=moment, notes=request.data.get("notes", ""))
+        except (TypeError, ValueError) as exc:
+            raise ValidationError(str(exc))
+        return Response({"assignment_id": str(assignment.id)})
+
+    @action(detail=True, methods=["post"])
+    def end(self, request, pk=None):
+        from datetime import datetime
+        from rest_framework.exceptions import ValidationError
+        from .services import end_vehicle_custody
+        self._require("fleet.change_vehiclecustody")
+        custody = self.get_object()
+        try:
+            end_vehicle_custody(custody=custody, user=request.user,
+                ended_on=datetime.fromisoformat(request.data.get("ended_on")).date(),
+                assignment_ended_at=datetime.fromisoformat(request.data.get("assignment_ended_at")),
+                notes=request.data.get("notes", ""))
+        except (TypeError, ValueError) as exc:
+            raise ValidationError(str(exc))
+        return Response({"status": "Acautelamento encerrado"})

@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Maintenance, Vehicle, VehicleCustody, VehicleHistory
+from .models import Maintenance, Vehicle, VehicleCustody, VehicleHistory, LicensingCalendar, VehicleCRLV
 from .services import open_maintenance
 
 
@@ -14,7 +14,7 @@ class VehicleSerializer(serializers.ModelSerializer):
     class Meta:
         model = Vehicle
         fields = "__all__"
-        read_only_fields = ["id", "created_at", "updated_at", "created_by", "current_mileage", "current_driver", "current_plate", "reserved_plate", "latest_inspection_date", "latest_inspection_status"]
+        read_only_fields = ["id", "created_at", "updated_at", "created_by", "sector", "current_mileage", "current_driver", "current_plate", "reserved_plate", "latest_inspection_date", "latest_inspection_status"]
 
     def get_current_driver(self, obj):
         active_assignment = next((a for a in obj.driver_assignments.all() if a.is_active), None)
@@ -135,3 +135,15 @@ class VehicleCustodySerializer(serializers.ModelSerializer):
         model = VehicleCustody
         fields = "__all__"
         read_only_fields = ["id", "created_at", "updated_at", "created_by"]
+
+class LicensingCalendarSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LicensingCalendar
+        fields = '__all__'
+        read_only_fields = ['id','created_at','updated_at','created_by']
+
+class VehicleCRLVSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = VehicleCRLV
+        fields = '__all__'
+        read_only_fields = ['id','created_at','updated_at','confirmed_by','confirmed_at']

@@ -24,6 +24,7 @@
                     <th>VEÍCULO (PLACA)</th>
                     <th>MARCA/MODELO</th>
                     <th>KM ATUAL</th>
+                    <th>INTERVALO</th>
                     <th>PRÓX. REVISÃO</th>
                     <th>FALTAM</th>
                     <th>STATUS</th>
@@ -35,9 +36,10 @@
                 <tr>
                     <td><strong>{{ v.plate }}</strong></td>
                     <td>{{ v.brand_model }}</td>
-                    <td>{{ v.km_atual }} km</td>
+                    <td>{% if v.km_atual is not None %}{{ v.km_atual }} km{% else %}Sem quilometragem registrada{% endif %}</td>
+                    <td>{{ v.revision_interval_km }} km</td>
                     <td>
-                        {% if v.km_prox_revisao %}
+                        {% if v.km_prox_revisao is not None %}
                             {{ v.km_prox_revisao }} km
                         {% else %}
                             —
@@ -61,6 +63,8 @@
                             <span class="tag" style="background:#ffe8e9;color:#df4b54;">VENCIDA</span>
                         {% elif v.revisao_status == 'PROXIMA' %}
                             <span class="tag" style="background:#fff1dc;color:#e98914;">PRÓXIMA</span>
+                        {% elif v.revisao_status == 'SEM_QUILOMETRAGEM' %}
+                            <span class="tag">SEM QUILOMETRAGEM</span>
                         {% elif v.revisao_status == 'SEM_HISTORICO' %}
                             <span class="tag" style="background:#f3f4f6;color:#6b7280;">SEM HISTÓRICO</span>
                         {% else %}
@@ -74,8 +78,10 @@
                                     class="secondary-action revision-edit"
                                     data-id="{{ v.id }}"
                                     data-plate="{{ v.plate }}"
-                                    data-km="{{ v.km_atual }}"
-                                    data-next="{{ v.km_prox_revisao|default:'' }}"
+                                    data-km="{{ v.km_atual|default_if_none:'' }}"
+                                    data-remaining="{{ v.km_faltando|default_if_none:'' }}"
+                                    data-interval="{{ v.revision_interval_km }}"
+                                    data-next="{{ v.km_prox_revisao|default_if_none:'' }}"
                                     data-status="{{ v.revisao_status }}"
                                     data-active-id="{% if v.active_revision %}{{ v.active_revision.id }}{% endif %}"
                                     data-revision-id="{{ v.last_revision_id|default:'' }}"
@@ -113,6 +119,8 @@
             <div style="display:flex;gap:24px;flex-wrap:wrap;">
                 <div><small>KM atual</small><strong id="revision-current-km" style="display:block;font-size:1.2rem;">—</strong></div>
                 <div><small>Próxima revisão</small><strong id="revision-next-km" style="display:block;font-size:1.2rem;">—</strong></div>
+                <div><small>Faltam</small><strong id="revision-remaining-km" style="display:block;font-size:1.2rem;">—</strong></div>
+                <div><small>Intervalo da revisão</small><strong id="revision-interval-km" style="display:block;">—</strong></div>
                 <div><small>Situação</small><strong id="revision-status" style="display:block;">—</strong></div>
             </div>
         </div>
@@ -154,7 +162,7 @@
                 <div id="completion-block" style="margin-top:15px;">
                     <label style="font-weight:bold;display:block;margin-bottom:5px;">{{ revision_action_form.completion_mileage.label }}</label>
                     {{ revision_action_form.completion_mileage }}
-                    <small style="color:#64748b;">Quando houver retorno, esta KM passa a ser a nova referência para +10.000 km.</small>
+                    <small id="revision-completion-help" style="color:#64748b;"></small>
                 </div>
 
                 <div id="status-block" style="margin-top:15px;">
@@ -199,6 +207,27 @@
     const help = document.getElementById('revision-help');
     let currentVehicleId = '';
 
+    if (workshop) {
+        const workshopButton = document.createElement('button');
+        workshopButton.type = 'button'; workshopButton.className = 'secondary-action'; workshopButton.textContent = '+ Oficina';
+        workshopButton.style.marginTop = '6px'; workshop.insertAdjacentElement('afterend', workshopButton);
+        workshopButton.addEventListener('click', async function () {
+            const name = window.prompt('Nome da oficina:');
+            if (!name || !name.trim()) return;
+            const body = new URLSearchParams({name: name.trim(), csrfmiddlewaretoken: document.querySelector('[name=csrfmiddlewaretoken]').value});
+            const response = await fetch('{% url "workshop_quick_create" %}', {method: 'POST', body: body});
+            const data = await response.json();
+            if (!response.ok) return window.alert(data.error || 'Não foi possível cadastrar a oficina.');
+            let option = Array.from(workshop.options).find(item => item.value === data.id);
+            if (!option) { option = new Option(data.name, data.id); workshop.add(option); }
+            workshop.value = data.id;
+        });
+    }
+
+    function formatKm(value) {
+        return value !== '' && Number.isFinite(Number(value)) ? Number(value).toLocaleString('pt-BR') + ' km' : 'Sem quilometragem registrada';
+    }
+
     function resetFields() {
         sentDate.value = '';
         returnDate.value = '';
@@ -216,15 +245,19 @@
         const id = button.dataset.id;
         currentVehicleId = id;
         const plate = button.dataset.plate;
-        const km = button.dataset.km || '0';
+        const km = button.dataset.km || '';
+        const interval = button.dataset.interval;
         const next = button.dataset.next || '';
         const currentStatus = button.dataset.status || '';
         const activeId = button.dataset.activeId || '';
         const revisionId = button.dataset.revisionId || '';
 
         title.textContent = 'Revisão — ' + plate;
-        currentKm.textContent = km + ' km';
-        nextKm.textContent = next ? next + ' km' : 'Sem referência';
+        currentKm.textContent = formatKm(km);
+        document.getElementById('revision-remaining-km').textContent = formatKm(button.dataset.remaining || '');
+        document.getElementById('revision-interval-km').textContent = formatKm(interval);
+        document.getElementById('revision-completion-help').textContent = 'Quando houver retorno, a próxima revisão será a KM informada + ' + formatKm(interval) + '.';
+        nextKm.textContent = next !== '' ? formatKm(next) : 'Sem referência';
         status.textContent = activeId ? 'EM REVISÃO' : currentStatus;
         form.action = '/manutencoes/' + id + '/revisao/';
         maintenanceId.value = activeId || revisionId;
@@ -246,7 +279,7 @@
             help.textContent = 'Use para veículos que já passaram por revisão, mas ainda não tiveram o histórico informado no sistema. Se não houver retorno, o veículo ficará EM REVISÃO.';
         } else {
             document.getElementById('revision-submit').textContent = returnDate.value ? 'Salvar revisão' : 'Salvar como EM REVISÃO';
-            help.textContent = 'Edite as datas, oficina e quilometragem. Com data de retorno, a KM informada será a nova referência e a próxima revisão será +10.000 km. Sem retorno, o card permanece EM REVISÃO.';
+            help.textContent = 'Edite as datas, oficina e quilometragem. Com data de retorno, a KM informada será a nova referência e a próxima revisão será +' + formatKm(interval) + '. Sem retorno, o card permanece EM REVISÃO.';
         }
 
         modal.style.display = 'flex';
@@ -304,3 +337,4 @@
 })();
 </script>
 {% endblock %}
+

@@ -1,0 +1,8 @@
+{% extends 'ui/base.html' %}
+{% block title %}Calendário de Licenciamento RJ{% endblock %}
+{% block heading %}Calendário de Licenciamento RJ{% endblock %}
+{% block content %}
+<section class="panel"><p>Cadastre os prazos oficiais por exercício e final de placa. Calendários de anos anteriores são preservados; não há cópia automática entre exercícios.</p>
+{% if can_edit %}<form method="post" class="form-grid">{% csrf_token %}{% if editing %}<input type="hidden" name="calendar_id" value="{{ editing.id }}">{% endif %}{{ form.as_p }}<button class="primary-action">{% if editing %}Salvar prorrogação{% else %}Salvar prazo{% endif %}</button></form>{% endif %}
+<table><thead><tr><th>Exercício</th><th>Final</th><th>Prazo</th><th>Observações</th>{% if can_edit %}<th></th>{% endif %}</tr></thead><tbody>{% for item in calendars %}<tr><td>{{ item.exercise }}</td><td>{{ item.plate_final }}</td><td>{{ item.due_date|date:'d/m/Y' }}</td><td>{{ item.notes|default:'-' }}</td>{% if can_edit %}<td><a href="?edit={{ item.id }}">Editar</a></td>{% endif %}</tr>{% empty %}<tr><td colspan="5">Nenhum prazo cadastrado.</td></tr>{% endfor %}</tbody></table></section>
+{% endblock %}

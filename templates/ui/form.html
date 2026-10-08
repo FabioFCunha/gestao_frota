@@ -231,4 +231,25 @@
 })();
 </script>
 
+<script>
+(function () {
+    const select = document.getElementById('id_workshop');
+    if (!select) return;
+    const button = document.createElement('button');
+    button.type = 'button'; button.className = 'secondary-action'; button.textContent = '+ Oficina';
+    button.style.marginTop = '6px'; select.insertAdjacentElement('afterend', button);
+    button.addEventListener('click', async function () {
+        const name = window.prompt('Nome da oficina:');
+        if (!name || !name.trim()) return;
+        const body = new URLSearchParams({name: name.trim(), csrfmiddlewaretoken: document.querySelector('[name=csrfmiddlewaretoken]').value});
+        const response = await fetch('{% url "workshop_quick_create" %}', {method: 'POST', body: body});
+        const data = await response.json();
+        if (!response.ok) return window.alert(data.error || 'Não foi possível cadastrar a oficina.');
+        let option = Array.from(select.options).find(item => item.value === data.id);
+        if (!option) { option = new Option(data.name, data.id); select.add(option); }
+        select.value = data.id;
+    });
+})();
+</script>
+
 {% endblock %}

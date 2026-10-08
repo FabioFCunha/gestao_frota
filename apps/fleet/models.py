@@ -80,6 +80,9 @@ class VehicleModel(NamedModel):
 
 
 class Driver(NamedModel):
+    sectors = models.ManyToManyField(
+        "Sector", related_name="drivers", blank=True, verbose_name="Setores",
+    )
     horus_user_id = models.UUIDField(
         null=True, blank=True, unique=True,
         help_text="ID do usuario na tabela users do Horus.",
@@ -136,6 +139,7 @@ class Vehicle(BaseModel):
     model = models.ForeignKey(VehicleModel, null=True, blank=True, on_delete=models.PROTECT)
     color = models.CharField(max_length=50, blank=True)
     renavam = models.CharField(max_length=20, blank=True, null=True, unique=True)
+    crlv_exercise = models.PositiveSmallIntegerField(null=True, blank=True, verbose_name="Exercício do CRLV")
     contract = models.ForeignKey(Contract, null=True, blank=True, on_delete=models.PROTECT, related_name="vehicles")
     renter = models.ForeignKey(Renter, null=True, blank=True, on_delete=models.PROTECT)
     unit = models.ForeignKey(AdministrativeUnit, null=True, blank=True, on_delete=models.PROTECT)
@@ -150,6 +154,9 @@ class Vehicle(BaseModel):
     documents = GenericRelation('DocumentRelation')
     class Meta:
         indexes = [models.Index(fields=["status"]), models.Index(fields=["unit", "base"])]
+        permissions = [
+            ("manage_vehicle_status", "Pode gerenciar situação administrativa da viatura"),
+        ]
 
 
 class VehicleExitOrderNumberSequence(models.Model):
@@ -192,6 +199,10 @@ class VehicleExitOrder(BaseModel):
 class VehicleDriverAssignment(BaseModel):
     vehicle = models.ForeignKey(Vehicle, on_delete=models.PROTECT, related_name="driver_assignments")
     driver = models.ForeignKey(Driver, on_delete=models.PROTECT, related_name="vehicle_assignments")
+    custody = models.ForeignKey(
+        "VehicleCustody", null=True, blank=True, on_delete=models.PROTECT,
+        related_name="assignments", verbose_name="Acautelamento",
+    )
     starts_on = models.DateTimeField(default=timezone.now)
     ends_on = models.DateTimeField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
@@ -209,11 +220,13 @@ class VehicleDriverAssignment(BaseModel):
 
 
 class VehicleCustody(BaseModel):
+    """Acautelamento por viatura; ``assignment`` preserva o responsável inicial legado."""
     assignment = models.ForeignKey(
         VehicleDriverAssignment,
         on_delete=models.PROTECT,
         related_name="custodies",
     )
+    vehicle = models.ForeignKey(Vehicle, on_delete=models.PROTECT, related_name="custodies")
     sei_number = models.CharField(
         "SEI do acautelamento",
         max_length=100,
@@ -230,6 +243,27 @@ class VehicleCustody(BaseModel):
         "Observações",
         blank=True,
     )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT,
+        related_name="vehicle_custodies_created",
+    )
+    ended_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT,
+        related_name="vehicle_custodies_ended",
+    )
+
+    class Meta:
+        ordering = ["-started_on", "-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["vehicle"], condition=Q(ended_on__isnull=True),
+                name="unique_open_custody_per_vehicle",
+            ),
+            models.CheckConstraint(
+                condition=Q(ended_on__isnull=True) | Q(ended_on__gte=models.F("started_on")),
+                name="custody_ended_on_after_started_on",
+            ),
+        ]
 
 class VehiclePlate(BaseModel):
     CURRENT, RESERVED = "CURRENT", "RESERVED"
@@ -335,6 +369,13 @@ class VehicleInspection(BaseModel):
     date = models.DateTimeField(default=timezone.now)
     type = models.ForeignKey(VehicleInspectionType, on_delete=models.PROTECT)
     status = models.ForeignKey(VehicleInspectionStatus, on_delete=models.PROTECT)
+    inspection_moment = models.CharField(
+        max_length=10,
+        choices=[("SAIDA", "Saída"), ("RETORNO", "Retorno"), ("AVULSA", "Vistoria avulsa")],
+        blank=True,
+        default="",
+    )
+    checklist = models.JSONField(default=dict, blank=True)
     inspector_name = models.CharField(max_length=150, blank=True)
     mileage = models.PositiveIntegerField(null=True, blank=True)
     notes = models.TextField(blank=True)
@@ -447,6 +488,28 @@ class DocumentRelation(BaseModel):
     class Meta:
         unique_together = ("document", "content_type", "object_id")
 
+class LicensingCalendar(BaseModel):
+    exercise = models.PositiveSmallIntegerField(db_index=True)
+    plate_final = models.PositiveSmallIntegerField()
+    due_date = models.DateField()
+    notes = models.TextField(blank=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.PROTECT, related_name="licensing_calendars_created")
+    class Meta:
+        ordering = ["-exercise", "plate_final"]
+        constraints = [models.UniqueConstraint(fields=["exercise", "plate_final"], name="unique_licensing_calendar_exercise_plate_final"), models.CheckConstraint(condition=Q(plate_final__gte=0, plate_final__lte=9), name="licensing_plate_final_0_9")]
+
+class VehicleCRLV(BaseModel):
+    vehicle = models.ForeignKey(Vehicle, on_delete=models.PROTECT, related_name="crlvs")
+    document = models.OneToOneField(Document, on_delete=models.PROTECT, related_name="crlv_record")
+    plate = models.CharField(max_length=8)
+    renavam = models.CharField(max_length=20, blank=True)
+    exercise = models.PositiveSmallIntegerField(db_index=True)
+    extracted_data = models.JSONField(default=dict, blank=True)
+    confirmed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="crlvs_confirmed")
+    confirmed_at = models.DateTimeField(default=timezone.now)
+    class Meta:
+        ordering = ["-exercise", "-confirmed_at"]
+
 
 class Maintenance(BaseModel):
     vehicle = models.ForeignKey(Vehicle, on_delete=models.PROTECT, related_name="maintenances")
@@ -490,3 +553,4 @@ class AuditLog(models.Model):
     new_values = models.JSONField(null=True, blank=True)
     reason = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+

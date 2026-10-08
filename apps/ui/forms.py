@@ -9,6 +9,20 @@ from apps.fleet.models import (
 INPUT = {'class': 'form-input'}
 SELECT = {'class': 'form-input'}
 
+class CRLVUploadForm(forms.Form):
+    file=forms.FileField(widget=forms.FileInput(attrs={**INPUT,'accept':'.pdf,.jpg,.jpeg,.png'}))
+    def clean_file(self):
+        f=self.cleaned_data['file']
+        if f.name.rsplit('.',1)[-1].lower() not in {'pdf','jpg','jpeg','png'}: raise forms.ValidationError('Envie PDF, JPG ou PNG.')
+        return f
+class CRLVConfirmForm(forms.Form):
+    document_id=forms.UUIDField(widget=forms.HiddenInput()); plate=forms.CharField(max_length=8,widget=forms.TextInput(attrs=INPUT)); renavam=forms.CharField(max_length=20,required=False,widget=forms.TextInput(attrs=INPUT)); exercise=forms.IntegerField(min_value=2000,max_value=2100,widget=forms.NumberInput(attrs=INPUT))
+class LicensingCalendarForm(forms.ModelForm):
+    class Meta:
+        from apps.fleet.models import LicensingCalendar
+        model=LicensingCalendar; fields=['exercise','plate_final','due_date','notes']
+        widgets={'exercise':forms.NumberInput(attrs=INPUT),'plate_final':forms.Select(choices=[(i,i) for i in range(10)],attrs=SELECT),'due_date':forms.DateInput(attrs={**INPUT,'type':'date'}),'notes':forms.Textarea(attrs=INPUT)}
+
 
 class DriverForm(forms.ModelForm):
     renewal_date = forms.DateField(
@@ -20,7 +34,7 @@ class DriverForm(forms.ModelForm):
 
     class Meta:
         model = Driver
-        fields = ['name', 'registration', 'unit', 'phone', 'email', 'cnh_number', 'cnh_category', 'cnh_expiration', 'renewal_date', 'active']
+        fields = ['name', 'sectors', 'registration', 'unit', 'phone', 'email', 'cnh_number', 'cnh_category', 'cnh_expiration', 'renewal_date', 'active']
         labels = {
             'name': 'Nome',
             'registration': 'Matrícula',
@@ -44,12 +58,37 @@ class DriverForm(forms.ModelForm):
             'active': forms.Select(choices=[(True, 'Ativo'), (False, 'Inativo')], attrs=SELECT),
         }
 
+    def __init__(self, *args, user=None, requested_sector=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        from apps.fleet.models import Sector
+        from apps.fleet.driver_scope import effective_driver_sector_slugs
+
+        allowed = effective_driver_sector_slugs(user) if user is not None else {"adm", "lei-seca"}
+        self.fields["sectors"].queryset = Sector.objects.filter(slug__in=allowed)
+        self.fields["sectors"].required = True
+        self.fields["sectors"].widget = forms.CheckboxSelectMultiple(choices=self.fields["sectors"].choices)
+        self._preserved_sector_ids = set()
+        if not self.instance._state.adding:
+            self._preserved_sector_ids = set(
+                self.instance.sectors.exclude(slug__in=allowed).values_list("pk", flat=True)
+            )
+        elif requested_sector in allowed:
+            self.initial["sectors"] = list(Sector.objects.filter(slug=requested_sector))
+        elif len(allowed) == 1:
+            self.initial["sectors"] = list(Sector.objects.filter(slug__in=allowed))
+
+    def _save_m2m(self):
+        super()._save_m2m()
+        if self._preserved_sector_ids:
+            self.instance.sectors.add(*self._preserved_sector_ids)
+
     def save(self, commit=True):
         driver = super().save(commit=False)
         renewal_date = self.cleaned_data.get('renewal_date')
 
         if commit:
             driver.save()
+            self.save_m2m()
             if renewal_date and driver.cnh_expiration:
                 from apps.fleet.models import DriverCNHHistory
                 DriverCNHHistory.objects.create(
@@ -431,3 +470,26 @@ class RevisionActionForm(forms.Form):
         required=False,
         widget=forms.Textarea(attrs={**INPUT, 'rows': 3}),
     )
+
+
+class VehiclePositionForm(forms.Form):
+    sector = forms.ModelChoiceField(
+        label="Setor de destino",
+        queryset=None,
+        empty_label=None,
+    )
+    active = forms.ChoiceField(
+        label="Situação operacional",
+        choices=(("true", "Ativa"), ("false", "Inativa")),
+    )
+    reason = forms.CharField(
+        label="Motivo da alteração",
+        widget=forms.Textarea(attrs={"rows": 4, "placeholder": "Ex.: Transferência da ADM para a Lei Seca; encerramento do contrato..."}),
+        min_length=5,
+    )
+
+    def __init__(self, *args, **kwargs):
+        from apps.fleet.models import Sector
+        super().__init__(*args, **kwargs)
+        self.fields["sector"].queryset = Sector.objects.filter(slug__in=["adm", "lei-seca"]).order_by("name")
+
