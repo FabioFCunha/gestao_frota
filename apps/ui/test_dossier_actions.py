@@ -107,7 +107,7 @@ class DossierActionsTests(TestCase):
         self.assertEqual(item.inspection_moment, "AVULSA")
         self.assertEqual(item.checklist["version"], 1)
         self.assertEqual(len(item.checklist["items"]), 8)
-        self.assertEqual(item.inspector_name, self.user.username)
+        self.assertEqual(item.inspector_name, "Dossier Teste")
         self.assertEqual(item.created_by, self.user)
         self.assertEqual(response.url, reverse("inspection_list"))
         self.assertFalse(VehicleInspection.objects.filter(vehicle=self.other).exists())
