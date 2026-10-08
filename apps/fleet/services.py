@@ -154,7 +154,11 @@ def get_vehicle_revision_status(*, vehicle):
                 "reference_initialization_required": True,
             }
 
-    km_remaining = next_revision_km - current_mileage if current_mileage is not None else None
+    km_remaining = (
+        next_revision_km - current_mileage
+        if current_mileage is not None and next_revision_km is not None
+        else None
+    )
 
     if active_revision:
         status = "EM_REVISAO"

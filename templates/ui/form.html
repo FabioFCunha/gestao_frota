@@ -22,10 +22,15 @@
     <article class="panel" style="grid-column:1/-1; max-width:1000px; margin:0 auto; width: 100%;">
         <form method="post"{% if form_action %} action="{{ form_action }}"{% endif %} {% if enctype %}enctype="{{ enctype }}"{% endif %}>
             {% csrf_token %}
+            {% if form.non_field_errors %}
+            <div role="alert" style="color:#b91c1c;margin-bottom:16px;">
+                {{ form.non_field_errors }}
+            </div>
+            {% endif %}
             {% if linked_vehicle %}<input type="hidden" name="vehicle" value="{{ linked_vehicle.id }}">{% endif %}
             {% if linked_vehicle %}
             <div style="margin-bottom:16px;padding:12px;border-radius:8px;background:#eff6ff;color:#1e3a8a;">
-                <strong>Nova multa para a viatura</strong><br>
+                <strong>{{ linked_heading|default:"Nova multa para a viatura" }}</strong><br>
                 {% for plate in linked_vehicle.plate_history.all %}{% if plate.kind == 'CURRENT' and not plate.ends_on %}{{ plate.plate }}{% endif %}{% endfor %}
                 — {{ linked_vehicle.brand.name|default:"" }} {{ linked_vehicle.model.name|default:"" }}
             </div>
@@ -234,22 +239,62 @@
 <script>
 (function () {
     const select = document.getElementById('id_workshop');
-    if (!select) return;
+    if (!select || !select.closest('form')) return;
     const button = document.createElement('button');
-    button.type = 'button'; button.className = 'secondary-action'; button.textContent = '+ Oficina';
-    button.style.marginTop = '6px'; select.insertAdjacentElement('afterend', button);
+    button.type = 'button';
+    button.id = 'workshop-form-add';
+    button.textContent = '+ Nova oficina';
+    button.style.cssText = 'display:block;margin-top:8px;padding:8px 12px;background:#2563eb;color:white;border:0;border-radius:6px;cursor:pointer;';
+    const message = document.createElement('span');
+    message.setAttribute('role', 'status');
+    select.insertAdjacentElement('afterend', button);
+    button.insertAdjacentElement('afterend', message);
+
     button.addEventListener('click', async function () {
-        const name = window.prompt('Nome da oficina:');
-        if (!name || !name.trim()) return;
-        const body = new URLSearchParams({name: name.trim(), csrfmiddlewaretoken: document.querySelector('[name=csrfmiddlewaretoken]').value});
-        const response = await fetch('{% url "workshop_quick_create" %}', {method: 'POST', body: body});
-        const data = await response.json();
-        if (!response.ok) return window.alert(data.error || 'Não foi possível cadastrar a oficina.');
-        let option = Array.from(select.options).find(item => item.value === data.id);
-        if (!option) { option = new Option(data.name, data.id); select.add(option); }
-        select.value = data.id;
+        const name = window.prompt('Nome da nova oficina:');
+        if (name === null || !name.trim()) return;
+        const csrf = button.closest('form').querySelector(
+            '[name="csrfmiddlewaretoken"]'
+        );
+        button.disabled = true;
+        message.textContent = ' Salvando...';
+        try {
+            const response = await fetch(
+                "{% url 'workshop_quick_create' %}",
+                {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: {'X-CSRFToken': csrf.value},
+                    body: new URLSearchParams({name: name.trim()})
+                }
+            );
+            if (!response.ok) {
+                let detail = 'Não foi possível cadastrar a oficina.';
+                try {
+                    const error = await response.json();
+                    detail = error.error || detail;
+                } catch (_) {}
+                throw new Error(detail);
+            }
+            const data = await response.json();
+            let option = Array.from(select.options).find(
+                item => item.value === data.id
+            );
+            if (!option) {
+                option = new Option(data.name, data.id);
+                select.add(option);
+            }
+            select.value = data.id;
+            const typedName = document.getElementById('id_workshop_name');
+            if (typedName) typedName.value = '';
+            select.dispatchEvent(new Event('change', {bubbles: true}));
+            message.textContent = ' Oficina cadastrada e selecionada.';
+        } catch (error) {
+            message.textContent = ' ' + error.message;
+        } finally {
+            button.disabled = false;
+        }
     });
 })();
 </script>
-
 {% endblock %}

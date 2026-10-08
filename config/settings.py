@@ -72,5 +72,6 @@ REST_FRAMEWORK = {
     ]
 }
 SYSTEM_CREATOR_EMAIL = os.getenv("SYSTEM_CREATOR_EMAIL", "fabiocunhaosp@gmail.com")
+FLEET_SYNC_TOKEN = os.getenv("FLEET_SYNC_TOKEN", "")
 LOGIN_URL = "/entrar/"
 LOGIN_REDIRECT_URL = "/"

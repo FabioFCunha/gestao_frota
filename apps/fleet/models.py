@@ -371,7 +371,11 @@ class VehicleInspection(BaseModel):
     status = models.ForeignKey(VehicleInspectionStatus, on_delete=models.PROTECT)
     inspection_moment = models.CharField(
         max_length=10,
-        choices=[("SAIDA", "Saída"), ("RETORNO", "Retorno"), ("AVULSA", "Vistoria avulsa")],
+        choices=[
+            ("SAIDA", "Saída"),
+            ("RETORNO", "Retorno"),
+            ("AVULSA", "Vistoria avulsa"),
+        ],
         blank=True,
         default="",
     )

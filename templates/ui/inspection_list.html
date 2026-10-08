@@ -1,0 +1,77 @@
+{% extends 'ui/base.html' %}
+{% block title %}Vistorias | Gestão de Frotas{% endblock %}
+{% block heading %}Vistorias{% endblock %}
+{% block content %}
+<style>
+.vistorias {max-width:960px;margin:auto}
+.vistorias .panel {margin-bottom:16px}
+.vistorias select {width:100%;min-height:48px;font-size:16px}
+.vistorias .vehicle-row {display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:14px 0;border-bottom:1px solid #ddd}
+.vistorias .primary-action {display:inline-block;padding:12px}
+.vistorias details {padding:16px 0;border-bottom:1px solid #ddd}
+.vistorias summary {cursor:pointer;line-height:1.8}
+.vistorias p {overflow-wrap:anywhere}
+</style>
+<div class="vistorias">
+{% if can_add_inspection %}
+<article class="panel">
+<h2>Nova vistoria</h2>
+<p>Selecione a viatura para preencher o checklist.</p>
+{% for row in vehicle_rows %}
+<div class="vehicle-row">
+<div><strong>{{ row.plate }}</strong> — {{ row.vehicle.brand.name }} {{ row.vehicle.model.name }}</div>
+<a class="primary-action" href="{% url 'inspection_create' row.vehicle.pk %}">Nova vistoria</a>
+</div>
+{% empty %}
+<p>Nenhuma viatura ativa disponível no seu setor.</p>
+{% endfor %}
+</article>
+{% endif %}
+{% if can_view_inspection %}
+<article class="panel">
+<h2>Histórico de vistorias</h2>
+<form method="get">
+{% if requested_sector %}<input type="hidden" name="sector" value="{{ requested_sector }}">{% endif %}
+<label for="vehicle">Filtrar por viatura</label>
+<select name="vehicle" id="vehicle">
+<option value="">Todas as viaturas do setor autorizado</option>
+{% for row in vehicle_rows %}
+<option value="{{ row.vehicle.pk }}" {% if selected_vehicle == row.vehicle.pk|stringformat:"s" %}selected{% endif %}>{{ row.plate }} — {{ row.vehicle.brand.name }} {{ row.vehicle.model.name }}</option>
+{% endfor %}
+</select>
+<button type="submit" class="primary-action">Filtrar histórico</button>
+</form>
+{% for inspection in history_page %}
+<details>
+<summary>
+<strong>{{ inspection.date|date:"d/m/Y H:i" }}</strong> —
+{% for plate in inspection.vehicle.plate_history.all %}
+{% if plate.kind == 'CURRENT' and not plate.ends_on %}{{ plate.plate }}{% endif %}
+{% endfor %}
+{{ inspection.vehicle.brand.name }} {{ inspection.vehicle.model.name }} —
+{{ inspection.get_inspection_moment_display }} — {{ inspection.status.name }}
+</summary>
+<p><strong>Responsável:</strong> {{ inspection.inspector_name|default:"Não informado" }}</p>
+<p><strong>Tipo:</strong> {{ inspection.type.name }} · <strong>Quilometragem:</strong> {{ inspection.mileage|default_if_none:"Não informada" }}</p>
+{% for item in inspection.checklist.items %}
+<p><strong>{{ item.label }}:</strong>
+{% if item.answer == 'CONFORME' %}Conforme{% elif item.answer == 'PROBLEMA' %}Com problema{% elif item.answer == 'NA' %}Não se aplica{% else %}{{ item.answer }}{% endif %}
+{% if item.observation %}<br>{{ item.observation|linebreaksbr }}{% endif %}
+</p>
+{% endfor %}
+{% if inspection.notes %}<p><strong>Observações:</strong><br>{{ inspection.notes|linebreaksbr }}</p>{% endif %}
+</details>
+{% empty %}
+<p>Nenhuma vistoria encontrada.</p>
+{% endfor %}
+<p>Página {{ history_page.number }} de {{ history_page.paginator.num_pages }}</p>
+{% if history_page.has_previous %}
+<a href="?page={{ history_page.previous_page_number }}&vehicle={{ selected_vehicle|urlencode }}&sector={{ requested_sector|urlencode }}">Anterior</a>
+{% endif %}
+{% if history_page.has_next %}
+<a href="?page={{ history_page.next_page_number }}&vehicle={{ selected_vehicle|urlencode }}&sector={{ requested_sector|urlencode }}">Próxima</a>
+{% endif %}
+</article>
+{% endif %}
+</div>
+{% endblock %}
