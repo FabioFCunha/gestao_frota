@@ -385,7 +385,7 @@ def bdt_list(request):
 @login_required
 @module_permission("fleet.change_vehicle")
 def vehicle_crlv(request, pk):
-    from apps.fleet.models import Document, Vehicle
+    from apps.fleet.models import Document, Vehicle, AuditLog
     from apps.fleet.services import confirm_crlv, stage_crlv_document
 
     vehicle = get_object_or_404(Vehicle.objects.prefetch_related("plate_history"), pk=pk)
