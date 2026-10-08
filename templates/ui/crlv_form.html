@@ -1,10 +1,10 @@
 {% extends 'ui/base.html' %}
 {% block title %}CRLV | Gestão de Frotas{% endblock %}
-{% block heading %}Anexar CRLV{% endblock %}
+{% block heading %}Atualizar CRLV{% endblock %}
 {% block content %}
 <section class="panel" style="max-width:760px">
   <h2>CRLV — {{ current_plate }}</h2>
-  <p>Envie o documento para extrair os dados. Revise e corrija os campos antes da confirmação.</p>
+  <p>Use esta tela pela seção <strong>Veículos</strong> para registrar um novo exercício do CRLV. O prontuário permanece somente informativo.</p>
   {% if not confirm_form %}
   <form method="post" enctype="multipart/form-data">{% csrf_token %}<input type="hidden" name="step" value="upload">
     {{ upload_form.as_p }}<button class="primary-action" type="submit">Anexar CRLV</button>
