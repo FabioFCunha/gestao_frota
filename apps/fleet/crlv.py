@@ -183,7 +183,7 @@ def _extract_renavam(text):
     for plate in plates:
         match = re.search(
             r"\b(\d{11})\s+" + re.escape(plate) +
-            r"\\s+20\\d{2}\\s+20\\d{2}\\s+20\\d{2}\\b",
+            r"\s+20\d{2}\s+20\d{2}\s+20\d{2}\b",
             upper,
         )
         if match and not _cpf_valid(match.group(1)):
