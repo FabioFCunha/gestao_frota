@@ -91,6 +91,7 @@ def extract_chassi(text):
     # Sem contexto explícito de CHASSI/VIN, não inferimos um chassi.
     # Isso evita transformar hashes, IDs, códigos de assinatura ou outros
     # números de 17 caracteres em VINs válidos.
+    return ""
 
 
 def _plate_candidates(text):
