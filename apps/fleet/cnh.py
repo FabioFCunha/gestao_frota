@@ -10,6 +10,41 @@ def _clean(value):
     return re.sub(r"\s+", " ", str(value or "").replace("\xa0", " ")).strip(" \t\r\n:.-")
 
 
+def _cnh_ocr(image, *, data=False):
+    """Limita threads somente no subprocesso OCR desta CNH."""
+    import csv
+    import os
+    from pathlib import Path
+    import subprocess
+    import tempfile
+    import pytesseract
+
+    environment = os.environ.copy()
+    environment["OMP_THREAD_LIMIT"] = "1"
+    with tempfile.TemporaryDirectory(prefix="cnh-ocr-") as directory:
+        image_path = Path(directory) / "input.png"
+        image.save(image_path, format="PNG")
+        command = [
+            pytesseract.pytesseract.tesseract_cmd, str(image_path), "stdout",
+            "-l", "por+eng", "--psm", "6",
+        ]
+        if data:
+            command.append("tsv")
+        result = subprocess.run(
+            command, capture_output=True, check=True,
+            env=environment, timeout=90,
+        )
+    text = result.stdout.decode("utf-8")
+    if not data:
+        return text
+    words = {"text": [], "left": [], "top": []}
+    for row in csv.DictReader(io.StringIO(text), delimiter="\t"):
+        words["text"].append(row["text"])
+        words["left"].append(int(row["left"]))
+        words["top"].append(int(row["top"]))
+    return words
+
+
 def _all_text(raw):
     """Extrai texto nativo e usa OCR quando o PDF só contém cabeçalhos/QR."""
     text = ""
@@ -39,11 +74,10 @@ def _all_text(raw):
         return text
 
     try:
-        import pytesseract
         from pdf2image import convert_from_bytes
         pages = convert_from_bytes(raw, dpi=300)
         ocr_text = "\n".join(
-            pytesseract.image_to_string(page, lang="por+eng", config="--psm 6")
+            _cnh_ocr(page)
             for page in pages
         )
         # Mantém o texto nativo como complemento, mas prioriza a camada OCR
@@ -59,7 +93,6 @@ def _cnh_field_text(raw):
     """OCR complementar da coluna da CNH, sem incluir o QR Code."""
     try:
         from pypdf import PdfReader
-        import pytesseract
 
         reader = PdfReader(io.BytesIO(raw))
         for page in reader.pages:
@@ -68,19 +101,15 @@ def _cnh_field_text(raw):
                 if image.width < 500 or image.width <= image.height:
                     continue
                 image = image.resize((image.width * 2, image.height * 2))
-                words = pytesseract.image_to_data(
-                    image, lang="por+eng", config="--psm 6",
-                    output_type=pytesseract.Output.DICT,
-                )
+                words = _cnh_ocr(image, data=True)
                 for index, word in enumerate(words["text"]):
                     token = re.sub(r"[^A-Z]", "", word.upper())
                     if token not in ("DOC", "DOCIDENTIDADE"):
                         continue
                     left = max(0, words["left"][index] - round(image.width * 0.035))
                     top = max(0, words["top"][index] - 8)
-                    text = pytesseract.image_to_string(
+                    text = _cnh_ocr(
                         image.crop((left, top, image.width, image.height)),
-                        lang="por+eng", config="--psm 6",
                     )
                     if re.search(r"(?:[OÓ]RG\.?|[OÓ]RG[ÃA]O)\s*EMISSOR\s*/?\s*UF", text, re.IGNORECASE):
                         return text

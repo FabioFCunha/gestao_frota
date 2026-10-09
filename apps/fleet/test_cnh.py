@@ -289,17 +289,19 @@ MARIA CRISTINA PEREIRA
         reader.pages = [page]
         pdf_module = types.ModuleType("pypdf")
         pdf_module.PdfReader = MagicMock(return_value=reader)
-        ocr_module = types.ModuleType("pytesseract")
-        ocr_module.Output = types.SimpleNamespace(DICT="dict")
-        ocr_module.image_to_data = MagicMock(return_value={
-            "text": ["DOC"], "left": [944], "top": [690],
-        })
-        ocr_module.image_to_string = MagicMock(return_value=self.field_text)
-        with patch.dict(sys.modules, {"pypdf": pdf_module, "pytesseract": ocr_module}):
-            self.assertEqual(_cnh_field_text(b"pdf"), self.field_text)
+        with patch.dict(sys.modules, {"pypdf": pdf_module}):
+            with patch(
+                "apps.fleet.cnh._cnh_ocr",
+                side_effect=[
+                    {"text": ["DOC"], "left": [944], "top": [690]},
+                    self.field_text,
+                ],
+            ) as ocr:
+                self.assertEqual(_cnh_field_text(b"pdf"), self.field_text)
         qr.image.convert.return_value.resize.assert_not_called()
         enlarged.crop.assert_called_once_with((877, 682, 1926, 1360))
-        ocr_module.image_to_string.assert_called_once()
+        self.assertEqual(ocr.call_count, 2)
+        self.assertEqual(ocr.call_args_list[0].kwargs, {"data": True})
 
     def test_complementary_ocr_failure_returns_empty_text(self):
         import sys
@@ -311,6 +313,92 @@ MARIA CRISTINA PEREIRA
         pdf_module.PdfReader = MagicMock(side_effect=RuntimeError("PDF indisponível"))
         ocr_module = types.ModuleType("pytesseract")
         with patch.dict(sys.modules, {"pypdf": pdf_module, "pytesseract": ocr_module}):
+            self.assertEqual(_cnh_field_text(b"pdf"), "")
+
+
+class CNHOCRPerformanceTests(SimpleTestCase):
+    def _ocr_environment(self):
+        import types
+        from unittest.mock import MagicMock
+
+        module = types.ModuleType("pytesseract")
+        module.pytesseract = types.SimpleNamespace(tesseract_cmd="tesseract")
+        result = MagicMock()
+        result.stdout = b"FILIA\xc3\x87\xc3\x83O\nJOSE ALBERTO DE ALMEIDA LOPA\nMARIA CRISTINA PEREIRA\n"
+        return module, result
+
+    def test_thread_limit_is_passed_only_to_cnh_subprocess(self):
+        import os
+        import sys
+        from pathlib import Path
+        from unittest.mock import MagicMock
+        from apps.fleet.cnh import _cnh_ocr
+
+        module, result = self._ocr_environment()
+        image = MagicMock()
+        with patch.dict(os.environ, {"OMP_THREAD_LIMIT": "7", "CNH_TEST_ENV": "preserved"}):
+            with patch.dict(sys.modules, {"pytesseract": module}):
+                with patch("subprocess.run", return_value=result) as run:
+                    text = _cnh_ocr(image)
+                    call = run.call_args
+                    self.assertEqual(call.kwargs["env"]["OMP_THREAD_LIMIT"], "1")
+                    self.assertEqual(call.kwargs["env"]["CNH_TEST_ENV"], "preserved")
+                    self.assertEqual(os.environ["OMP_THREAD_LIMIT"], "7")
+                    self.assertEqual(call.args[0][0], "tesseract")
+                    self.assertEqual(call.args[0][2:], ["stdout", "-l", "por+eng", "--psm", "6"])
+                    self.assertEqual(call.kwargs["timeout"], 90)
+                    self.assertTrue(call.kwargs["check"])
+                    self.assertFalse(Path(call.args[0][1]).parent.exists())
+        self.assertEqual(text, result.stdout.decode("utf-8"))
+        image.save.assert_called_once()
+
+    def test_tsv_coordinates_remain_available_for_dynamic_crop(self):
+        import sys
+        from unittest.mock import MagicMock
+        from apps.fleet.cnh import _cnh_ocr
+
+        module, result = self._ocr_environment()
+        result.stdout = b"level\tleft\ttop\ttext\n5\t944\t690\tDOC\n5\t998\t686\tIDENTIDADE\n"
+        with patch.dict(sys.modules, {"pytesseract": module}):
+            with patch("subprocess.run", return_value=result) as run:
+                words = _cnh_ocr(MagicMock(), data=True)
+        self.assertEqual(words, {
+            "text": ["DOC", "IDENTIDADE"], "left": [944, 998], "top": [690, 686],
+        })
+        self.assertEqual(run.call_args.args[0][-1], "tsv")
+
+    def test_subprocess_failure_does_not_change_environment(self):
+        import os
+        import subprocess
+        import sys
+        from pathlib import Path
+        from unittest.mock import MagicMock
+        from apps.fleet.cnh import _cnh_ocr
+
+        module, _ = self._ocr_environment()
+        with patch.dict(os.environ, {"OMP_THREAD_LIMIT": "7"}):
+            with patch.dict(sys.modules, {"pytesseract": module}):
+                with patch("subprocess.run", side_effect=subprocess.CalledProcessError(1, "tesseract")) as run:
+                    with self.assertRaises(subprocess.CalledProcessError):
+                        _cnh_ocr(MagicMock())
+                    self.assertEqual(os.environ["OMP_THREAD_LIMIT"], "7")
+                    self.assertFalse(Path(run.call_args.args[0][1]).parent.exists())
+
+    @patch("apps.fleet.cnh._cnh_ocr", side_effect=RuntimeError("OCR indisponível"))
+    def test_complementary_failure_preserves_original_extraction(self, _ocr):
+        import sys
+        import types
+        from unittest.mock import MagicMock
+        from apps.fleet.cnh import _cnh_field_text
+
+        embedded = MagicMock()
+        image = embedded.image.convert.return_value
+        image.width, image.height = 963, 680
+        reader = MagicMock()
+        reader.pages = [types.SimpleNamespace(images=[embedded])]
+        module = types.ModuleType("pypdf")
+        module.PdfReader = MagicMock(return_value=reader)
+        with patch.dict(sys.modules, {"pypdf": module}):
             self.assertEqual(_cnh_field_text(b"pdf"), "")
 
 
