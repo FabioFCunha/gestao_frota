@@ -233,7 +233,7 @@
             <p class="empty" style="margin:14px 0;">📅 Nenhum prazo próximo.</p>
             {% endif %}
             <div class="crlv-status-actions">
-                <a class="secondary-action" href="{% url 'licensing_calendar' %}">Abrir calendário anual</a>
+                <a class="secondary-action" href="{% url 'licensing_calendar_overview' %}">Abrir calendário anual</a>
             </div>
         </article>
     </div>
@@ -250,7 +250,7 @@
             </div>
             {% endfor %}
         </div>
-        <a href="{% url 'licensing_calendar' %}">Abrir calendário anual</a>
+        <a href="{% url 'licensing_calendar_overview' %}">Abrir calendário anual</a>
     </details>
     {% endif %}
 </section>
