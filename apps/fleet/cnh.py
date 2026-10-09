@@ -79,14 +79,6 @@ def _date_field(text, labels):
         match = re.search(label, text, re.IGNORECASE)
         if match:
             window = text[match.end():match.end() + 100]
-            next_label = re.search(
-                r"\b(?:CPF|N[º°O]\s*REGISTRO|REGISTRO|CAT\.?\s*HAB|"
-                r"CATEGORIA|VALIDADE|NASCIMENTO|EMISS[AÃ]O|HABILITA[CÇ][AÃ]O)\b",
-                window,
-                re.IGNORECASE,
-            )
-            if next_label:
-                window = window[:next_label.start()]
             date_match = re.search(date_pattern, window)
             if date_match:
                 return _iso_date(date_match.group(1).replace(".", "/"))
