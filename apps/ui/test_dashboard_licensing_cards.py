@@ -60,12 +60,14 @@ class CRLVOperationalCardsTemplateTests(SimpleTestCase):
             ]
         )
 
-        self.assertIn("Licenciamento vencido ou a vencer", html)
         self.assertIn("viatura(s) com licenciamento vencido", html)
-        self.assertIn("viatura(s) com prazo nos próximos 30 dias", html)
-        self.assertIn("Situação dos licenciamentos", html)
-        self.assertIn("viatura(s) com licenciamento pendente", html)
+        self.assertIn("viatura(s)", html)
+        self.assertIn("Licenciamento vencido", html)
+        self.assertIn("Vence nos próximos 30 dias", html)
+        self.assertIn("Ver todas as 1 viaturas vencidas", html)
+        self.assertIn("Abrir calendário anual", html)
         self.assertIn("TTO8A04", html)
+        self.assertIn("crlv-overview-grid", html)
         self.assertIn("Vencido", html)
         self.assertIn('href="/calendario-licenciamento-rj/"', html)
         self.assertNotIn("Vistorias e multas", html)
