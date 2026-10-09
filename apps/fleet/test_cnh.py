@@ -64,7 +64,10 @@ class CNHDriverFlowTests(TestCase):
 
         self.user = get_user_model().objects.create_user(username="cnh-test", password="x")
         self.user.user_permissions.add(Permission.objects.get(codename="add_driver"))
-        self.sector = Sector.objects.create(name="ADM", slug="adm")
+        self.sector, _ = Sector.objects.get_or_create(
+            slug="adm",
+            defaults={"name": "ADM"},
+        )
         self.user.sectors.add(self.sector)
 
     @patch(
@@ -92,7 +95,7 @@ class CNHDriverFlowTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIsNotNone(response.context["confirm_form"])
         document = Document.objects.get(document_type__name="CNH")
-        self.assertTrue(DocumentRelation.objects.filter(document=document).exists() is False)
+        self.assertFalse(DocumentRelation.objects.filter(document=document).exists())
 
         response = self.client.post(
             "/motoristas/novo/?sector=adm",
