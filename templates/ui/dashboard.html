@@ -261,10 +261,10 @@
 
         <article class="panel" style="border-left:4px solid #7c3aed;">
             <h3 style="margin-top:0;">Vistorias e multas</h3>
-            <p style="margin:0 0 12px;color:#64748b;font-size:.9rem;">Pendências operacionais para conferir antes de concluir a regularização documental.</p>
+            <p style="margin:0 0 12px;color:#64748b;font-size:.9rem;">Pontos de atenção: confira se estas pendências afetam a regularização de cada viatura.</p>
             <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;">
                 <div><strong>{{ dashboard_alerts.inspections_pending|length }}</strong><br><span style="font-size:.85rem;">Vistorias reprovadas/com ressalvas</span></div>
-                <div><strong>{{ dashboard_alerts.fines_pending|length }}</strong><br><span style="font-size:.85rem;">Multas pendentes/em análise</span></div>
+                <div><strong>{{ dashboard_alerts.fines_pending|length }}</strong><br><span style="font-size:.85rem;">Multas pendentes/em análise/recurso</span></div>
             </div>
 
             {% if dashboard_alerts.inspections_pending %}
