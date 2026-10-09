@@ -211,36 +211,30 @@ def dashboard(request):
 
     from apps.fleet.sector_scope import can_select_sector
 
-    # Pendências de vistoria vinculadas somente às viaturas do escopo do usuário.
-    # Consultamos o histórico da vistoria, mas exibimos sempre a placa atual para
-    # evitar duplicação por mudanças anteriores de placa.
-    from apps.fleet.models import VehicleInspection
-    pending_inspection_qs = (
-        VehicleInspection.objects
-        .filter(
-            vehicle_id__in=scoped_vehicle_ids,
-            status__name__in=["Reprovada", "Com ressalvas"],
-        )
-        .select_related("vehicle", "status")
-        .prefetch_related("vehicle__plate_history")
-        .order_by("-date", "-created_at")
+    # Consolidar a situação do licenciamento anual por viatura, usando
+    # o calendário oficial e o exercício do CRLV confirmado.
+    licensing_by_vehicle = {}
+    licensing_statuses = (
+        ("overdue", "Vencido"),
+        ("due_soon", "Vence em até 30 dias"),
+        ("pending_in_time", "Pendente dentro do prazo"),
     )
-    pending_inspections = []
-    for inspection in pending_inspection_qs:
-        inspection_plate = next(
-            (
-                p.plate for p in inspection.vehicle.plate_history.all()
-                if p.kind == VehiclePlate.CURRENT and p.ends_on is None
-            ),
-            "Sem placa atual",
-        )
-        pending_inspections.append({
-            "id": inspection.id,
-            "vehicle_id": inspection.vehicle_id,
-            "plate": inspection_plate,
-            "status": inspection.status.name,
-            "date": inspection.date,
-        })
+    for bucket, status_label in licensing_statuses:
+        for item in crlv_alerts.get(bucket, []):
+            vehicle_key = item["vehicle_id"]
+            current = licensing_by_vehicle.get(vehicle_key)
+            candidate = {**item, "status_label": status_label}
+            # Se houver mais de um exercício pendente, exibir o mais recente.
+            if current is None or candidate["exercise"] > current["exercise"]:
+                licensing_by_vehicle[vehicle_key] = candidate
+
+    licensing_pending = sorted(
+        licensing_by_vehicle.values(),
+        key=lambda item: (-item["exercise"], item["plate"]),
+    )
+    licensing_calendar_missing_count = len({
+        item["vehicle_id"] for item in crlv_alerts.get("calendar_missing", [])
+    })
 
     context = {
         "show_sector_filter": can_select_sector(request.user),
@@ -256,6 +250,11 @@ def dashboard(request):
             "cnh_expired": alerts.get("expired_cnh", []),
         },
         "crlv_alerts": crlv_alerts,
+        "licensing_summary": {
+            "pending": licensing_pending,
+            "pending_count": len(licensing_pending),
+            "calendar_missing_count": licensing_calendar_missing_count,
+        },
     }
     return render(request, "ui/dashboard.html", context)
 
