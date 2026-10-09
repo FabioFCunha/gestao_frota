@@ -300,8 +300,16 @@ def extract_cnh_data(file_obj):
         issuing_state = ""
 
     nationality = _field_value(
-        upper, [r"NACIONALIDADE"], [r"FILIA[CÇ][AÃ]O", r"VALIDADE", r"CAT\.?\s*HAB\.?"], max_len=60
+        upper,
+        [r"NACIONALIDADE"],
+        [r"FILIA[CÇ][AÃ]O", r"VALIDADE", r"CAT\.?\s*HAB\.?", r"CATEGORIA"],
+        max_len=60,
     )
+    # Quando o OCR mistura o texto da MRZ com os campos, prioriza o valor
+    # explícito da CNH em vez de devolver ruído como "NAN UL BA...".
+    nationality_match = re.search(r"\b(BRASILEIR[OA](?:\s*\([MF]\))?)\b", upper)
+    if nationality_match:
+        nationality = nationality_match.group(1).replace(" ", "")
     parents = []
     filiation_match = re.search(r"FILIA[CÇ][AÃ]O", upper, re.IGNORECASE)
     if filiation_match:
@@ -317,14 +325,33 @@ def extract_cnh_data(file_obj):
         parents = [
             _clean(line)
             for line in filiation_tail.splitlines()
-            if _clean(line) and not re.fullmatch(r"[-:/ ]+", _clean(line))
+            if _clean(line)
+            and not re.fullmatch(r"[-:/ ]+", _clean(line))
+            and not re.search(
+                r"\b(?:FILIA[CÇ][AÃ]O|FILIATION|FILIACIÓN|PAI|M[AÃ]E|NACIONALIDADE|"
+                r"BRASILEIR[OA]|LOCAL|VALIDADE|CATEGORIA|REGISTRO|OBSERVA[CÇ][OÕ]ES)\b",
+                _clean(line),
+                re.IGNORECASE,
+            )
+            and re.fullmatch(r"[A-ZÀ-ÖØ-Þ'’.-]+(?:\s+[A-ZÀ-ÖØ-Þ'’.-]+){1,7}", _clean(line))
         ]
         if len(parents) < 2:
             inline_filiation = _clean(filiation_tail)
-            # OCR occasionally places both names on one line with wide spacing.
-            parts = [part for part in re.split(r"\s{2,}", inline_filiation) if _clean(part)]
+            inline_filiation = re.sub(
+                r"\b(?:FILIA[CÇ][AÃ]O|FILIATION|FILIACIÓN|PAI|M[AÃ]E)\b",
+                " ",
+                inline_filiation,
+                flags=re.IGNORECASE,
+            )
+            # Em OCR de colunas, dois nomes podem aparecer separados por barras
+            # ou múltiplos espaços na mesma linha.
+            parts = [
+                _clean(part)
+                for part in re.split(r"\s{2,}|\\s*/\\s*", inline_filiation)
+                if re.fullmatch(r"[A-ZÀ-ÖØ-Þ'’.-]+(?:\s+[A-ZÀ-ÖØ-Þ'’.-]+){1,7}", _clean(part))
+            ]
             if len(parts) >= 2:
-                parents = [_clean(parts[0]), _clean(parts[1])]
+                parents = parts[:2]
     father = _clean(parents[0]) if parents else ""
     mother = _clean(parents[1]) if len(parents) > 1 else ""
 
