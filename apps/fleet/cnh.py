@@ -54,6 +54,41 @@ def _all_text(raw):
         # quando o ambiente não dispõe de OCR/Poppler.
         return text
 
+
+def _cnh_field_text(raw):
+    """OCR complementar da coluna da CNH, sem incluir o QR Code."""
+    try:
+        from pypdf import PdfReader
+        import pytesseract
+
+        reader = PdfReader(io.BytesIO(raw))
+        for page in reader.pages:
+            for embedded in page.images:
+                image = embedded.image.convert("RGB")
+                if image.width < 500 or image.width <= image.height:
+                    continue
+                image = image.resize((image.width * 2, image.height * 2))
+                words = pytesseract.image_to_data(
+                    image, lang="por+eng", config="--psm 6",
+                    output_type=pytesseract.Output.DICT,
+                )
+                for index, word in enumerate(words["text"]):
+                    token = re.sub(r"[^A-Z]", "", word.upper())
+                    if token not in ("DOC", "DOCIDENTIDADE"):
+                        continue
+                    left = max(0, words["left"][index] - round(image.width * 0.035))
+                    top = max(0, words["top"][index] - 8)
+                    text = pytesseract.image_to_string(
+                        image.crop((left, top, image.width, image.height)),
+                        lang="por+eng", config="--psm 6",
+                    )
+                    if re.search(r"(?:[OÓ]RG\.?|[OÓ]RG[ÃA]O)\s*EMISSOR\s*/?\s*UF", text, re.IGNORECASE):
+                        return text
+    except Exception:
+        # Falha no recurso complementar preserva a extração original.
+        return ""
+    return ""
+
 def _iso_date(value):
     value = _clean(value)
     for fmt in ("%d/%m/%Y", "%d-%m-%Y", "%Y-%m-%d"):
@@ -241,9 +276,17 @@ def extract_cnh_data(file_obj):
         upper,
         [r"CAT\.?\s*HAB\.?", r"CATEGORIA"],
         [r"N[º°O]\s*REGISTRO", r"VALIDADE", r"1[ªA]\s*HABILITA[CÇ][AÃ]O"],
-        max_len=20,
+        max_len=80,
     )
-    category_match = re.search(r"\b(ACC|[A-E]{1,2})\b", category)
+    # No leiaute de colunas, a linha de valores contém CPF, registro e categoria.
+    category = re.split(
+        r"\b(?:NACIONALIDADE|FILIA[CÇ][AÃ]O|DOC\.?\s*IDENTIDADE)\b",
+        category,
+        maxsplit=1,
+    )[0]
+    category_match = re.search(
+        r"\b\d{9,11}\b\s*[|:; ]*(ACC|A[BCDE]?|[BCDE])\b", category,
+    ) or re.search(r"\b(ACC|[A-E]{1,2})\b", category)
     if category_match:
         category = category_match.group(1)
     else:
@@ -283,11 +326,15 @@ def extract_cnh_data(file_obj):
                 flags=re.IGNORECASE,
             )
             tokens = re.findall(r"\b[A-Z]{2,}\b", identity_remainder)
-            if tokens and len(tokens[-1]) == 2:
-                issuing_state = tokens[-1]
-                issuing_authority = " ".join(tokens[:-1]).strip()
+            if len(tokens) >= 2 and tokens[1] in {
+                "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO",
+                "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI",
+                "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO",
+            }:
+                issuing_state = tokens[1]
+                issuing_authority = tokens[0]
             elif tokens:
-                issuing_authority = " ".join(tokens).strip()
+                issuing_authority = tokens[0]
                 issuing_state = ""
             else:
                 issuing_authority = ""
@@ -354,6 +401,40 @@ def extract_cnh_data(file_obj):
                 parents = parts[:2]
     father = _clean(parents[0]) if parents else ""
     mother = _clean(parents[1]) if len(parents) > 1 else ""
+
+    if not father or not mother or not re.fullmatch(
+        r"BRASILEIR[OA](?:\([A-Z]\))?", nationality,
+    ):
+        field_text = _cnh_field_text(raw).upper()
+        if field_text:
+            clean_nationality = re.search(
+                r"\b(BRASILEIR[OA](?:\s*\([A-Z]\))?)(?![A-Z])", field_text,
+            )
+            if clean_nationality and not re.fullmatch(
+                r"BRASILEIR[OA](?:\([A-Z]\))?", nationality,
+            ):
+                nationality = clean_nationality.group(1).replace(" ", "")
+            clean_filiation = re.search(
+                r"FILIA[CÇ][AÃ]O\s*\n(.*)", field_text, re.DOTALL,
+            )
+            if clean_filiation:
+                parent_block = re.split(
+                    r"\b(?:ASSINATURA|OBSERVA[CÇ][OÕ]ES|LOCAL|VALIDADE|"
+                    r"NACIONALIDADE|CAT\.?\s*HAB\.?|REGISTRO)\b",
+                    clean_filiation.group(1), maxsplit=1,
+                )[0]
+                clean_parents = [
+                    _clean(line).strip(" |")
+                    for line in parent_block.splitlines()
+                    if re.fullmatch(
+                        r"[A-ZÀ-ÖØ-Þ'’.-]+(?:\s+[A-ZÀ-ÖØ-Þ'’.-]+)+",
+                        _clean(line).strip(" |"),
+                    )
+                ]
+                # Só associa pai/mãe quando os dois nomes estão disponíveis.
+                if len(clean_parents) == 2:
+                    father = father or clean_parents[0]
+                    mother = mother or clean_parents[1]
 
     location = _field_value(
         upper,

@@ -169,6 +169,151 @@ class CNHExtractionTests(SimpleTestCase):
         self.assertEqual(data["location"], "RIO DE JANEIRO RJ")
 
 
+class CNHExtractionRegressionTests(SimpleTestCase):
+    noisy_text = """
+NOME E SOBRENOME 1º HABILITAÇÃO
+ALBERTO FELIPE PEREIRA LOPA 29/09/2006 + i" oO h poa
+DATA, LOCAL E UF DE NASCIMENTO
+22/01/1987, RIO DE JANEIRO, RJ
+DATA EMISSÃO VALIDADE ACC
+16/04/2024 14/04/2034 ==|D
+E AE DOCIDENTIDADE / ORG EMISSOR UF
+= 021012056533 COMAER RJ "i oO E a oO T E Ea, o — =
+a nm =
+E ad CPF 5 Nº REGISTRO 9 CATHAB Fr —
+2 O 113.483.417-93 03044729845 || D = eons, Tl ee FILE m1
+& a NACIONALIDADE nan ul Ba = | na
+E a BRASILEIRO(A) po + no mp
+e - Fiação T Fr Em e jm la
+s bi JOSE ALBERTO DE ALMEIDA LOPA Co Eça ns a = ei rs I
+E 4 Alb Edy P lda MARIA CRISTINA PEREIRA a 1 ao al Du Fr |
+= 7 ASSINATURA DO PORTADOR
+Filiação / Filiation / Filiación - 12. Observações / Observations
+I<BRA039447298<457<<<<<<<<<<<<
+8701222M3404148BRA<<<<<<<<<<<8
+"""
+    field_text = """
+4c DOC IDENTIDADE / ORG EMISSOR / UF
+021012056533 COMAER RJ |
+4d CPF 5 Nº REGISTRO 9 CAT HAB
+113.483.417-93 | | 03944729845 | D |
+NACIONALIDADE
+BRASILEIRO(A) |
+FILIAÇÃO
+JOSE ALBERTO DE ALMEIDA LOPA
+MARIA CRISTINA PEREIRA
+"""
+
+    @patch("apps.fleet.cnh._cnh_field_text")
+    @patch("apps.fleet.cnh._all_text")
+    def test_real_ocr_noise_recovers_fields_without_replacing_original_identifiers(self, all_text, field_text):
+        all_text.return_value = self.noisy_text
+        field_text.return_value = self.field_text
+        data = extract_cnh_data(b"%PDF-1.4 test")
+        self.assertEqual(data["issuing_authority"], "COMAER")
+        self.assertEqual(data["issuing_state"], "RJ")
+        self.assertEqual(data["cnh_category"], "D")
+        self.assertEqual(data["father_name"], "JOSE ALBERTO DE ALMEIDA LOPA")
+        self.assertEqual(data["mother_name"], "MARIA CRISTINA PEREIRA")
+        self.assertEqual(data["nationality"], "BRASILEIRO(A)")
+        self.assertEqual(data["name"], "ALBERTO FELIPE PEREIRA LOPA")
+        self.assertEqual(data["cpf"], "113.483.417-93")
+        self.assertEqual(data["identity_document"], "021012056533")
+        self.assertEqual(data["cnh_number"], "03044729845")
+        self.assertEqual(data["birth_date"], "1987-01-22")
+        self.assertEqual(data["cnh_issue_date"], "2024-04-16")
+        self.assertEqual(data["cnh_expiration"], "2034-04-14")
+        self.assertEqual(data["cnh_first_issue_date"], "2006-09-29")
+        self.assertEqual(data["text_extracted"], self.noisy_text)
+
+    @patch("apps.fleet.cnh._cnh_field_text", return_value="")
+    @patch("apps.fleet.cnh._all_text")
+    def test_missing_supplemental_ocr_preserves_original_extraction(self, all_text, field_text):
+        all_text.return_value = self.noisy_text
+        data = extract_cnh_data(b"%PDF-1.4 test")
+        self.assertEqual(data["issuing_authority"], "COMAER")
+        self.assertEqual(data["issuing_state"], "RJ")
+        self.assertEqual(data["cnh_category"], "D")
+        self.assertEqual(data["father_name"], "")
+        self.assertEqual(data["mother_name"], "")
+        self.assertEqual(data["cpf"], "113.483.417-93")
+        self.assertEqual(data["cnh_number"], "03044729845")
+
+    @patch("apps.fleet.cnh._cnh_field_text")
+    @patch("apps.fleet.cnh._all_text")
+    def test_supplemental_ocr_recovers_noisy_nationality(self, all_text, field_text):
+        all_text.return_value = self.noisy_text.replace("BRASILEIRO(A)", "BRAS1LEIR0(A)")
+        field_text.return_value = self.field_text
+        data = extract_cnh_data(b"%PDF-1.4 test")
+        self.assertEqual(data["nationality"], "BRASILEIRO(A)")
+
+    @patch("apps.fleet.cnh._cnh_field_text")
+    @patch("apps.fleet.cnh._all_text")
+    def test_parent_names_are_complete_and_single_name_is_not_assigned(self, all_text, field_text):
+        all_text.return_value = self.noisy_text
+        father = "JOSE ALBERTO DE ALMEIDA LOPA DA SILVA DE OLIVEIRA"
+        field_text.return_value = self.field_text.replace("JOSE ALBERTO DE ALMEIDA LOPA", father)
+        data = extract_cnh_data(b"%PDF-1.4 test")
+        self.assertEqual(data["father_name"], father)
+        self.assertEqual(data["mother_name"], "MARIA CRISTINA PEREIRA")
+        field_text.return_value = "FILIAÇÃO\nMARIA CRISTINA PEREIRA\n"
+        data = extract_cnh_data(b"%PDF-1.4 test")
+        self.assertEqual(data["father_name"], "")
+        self.assertEqual(data["mother_name"], "")
+
+    @patch("apps.fleet.cnh._cnh_field_text", return_value="")
+    @patch("apps.fleet.cnh._all_text")
+    def test_category_window_does_not_consume_following_personal_fields(self, all_text, field_text):
+        all_text.return_value = "CAT HAB\nNACIONALIDADE\nBRASILEIRO(A)\nFILIAÇÃO\nA DE ALMEIDA\nMARIA PEREIRA\n"
+        data = extract_cnh_data(b"%PDF-1.4 test")
+        self.assertEqual(data["cnh_category"], "")
+
+
+    def test_complementary_ocr_uses_margin_and_skips_square_qr_image(self):
+        import sys
+        import types
+        from unittest.mock import MagicMock
+        from apps.fleet.cnh import _cnh_field_text
+
+        qr = MagicMock()
+        qr.image.convert.return_value.width = 591
+        qr.image.convert.return_value.height = 591
+        embedded = MagicMock()
+        image = embedded.image.convert.return_value
+        image.width, image.height = 963, 680
+        enlarged = image.resize.return_value
+        enlarged.width, enlarged.height = 1926, 1360
+        page = MagicMock()
+        page.images = [qr, embedded]
+        reader = MagicMock()
+        reader.pages = [page]
+        pdf_module = types.ModuleType("pypdf")
+        pdf_module.PdfReader = MagicMock(return_value=reader)
+        ocr_module = types.ModuleType("pytesseract")
+        ocr_module.Output = types.SimpleNamespace(DICT="dict")
+        ocr_module.image_to_data = MagicMock(return_value={
+            "text": ["DOC"], "left": [944], "top": [690],
+        })
+        ocr_module.image_to_string = MagicMock(return_value=self.field_text)
+        with patch.dict(sys.modules, {"pypdf": pdf_module, "pytesseract": ocr_module}):
+            self.assertEqual(_cnh_field_text(b"pdf"), self.field_text)
+        qr.image.convert.return_value.resize.assert_not_called()
+        enlarged.crop.assert_called_once_with((877, 682, 1926, 1360))
+        ocr_module.image_to_string.assert_called_once()
+
+    def test_complementary_ocr_failure_returns_empty_text(self):
+        import sys
+        import types
+        from unittest.mock import MagicMock
+        from apps.fleet.cnh import _cnh_field_text
+
+        pdf_module = types.ModuleType("pypdf")
+        pdf_module.PdfReader = MagicMock(side_effect=RuntimeError("PDF indisponível"))
+        ocr_module = types.ModuleType("pytesseract")
+        with patch.dict(sys.modules, {"pypdf": pdf_module, "pytesseract": ocr_module}):
+            self.assertEqual(_cnh_field_text(b"pdf"), "")
+
+
 class CNHBrazilianDateFormatTests(SimpleTestCase):
     def test_cnh_date_fields_render_and_accept_brazilian_dates(self):
         form = CNHDriverCreateForm()
