@@ -608,7 +608,7 @@ class BrazilianDateInput(forms.DateInput):
     input_type = "text"
 
     def __init__(self, attrs=None):
-        defaults = {"placeholder": "dd/mm/aaaa", "inputmode": "numeric", "autocomplete": "off"}
+        defaults = {"class": "form-input", "placeholder": "dd/mm/aaaa", "inputmode": "numeric", "autocomplete": "off"}
         defaults.update(attrs or {})
         super().__init__(format="%d/%m/%Y", attrs=defaults)
 
