@@ -245,8 +245,11 @@
         </article>
 
         <article class="panel" style="border-left:4px solid #d97706;">
-            <h3 style="margin-top:0;">Vence nos próximos 30 dias</h3>
-            <strong>{{ crlv_alerts.due_soon|length }}</strong> viatura(s)
+            <h3 style="margin-top:0;">Licenciamento vencido ou a vencer</h3>
+            <div style="display:grid;gap:8px;margin-top:8px;">
+                <div><strong>{{ crlv_alerts.overdue|length }}</strong> viatura(s) com licenciamento vencido</div>
+                <div><strong>{{ crlv_alerts.due_soon|length }}</strong> viatura(s) com prazo nos próximos 30 dias</div>
+            </div>
             {% if crlv_alerts.due_soon %}
             <div class="crlv-pending-list">
                 {% for item in crlv_alerts.due_soon %}
