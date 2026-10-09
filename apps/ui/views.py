@@ -246,7 +246,6 @@ def dashboard(request):
             "contracts_expired": alerts.get("expired_contracts", []),
             "contracts_expiring": alerts.get("expiring_contracts", []),
             "fines_pending": alerts.get("pending_fines", []),
-            "inspections_pending": pending_inspections,
             "cnh_expired": alerts.get("expired_cnh", []),
         },
         "crlv_alerts": crlv_alerts,
