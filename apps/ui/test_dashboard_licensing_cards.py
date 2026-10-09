@@ -56,7 +56,7 @@ class CRLVOperationalCardsTemplateTests(SimpleTestCase):
         self.assertIn("30/09/2026", html)
         self.assertIn("15/10/2026", html)
         self.assertEqual(html.count("class=\"panel crlv-status-card\""), 2)
-        self.assertIn('href="/calendario-licenciamento-rj/"', html)
+        self.assertIn('href="/calendario-licenciamento/"', html)
         self.assertNotIn("Situação dos licenciamentos", html)
         self.assertNotIn("Vistorias e multas", html)
         self.assertNotIn("Vistorias reprovadas/com ressalvas", html)
@@ -73,3 +73,36 @@ class CRLVOperationalCardsTemplateTests(SimpleTestCase):
         self.assertIn("Finais sem prazo cadastrado: 1 viatura(s)", html)
         self.assertIn("ABC1234", html)
         self.assertIn('href="/calendario-licenciamento-rj/"', html)
+
+
+
+class LicensingCalendarOverviewTemplateTests(SimpleTestCase):
+    def test_read_only_calendar_renders_deadlines_by_plate_final(self):
+        html = render_to_string(
+            "ui/licensing_calendar_overview.html",
+            {
+                "available_years": [2026, 2025],
+                "selected_year": 2026,
+                "calendar_count": 2,
+                "finals": [
+                    {"plate_final": 0, "due_date": date(2026, 9, 30), "notes": ""},
+                    {"plate_final": 1, "due_date": date(2026, 10, 15), "notes": "Prazo oficial"},
+                ] + [
+                    {"plate_final": final, "due_date": None, "notes": ""}
+                    for final in range(2, 10)
+                ],
+                "deadline_groups": [
+                    {"due_date": date(2026, 9, 30), "notes": "", "plate_finals": [0], "plate_finals_label": "0"},
+                    {"due_date": date(2026, 10, 15), "notes": "Prazo oficial", "plate_finals": [1], "plate_finals_label": "1"},
+                ],
+            },
+        )
+        self.assertIn("Calendário anual de licenciamento", html)
+        self.assertIn("2026", html)
+        self.assertIn("30/09/2026", html)
+        self.assertIn("15/10/2026", html)
+        self.assertIn("Final 0", html)
+        self.assertIn("Final 1", html)
+        self.assertIn("Voltar à central da frota", html)
+        self.assertNotIn("Cadastrar prazo de licenciamento", html)
+        self.assertNotIn("Editar grupo", html)
