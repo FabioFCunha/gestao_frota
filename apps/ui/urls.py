@@ -14,6 +14,7 @@ urlpatterns = [
     path("bdts/", views.bdt_list, name="bdt_list"),
     path("veiculos/<uuid:pk>/", vehicle_dossier, name="vehicle_dossier"),
     path("veiculos/<uuid:pk>/crlv/", views.vehicle_crlv, name="vehicle_crlv"),
+    path("calendario-licenciamento/", views.licensing_calendar_overview, name="licensing_calendar_overview"),
     path("calendario-licenciamento-rj/", views.licensing_calendar, name="licensing_calendar"),
     path("contratos/", contract_list, name="contract_list"),
     path("contratos/novo/", views.contract_create, name="contract_create"),
