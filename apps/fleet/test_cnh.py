@@ -70,6 +70,29 @@ class CNHExtractionTests(SimpleTestCase):
         self.assertEqual(data["name"], "")
         self.assertEqual(data["cpf"], "")
 
+    @patch("apps.fleet.cnh._all_text")
+    def test_name_parser_does_not_match_inside_sobrenome(self, all_text):
+        all_text.return_value = """
+        SOBRENOME PEREIRA
+        DATA NASCIMENTO
+        01/02/1985
+        """
+        upload = SimpleUploadedFile("cnh.pdf", b"%PDF-1.4 test", content_type="application/pdf")
+        data = extract_cnh_data(upload)
+        self.assertEqual(data["name"], "")
+
+    @patch("apps.fleet.cnh._all_text")
+    def test_name_parser_stops_at_date_and_following_labels(self, all_text):
+        all_text.return_value = """
+        NOME E SOBRENOME ALBERTO FELIPE PEREIRA LOPA 29/09/2006 DATA LOCAL
+        CPF
+        123.456.789-09
+        """
+        upload = SimpleUploadedFile("cnh.pdf", b"%PDF-1.4 test", content_type="application/pdf")
+        data = extract_cnh_data(upload)
+        self.assertEqual(data["name"], "ALBERTO FELIPE PEREIRA LOPA")
+
+
 class CNHDriverFlowTests(TestCase):
     def setUp(self):
         self.media_root = tempfile.TemporaryDirectory()
