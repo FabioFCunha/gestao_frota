@@ -60,6 +60,9 @@ class CRLVOperationalCardsTemplateTests(SimpleTestCase):
             ]
         )
 
+        self.assertIn("Licenciamento vencido ou a vencer", html)
+        self.assertIn("viatura(s) com licenciamento vencido", html)
+        self.assertIn("viatura(s) com prazo nos próximos 30 dias", html)
         self.assertIn("Situação dos licenciamentos", html)
         self.assertIn("viatura(s) com licenciamento pendente", html)
         self.assertIn("TTO8A04", html)
