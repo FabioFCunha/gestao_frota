@@ -25,13 +25,13 @@ def _all_text(raw):
     # Portanto, texto não vazio não significa que a CNH foi efetivamente lida.
     useful_text = bool(
         len(re.findall(
-            r"\\b(?:NOME|CPF|REGISTRO|VALIDADE|NASCIMENTO|CATEGORIA|CAT\\.?\\s*HAB)\\b",
+            r"\b(?:NOME|CPF|REGISTRO|VALIDADE|NASCIMENTO|CATEGORIA|CAT\.?\s*HAB)\b",
             text,
             re.IGNORECASE,
         )) >= 3
         and re.search(
-            r"\\d{2}[./-]\\d{2}[./-]\\d{4}|"
-            r"\\d{3}\\.?\\d{3}\\.?\\d{3}-?\\d{2}|\\b\\d{9,11}\\b",
+            r"\d{2}[./-]\d{2}[./-]\d{4}|"
+            r"\d{3}\.?\d{3}\.?\d{3}-?\d{2}|\b\d{9,11}\b",
             text,
         )
     )
@@ -53,6 +53,7 @@ def _all_text(raw):
         # A extração nativa ainda pode permitir preenchimento manual, mesmo
         # quando o ambiente não dispõe de OCR/Poppler.
         return text
+
 def _iso_date(value):
     value = _clean(value)
     for fmt in ("%d/%m/%Y", "%d-%m-%Y", "%Y-%m-%d"):
