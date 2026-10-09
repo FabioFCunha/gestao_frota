@@ -605,6 +605,14 @@ class CNHUploadForm(forms.Form):
 
 
 class CNHDriverCreateForm(DriverForm):
+    class Meta(DriverForm.Meta):
+        fields = [
+            "name", "cpf", "birth_date", "cnh_number", "cnh_category",
+            "cnh_expiration", "cnh_issue_date", "cnh_first_issue_date",
+            "identity_document", "issuing_authority", "issuing_state",
+            "nationality", "father_name", "mother_name", "location",
+        ]
+
     document_id = forms.UUIDField(widget=forms.HiddenInput())
     cnh_issue_date = forms.DateField(
         label="Data de emissão da CNH", required=False,
