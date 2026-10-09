@@ -109,6 +109,11 @@ class CNHExtractionTests(SimpleTestCase):
         123.456.789-09 03044729845
         NACIONALIDADE
         BRASILEIRO(A)
+        FILIAÇÃO
+        JOSE ALBERTO DE ALMEIDA LOPA
+        MARIA CRISTINA PEREIRA
+        LOCAL
+        RIO DE JANEIRO RJ
         I<BRA039447298<457<<<<<<<<<<<<
         8701222M3404148BRA<<<<<<<<<<<8
         ALBERTO<<FELIPE<PEREIRA<LOPA<<
@@ -126,6 +131,9 @@ class CNHExtractionTests(SimpleTestCase):
         self.assertEqual(data["issuing_authority"], "COMAER")
         self.assertEqual(data["issuing_state"], "RJ")
         self.assertEqual(data["nationality"], "BRASILEIRO(A)")
+        self.assertEqual(data["father_name"], "JOSE ALBERTO DE ALMEIDA LOPA")
+        self.assertEqual(data["mother_name"], "MARIA CRISTINA PEREIRA")
+        self.assertEqual(data["location"], "RIO DE JANEIRO RJ")
 
 
 class CNHDriverFlowTests(TestCase):
