@@ -143,6 +143,7 @@ class CNHDriverFlowTests(TestCase):
         )
         self.assertEqual(response.status_code, 302)
         driver = Driver.objects.get(name="MARIA DA SILVA")
+        self.assertTrue(driver.sectors.filter(pk=self.sector.pk).exists())
         self.assertEqual(driver.cpf, "123.456.789-09")
         self.assertEqual(driver.birth_date, date(1985, 2, 1))
         self.assertEqual(driver.cnh_number, "12345678901")
