@@ -64,6 +64,16 @@ def _iso_date(value):
     return ""
 
 
+def _br_date(value):
+    normalized = _iso_date(value)
+    if not normalized:
+        return ""
+    try:
+        return datetime.strptime(normalized, "%Y-%m-%d").strftime("%d/%m/%Y")
+    except ValueError:
+        return ""
+
+
 def _date_field(text, labels):
     date_pattern = r"(\d{2}[./-]\d{2}[./-]\d{4}|\d{4}-\d{2}-\d{2})"
     for label in labels:
@@ -251,23 +261,34 @@ def extract_cnh_data(file_obj):
     identity = _clean(identity_match.group(0)) if identity_match else _clean(re.split(r"\s*/\s*", identity)[0])
 
     identity_block = re.search(
-        r"DOC\.?\s*IDENTIDADE\s*/\s*ORG\.?\s*EMISSOR\s*/\s*UF\s*([^\n]+)",
+        r"DOC\.?\s*IDENTIDADE\s*/?\s*ORG\.?\s*EMISSOR\s*/?\s*UF",
         upper,
         re.IGNORECASE,
     )
     if identity_block:
-        identity_parts = _clean(identity_block.group(1)).split()
-        if identity_parts:
-            identity = identity_parts[0]
-            if len(identity_parts) >= 2:
-                # O nome do órgão pode ser composto; usamos o estado final
-                # de duas letras quando o leiaute traz todos os valores na mesma linha.
-                if re.fullmatch(r"[A-Z]{2}", identity_parts[-1]):
-                    issuing_state = identity_parts[-1]
-                    issuing_authority = " ".join(identity_parts[1:-1])
-                else:
-                    issuing_authority = " ".join(identity_parts[1:])
-                    issuing_state = ""
+        identity_tail = upper[identity_block.end():identity_block.end() + 180]
+        identity_tail = re.split(
+            r"\b(?:CPF|DATA\s+NASCIMENTO|FILIA[CÇ][AÃ]O|NACIONALIDADE|VALIDADE|OBSERVA[CÇ][OÕ]ES)\b",
+            identity_tail,
+            maxsplit=1,
+        )[0]
+        identity_match = re.search(r"(?<!\d)\d[\d .-]{4,19}(?!\d)", identity_tail)
+        if identity_match:
+            identity = _clean(identity_match.group(0))
+            identity_remainder = identity_tail[identity_match.end():]
+            identity_remainder = re.sub(
+                r"/?\s*ORG\.?\s*EMISSOR\s*/?\s*UF\s*",
+                " ",
+                identity_remainder,
+                flags=re.IGNORECASE,
+            )
+            tokens = re.findall(r"\b[A-Z]{2,}\b", identity_remainder)
+            if tokens and len(tokens[-1]) == 2:
+                issuing_state = tokens[-1]
+                issuing_authority = " ".join(tokens[:-1]).strip()
+            elif tokens:
+                issuing_authority = " ".join(tokens).strip()
+                issuing_state = ""
             else:
                 issuing_authority = ""
                 issuing_state = ""
@@ -281,22 +302,29 @@ def extract_cnh_data(file_obj):
     nationality = _field_value(
         upper, [r"NACIONALIDADE"], [r"FILIA[CÇ][AÃ]O", r"VALIDADE", r"CAT\.?\s*HAB\.?"], max_len=60
     )
-    filiation_lines = [_clean(line) for line in upper.splitlines()]
     parents = []
-    for index, line in enumerate(filiation_lines):
-        if re.search(r"FILIA[CÇ][AÃ]O", line):
-            for candidate in filiation_lines[index + 1:index + 4]:
-                if not candidate:
-                    continue
-                if re.search(r"\b(PERMISS[AÃ]O|ACC|CAT\.?\s*HAB\.?|VALIDADE|REGISTRO|OBSERVA[CÇ][OÕ]ES)\b", candidate):
-                    break
-                parents.append(candidate)
-            break
-    if not parents:
-        filiation = _field_value(
-            upper, [r"FILIA[CÇ][AÃ]O"], [r"PERMISS[AÃ]O", r"ACC", r"CAT\.?\s*HAB\.?", r"OBSERVA[CÇ][OÕ]ES"], max_len=180
+    filiation_match = re.search(r"FILIA[CÇ][AÃ]O", upper, re.IGNORECASE)
+    if filiation_match:
+        filiation_tail = upper[filiation_match.end():filiation_match.end() + 240]
+        stop = re.search(
+            r"\b(?:PERMISS[AÃ]O|ACC|CAT\.?\s*HAB\.?|VALIDADE|REGISTRO|"
+            r"OBSERVA[CÇ][OÕ]ES|NACIONALIDADE|LOCAL|DATA\s+(?:DA\s+)?EMISS[AÃ]O|I<)\b",
+            filiation_tail,
+            re.IGNORECASE,
         )
-        parents = [part for part in re.split(r"\s{2,}", filiation) if _clean(part)]
+        if stop:
+            filiation_tail = filiation_tail[:stop.start()]
+        parents = [
+            _clean(line)
+            for line in filiation_tail.splitlines()
+            if _clean(line) and not re.fullmatch(r"[-:/ ]+", _clean(line))
+        ]
+        if len(parents) < 2:
+            inline_filiation = _clean(filiation_tail)
+            # OCR occasionally places both names on one line with wide spacing.
+            parts = [part for part in re.split(r"\s{2,}", inline_filiation) if _clean(part)]
+            if len(parts) >= 2:
+                parents = [_clean(parts[0]), _clean(parts[1])]
     father = _clean(parents[0]) if parents else ""
     mother = _clean(parents[1]) if len(parents) > 1 else ""
 
@@ -328,11 +356,15 @@ def extract_cnh_data(file_obj):
         "issuing_authority": issuing_authority or _field_value(upper, [r"ORG\.?\s*EMISSOR", r"ÓRG[ÃA]O\s+EMISSOR"], [r"UF", r"CPF", r"DATA\s+NASCIMENTO"], 50),
         "issuing_state": issuing_state or _field_value(upper, [r"UF"], [r"CPF", r"DATA\s+NASCIMENTO", r"FILIA[CÇ][AÃ]O"], 12),
         "birth_date": birth_date,
+        "birth_date_display": _br_date(birth_date),
         "cnh_number": cnh_number,
         "cnh_category": category,
         "cnh_expiration": expiration_date,
+        "cnh_expiration_display": _br_date(expiration_date),
         "cnh_issue_date": issue_date,
+        "cnh_issue_date_display": _br_date(issue_date),
         "cnh_first_issue_date": first_issue_date,
+        "cnh_first_issue_date_display": _br_date(first_issue_date),
         "nationality": nationality,
         "father_name": father,
         "mother_name": mother,
