@@ -335,6 +335,7 @@ def extract_cnh_data(file_obj):
             r"LOCAL\s+DA\s+EMISS[AÃ]O",
             r"LOCAL\s+DE\s+EXPEDI[CÇ][AÃ]O",
             r"(?m)^\s*LOCAL\s*$",
+            r"(?m)^\s*LOCAL\s+(?!(?:DE\s+NASCIMENTO|E\s+UF))",
         ],
         [r"DATA\s+(?:DA\s+)?EMISS[AÃ]O", r"OBSERVA[CÇ][OÕ]ES", r"I<", r"^\d{6}\d[MF<]"],
         max_len=70,
