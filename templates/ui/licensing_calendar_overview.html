@@ -1,0 +1,112 @@
+{% extends 'ui/base.html' %}
+{% block title %}Calendário anual de licenciamento | Gestão de Frotas{% endblock %}
+{% block heading %}Calendário anual de licenciamento{% endblock %}
+{% block content %}
+<style>
+.liccal-page { display:grid; gap:22px; }
+.liccal-hero { display:flex; justify-content:space-between; align-items:center; gap:18px; flex-wrap:wrap; padding:26px; border-radius:18px; background:linear-gradient(125deg,#10243a,#1e4665); color:#fff; }
+.liccal-eyebrow { display:block; font-size:.75rem; letter-spacing:.13em; font-weight:800; color:#b9d9ed; }
+.liccal-hero h2 { margin:7px 0; font-size:clamp(1.5rem,3vw,2.15rem); color:#fff; }
+.liccal-hero p { margin:0; color:#d9e7f1; max-width:650px; }
+.liccal-year-form { display:flex; align-items:end; gap:10px; flex-wrap:wrap; }
+.liccal-year-form label { display:grid; gap:6px; font-size:.82rem; color:#d9e7f1; font-weight:700; }
+.liccal-year-form select { min-width:120px; padding:10px 12px; border:1px solid #7893a8; border-radius:9px; background:#fff; color:#172b3e; }
+.liccal-section-head { display:flex; align-items:end; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+.liccal-section-head h3 { margin:0; }
+.liccal-muted { color:#64748b; margin:5px 0 0; }
+.liccal-deadlines { display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:14px; margin-top:16px; }
+.liccal-deadline { padding:18px; border:1px solid #dbe4ee; border-radius:14px; background:#fff; box-shadow:0 5px 16px rgba(15,23,42,.045); }
+.liccal-deadline-date { font-size:1.35rem; font-weight:800; letter-spacing:-.035em; color:#183b59; }
+.liccal-deadline-label { margin:3px 0 12px; font-size:.82rem; color:#64748b; }
+.liccal-finals { display:flex; flex-wrap:wrap; gap:7px; }
+.liccal-final { display:inline-flex; align-items:center; justify-content:center; min-width:34px; height:34px; padding:0 9px; border-radius:9px; background:#eaf2f8; color:#174569; font-weight:800; }
+.liccal-final-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(145px,1fr)); gap:10px; margin-top:16px; }
+.liccal-final-card { padding:14px; border:1px solid #e2e8f0; border-radius:12px; background:#fff; }
+.liccal-final-card-top { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+.liccal-final-card .liccal-final { min-width:38px; height:38px; border-radius:11px; }
+.liccal-date-small { margin-top:10px; font-weight:750; color:#243b53; }
+.liccal-no-date { margin-top:10px; color:#94a3b8; font-size:.88rem; }
+.liccal-note { margin-top:9px; color:#64748b; font-size:.82rem; }
+.liccal-empty { padding:24px; text-align:center; border:1px dashed #cbd5e1; border-radius:14px; color:#64748b; background:#f8fafc; }
+@media(max-width:600px) { .liccal-hero { padding:20px; } }
+</style>
+
+<div class="liccal-page">
+  <section class="liccal-hero">
+    <div>
+      <span class="liccal-eyebrow">CONSULTA • DETRAN-RJ</span>
+      <h2>Calendário anual de licenciamento</h2>
+      <p>Consulte os prazos por exercício e final de placa em uma visão simples, organizada e somente para leitura.</p>
+    </div>
+    <form method="get" class="liccal-year-form">
+      <label for="liccal-exercise">Exercício
+        <select id="liccal-exercise" name="exercise" onchange="this.form.submit()">
+          {% for year in available_years %}
+          <option value="{{ year }}" {% if year == selected_year %}selected{% endif %}>{{ year }}</option>
+          {% endfor %}
+          {% if not available_years %}
+          <option value="{{ selected_year }}" selected>{{ selected_year }}</option>
+          {% endif %}
+        </select>
+      </label>
+      <a class="secondary-action" href="{% url 'dashboard' %}" style="color:#fff;border-color:#7893a8;">Voltar à central da frota</a>
+    </form>
+  </section>
+
+  <section class="panel">
+    <div class="liccal-section-head">
+      <div>
+        <h3>Prazos oficiais por data</h3>
+        <p class="liccal-muted">{{ calendar_count }} final(is) de placa com prazo cadastrado no exercício {{ selected_year }}.</p>
+      </div>
+      <span class="fd-board-counter">{{ selected_year }}</span>
+    </div>
+    {% if deadline_groups %}
+    <div class="liccal-deadlines">
+      {% for item in deadline_groups %}
+      <article class="liccal-deadline">
+        <div class="liccal-deadline-date">{{ item.due_date|date:"d/m/Y" }}</div>
+        <div class="liccal-deadline-label">Data-limite do licenciamento</div>
+        <div class="liccal-finals">
+          {% for final in item.plate_finals %}
+          <span class="liccal-final" aria-label="Final {{ final }}">{{ final }}</span>
+          {% endfor %}
+        </div>
+        {% if item.notes %}<div class="liccal-note">{{ item.notes }}</div>{% endif %}
+      </article>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="liccal-empty" style="margin-top:16px;">
+      <strong>Nenhum prazo cadastrado para {{ selected_year }}.</strong>
+      <p style="margin:6px 0 0;">Selecione outro exercício para consultar os prazos disponíveis.</p>
+    </div>
+    {% endif %}
+  </section>
+
+  <section class="panel">
+    <div class="liccal-section-head">
+      <div>
+        <h3>Consulta por final de placa</h3>
+        <p class="liccal-muted">Localize rapidamente a data correspondente ao último número da placa.</p>
+      </div>
+    </div>
+    <div class="liccal-final-grid">
+      {% for item in finals %}
+      <article class="liccal-final-card">
+        <div class="liccal-final-card-top">
+          <strong>Final {{ item.plate_final }}</strong>
+          <span class="liccal-final">{{ item.plate_final }}</span>
+        </div>
+        {% if item.due_date %}
+        <div class="liccal-date-small">{{ item.due_date|date:"d/m/Y" }}</div>
+        {% else %}
+        <div class="liccal-no-date">Prazo não cadastrado</div>
+        {% endif %}
+        {% if item.notes %}<div class="liccal-note">{{ item.notes }}</div>{% endif %}
+      </article>
+      {% endfor %}
+    </div>
+  </section>
+</div>
+{% endblock %}
