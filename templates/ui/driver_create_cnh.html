@@ -1,0 +1,128 @@
+{% extends 'ui/base.html' %}
+{% block title %}Cadastrar motorista pela CNH | Gestão de Frotas{% endblock %}
+{% block heading %}Cadastrar motorista pela CNH{% endblock %}
+{% block content %}
+<style>
+.cnh-shell { max-width:1100px; margin:0 auto; }
+.cnh-hero { padding:26px; border-radius:16px; color:#fff; background:linear-gradient(125deg,#0f2747,#1d4e89); margin-bottom:22px; }
+.cnh-hero h2 { margin:0 0 8px; font-size:1.45rem; }
+.cnh-hero p { margin:0; opacity:.9; line-height:1.6; }
+.cnh-step { display:flex; align-items:flex-start; gap:12px; margin:16px 0; }
+.cnh-step-number { display:flex; flex:0 0 34px; width:34px; height:34px; border-radius:50%; align-items:center; justify-content:center; background:#e7eef8; color:#173b66; font-weight:800; }
+.cnh-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; }
+.cnh-fields > div { min-width:0; }
+.cnh-fields label { display:block; font-weight:650; margin-bottom:6px; }
+.cnh-fields input, .cnh-fields select, .cnh-fields textarea { width:100%; }
+.cnh-field-wide { grid-column:1/-1; }
+.cnh-data-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin-top:16px; }
+.cnh-data { border:1px solid #e2e8f0; border-radius:10px; padding:12px; min-width:0; }
+.cnh-data small { display:block; color:#64748b; margin-bottom:4px; }
+.cnh-data strong { overflow-wrap:anywhere; }
+@media(max-width:760px) { .cnh-fields,.cnh-data-grid { grid-template-columns:1fr; } .cnh-field-wide { grid-column:auto; } .cnh-hero { padding:20px; } }
+</style>
+
+<div class="cnh-shell">
+    <section class="welcome" style="margin-bottom:18px;">
+        <div><strong>Motoristas</strong><div style="color:#64748b;margin-top:4px;">Cadastro assistido com leitura do documento</div></div>
+        <a class="secondary-action" href="{{ back_url_url }}">← Voltar para motoristas</a>
+    </section>
+
+    <section class="cnh-hero">
+        <div style="font-size:.75rem;letter-spacing:.12em;font-weight:800;opacity:.85;margin-bottom:8px;">CADASTRO DOCUMENTAL</div>
+        <h2>Leia a CNH e revise os dados antes de salvar</h2>
+        <p>Envie o PDF da Carteira Nacional de Habilitação. O sistema tentará extrair os dados automaticamente; nada será cadastrado até você revisar e confirmar.</p>
+    </section>
+
+    {% if messages %}
+        {% for message in messages %}
+        <div role="status" style="padding:12px 14px;border-radius:9px;margin-bottom:14px;background:#eff6ff;color:#1e3a8a;">{{ message }}</div>
+        {% endfor %}
+    {% endif %}
+
+    {% if confirm_form %}
+    <section class="panel" style="padding:24px;margin-bottom:22px;">
+        <div class="cnh-step">
+            <span class="cnh-step-number">1</span>
+            <div><strong>Documento lido</strong><div style="color:#64748b;margin-top:3px;">{{ document.title|default:"CNH enviada" }} — confira os dados extraídos abaixo e corrija os campos necessários.</div></div>
+        </div>
+
+        {% if preview and preview.text_extraction_succeeded %}
+        <div style="padding:12px 14px;border:1px solid #bbf7d0;border-radius:9px;background:#f0fdf4;color:#166534;">
+            Texto do PDF extraído. Confira especialmente nome, CPF, registro, categoria e validade.
+        </div>
+        {% else %}
+        <div role="alert" style="padding:12px 14px;border:1px solid #fed7aa;border-radius:9px;background:#fff7ed;color:#9a3412;">
+            Não foi possível reconhecer o texto automaticamente. O documento foi anexado; preencha os campos manualmente após conferi-lo.
+        </div>
+        {% endif %}
+
+        {% if preview %}
+        <div class="cnh-data-grid">
+            <div class="cnh-data"><small>Nome identificado</small><strong>{{ preview.name|default:"Não identificado" }}</strong></div>
+            <div class="cnh-data"><small>CPF identificado</small><strong>{{ preview.cpf|default:"Não identificado" }}</strong></div>
+            <div class="cnh-data"><small>Nº de registro identificado</small><strong>{{ preview.cnh_number|default:"Não identificado" }}</strong></div>
+            <div class="cnh-data"><small>Categoria identificada</small><strong>{{ preview.cnh_category|default:"Não identificada" }}</strong></div>
+            <div class="cnh-data"><small>Validade identificada</small><strong>{{ preview.cnh_expiration|default:"Não identificada" }}</strong></div>
+            <div class="cnh-data"><small>Data de nascimento</small><strong>{{ preview.birth_date|default:"Não identificada" }}</strong></div>
+        </div>
+        {% endif %}
+
+        <div class="cnh-step" style="margin-top:26px;">
+            <span class="cnh-step-number">2</span>
+            <div><strong>Conferência e cadastro</strong><div style="color:#64748b;margin-top:3px;">Os campos abaixo são editáveis. Dados complementares lidos do documento também serão guardados no histórico da CNH.</div></div>
+        </div>
+
+        <form method="post" action="" style="margin-top:18px;">
+            {% csrf_token %}
+            <input type="hidden" name="step" value="confirm">
+            {{ confirm_form.document_id }}
+            {% if confirm_form.non_field_errors %}
+            <div role="alert" style="padding:12px;margin-bottom:16px;border-radius:8px;background:#fef2f2;color:#b91c1c;">{{ confirm_form.non_field_errors }}</div>
+            {% endif %}
+            <div class="cnh-fields">
+                {% for field in confirm_form.visible_fields %}
+                <div class="{% if field.name == 'sectors' or field.name == 'renewal_date' %}cnh-field-wide{% endif %}">
+                    <label for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %} <span style="color:#dc2626">*</span>{% endif %}</label>
+                    {{ field }}
+                    {% if field.help_text %}<small style="display:block;color:#64748b;margin-top:5px;">{{ field.help_text }}</small>{% endif %}
+                    {% for error in field.errors %}<small style="display:block;color:#b91c1c;margin-top:5px;">{{ error }}</small>{% endfor %}
+                </div>
+                {% endfor %}
+            </div>
+            <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:26px;">
+                <a class="secondary-action" href="{{ back_url_url }}">Cancelar</a>
+                <button type="submit" class="primary-action">Confirmar e cadastrar motorista</button>
+            </div>
+        </form>
+    </section>
+    {% else %}
+    <section class="panel" style="padding:24px;margin-bottom:22px;">
+        <div class="cnh-step">
+            <span class="cnh-step-number">1</span>
+            <div><strong>Envie o PDF da CNH</strong><div style="color:#64748b;margin-top:3px;">Prefira o PDF digital original. PDFs digitalizados também serão tentados por OCR quando disponível.</div></div>
+        </div>
+        <form method="post" enctype="multipart/form-data" action="">
+            {% csrf_token %}
+            <input type="hidden" name="step" value="upload">
+            {% if requested_sector %}<input type="hidden" name="sector" value="{{ requested_sector }}">{% endif %}
+            <div style="border:1px dashed #94a3b8;background:#f8fafc;border-radius:12px;padding:24px;text-align:center;">
+                <div style="font-size:2rem;margin-bottom:8px;">📄</div>
+                <label for="{{ upload_form.file.id_for_label }}" style="display:block;font-weight:750;margin-bottom:10px;">Arquivo PDF da CNH</label>
+                {{ upload_form.file }}
+                {% for error in upload_form.file.errors %}<div role="alert" style="color:#b91c1c;margin-top:8px;">{{ error }}</div>{% endfor %}
+                <p style="color:#64748b;margin:10px 0 0;">O arquivo original será anexado ao prontuário documental do motorista após a confirmação.</p>
+            </div>
+            <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:22px;">
+                <a class="secondary-action" href="{{ back_url_url }}">Voltar</a>
+                <button type="submit" class="primary-action">Ler PDF e continuar</button>
+            </div>
+        </form>
+    </section>
+    {% endif %}
+
+    <div style="text-align:center;margin:18px 0 8px;color:#64748b;">
+        <a href="{% url 'driver_create' %}?manual=1{% if requested_sector %}&amp;sector={{ requested_sector|urlencode }}{% endif %}">Prefiro cadastrar manualmente</a>
+    </div>
+    <p style="font-size:.82rem;color:#64748b;line-height:1.5;">A extração automática pode cometer erros. A conferência humana é obrigatória antes de concluir o cadastro. O PDF e os dados extraídos ficam vinculados ao registro documental.</p>
+</div>
+{% endblock %}
