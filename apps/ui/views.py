@@ -1556,9 +1556,11 @@ def driver_create(request):
                 def json_value(value):
                     if hasattr(value, "isoformat") and not isinstance(value, str):
                         return value.isoformat()
+                    if hasattr(value, "values_list") and hasattr(value, "model"):
+                        return [str(pk) for pk in value.values_list("pk", flat=True)]
                     if hasattr(value, "pk"):
                         return str(value.pk)
-                    if isinstance(value, (list, tuple)):
+                    if isinstance(value, (list, tuple, set)):
                         return [json_value(item) for item in value]
                     return value
 
