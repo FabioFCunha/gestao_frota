@@ -305,18 +305,27 @@ def extract_cnh_data(file_obj):
         [r"1[ªº°A]\\s*HABILITA[CÇ][AÃ]O", r"PRIMEIRA\\s+HABILITA[CÇ][AÃ]O"],
     )
 
+    mrz_birth_date, mrz_expiration = _mrz_dates(upper)
+    birth_date = _date_field(upper, [r"DATA\s+NASCIMENTO", r"NASCIMENTO"]) or mrz_birth_date
+    expiration_date = mrz_expiration or _date_field(upper, [r"VALIDADE"])
+    issue_date = _date_field(upper, [r"DATA\s+(?:DA\s+)?EMISS[AÃ]O", r"EMISS[AÃ]O"])
+    first_issue_date = _date_field(
+        upper,
+        [r"1[ªº°A]\s*HABILITA[CÇ][AÃ]O", r"PRIMEIRA\s+HABILITA[CÇ][AÃ]O"],
+    )
+
     data = {
         "name": name,
         "cpf": _cpf(upper),
         "identity_document": identity,
         "issuing_authority": issuing_authority or _field_value(upper, [r"ORG\.?\s*EMISSOR", r"ÓRG[ÃA]O\s+EMISSOR"], [r"UF", r"CPF", r"DATA\s+NASCIMENTO"], 50),
         "issuing_state": issuing_state or _field_value(upper, [r"UF"], [r"CPF", r"DATA\s+NASCIMENTO", r"FILIA[CÇ][AÃ]O"], 12),
-        "birth_date": _date_field(upper, [r"DATA\s+NASCIMENTO", r"NASCIMENTO"]),
+        "birth_date": birth_date,
         "cnh_number": cnh_number,
         "cnh_category": category,
         "cnh_expiration": expiration_date,
-        "cnh_issue_date": _date_field(upper, [r"DATA\s+(?:DA\s+)?EMISS[AÃ]O", r"EMISS[AÃ]O"]),
-        "cnh_first_issue_date": _date_field(upper, [r"1[ªA]\s*HABILITA[CÇ][AÃ]O", r"PRIMEIRA\s+HABILITA[CÇ][AÃ]O"]),
+        "cnh_issue_date": issue_date,
+        "cnh_first_issue_date": first_issue_date,
         "nationality": nationality,
         "father_name": father,
         "mother_name": mother,
