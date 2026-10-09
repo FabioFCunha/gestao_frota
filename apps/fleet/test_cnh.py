@@ -122,6 +122,10 @@ class CNHExtractionTests(SimpleTestCase):
         self.assertEqual(data["cnh_issue_date"], "2024-04-16")
         self.assertEqual(data["cnh_expiration"], "2034-04-14")
         self.assertEqual(data["cnh_first_issue_date"], "2006-09-29")
+        self.assertEqual(data["identity_document"], "021012056533")
+        self.assertEqual(data["issuing_authority"], "COMAER")
+        self.assertEqual(data["issuing_state"], "RJ")
+        self.assertEqual(data["nationality"], "BRASILEIRO(A)")
 
 
 class CNHDriverFlowTests(TestCase):
