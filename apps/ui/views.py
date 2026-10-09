@@ -30,6 +30,7 @@ def dashboard(request):
     from datetime import timedelta
     from apps.fleet.models import Vehicle, VehiclePlate, Maintenance, VehicleFine
     from apps.fleet.services import get_dashboard_metrics, get_operational_alerts, get_crlv_alerts
+    from apps.fleet.crlv import normalize_plate
     from apps.fleet.sector_scope import apply_sector_scope
 
     requested_sector = request.GET.get("sector")
@@ -38,6 +39,8 @@ def dashboard(request):
 
     metrics = get_dashboard_metrics({"vehicle__in": scoped_vehicle_ids})
     alerts = get_operational_alerts({"vehicle__in": scoped_vehicle_ids})
+    crlv_alerts = get_crlv_alerts(scoped_vehicles)
+    crlv_overdue_plates = {normalize_plate(item["plate"]) for item in crlv_alerts["overdue"]}
 
     today = timezone.now().date()
     fine_warning_date = today + timedelta(days=30)
@@ -102,11 +105,12 @@ def dashboard(request):
     # --- Priority ordering weights ---
     PRIORITY_ORDER = {
         "revisao-vencida": 0,
-        "manutencao": 1,
-        "multa": 2,
-        "contrato": 3,
-        "revisao-proxima": 4,
-        "normal": 5,
+        "crlv-vencido": 1,
+        "manutencao": 2,
+        "multa": 3,
+        "contrato": 4,
+        "revisao-proxima": 5,
+        "normal": 6,
     }
 
     plate_rows = []
@@ -124,6 +128,8 @@ def dashboard(request):
 
         attention = []
 
+        if normalize_plate(current_plate) in crlv_overdue_plates:
+            attention.append("crlv_vencido")
         if vehicle.id in revision_vencida_ids:
             attention.append("revisao_vencida")
         if vehicle.id in revision_proxima_ids:
@@ -138,7 +144,10 @@ def dashboard(request):
             attention.append("contrato")
 
         # Determine dominant priority for card styling
-        if "revisao_vencida" in attention:
+        if "crlv_vencido" in attention:
+            priority = "crlv-vencido"
+            priority_label = "CRLV vencido"
+        elif "revisao_vencida" in attention:
             priority = "revisao-vencida"
             priority_label = "Revisão vencida"
         elif "manutencao" in attention:
@@ -192,6 +201,7 @@ def dashboard(request):
 
     # --- Build counts for the indicator strip ---
     plate_alert_counts = {
+        "crlv_vencido": sum(1 for r in plate_rows if "crlv_vencido" in r["alerts"]),
         "revisao_vencida": sum(1 for r in plate_rows if "revisao_vencida" in r["alerts"]),
         "revisao_proxima": sum(1 for r in plate_rows if "revisao_proxima" in r["alerts"]),
         "manutencao": sum(1 for r in plate_rows if "manutencao" in r["alerts"]),
@@ -212,7 +222,7 @@ def dashboard(request):
             "fines_pending": alerts.get("pending_fines", []),
             "cnh_expired": alerts.get("expired_cnh", []),
         },
-        "crlv_alerts": get_crlv_alerts(scoped_vehicles),
+        "crlv_alerts": crlv_alerts,
     }
     return render(request, "ui/dashboard.html", context)
 

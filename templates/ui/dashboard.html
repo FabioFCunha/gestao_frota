@@ -70,6 +70,13 @@
         <span>Todos</span>
         <b>{{ plate_rows|length }}</b>
     </button>
+    {% if plate_alert_counts.crlv_vencido %}
+    <button class="fd-chip" type="button" data-filter="crlv_vencido">
+        <i class="fd-dot fd-dot--red"></i>
+        <span>CRLV vencido</span>
+        <b>{{ plate_alert_counts.crlv_vencido }}</b>
+    </button>
+    {% endif %}
     {% if plate_alert_counts.revisao_vencida %}
     <button class="fd-chip" type="button" data-filter="revisao_vencida">
         <i class="fd-dot fd-dot--red"></i>
@@ -300,6 +307,12 @@
             </div>
 
             <div class="vc-details">
+                {% if "crlv_vencido" in v.alerts %}
+                <div class="vc-detail-item" title="Licenciamento anual vencido">
+                    <span class="vc-detail-icon">🚨</span>
+                    <strong style="color:#dc2626;">CRLV VENCIDO — regularização necessária</strong>
+                </div>
+                {% endif %}
                 <div class="vc-detail-item" title="Quilometragem Atual">
                     <span class="vc-detail-icon">⏱</span>
                     <span>{% if v.mileage is not None %}{{ v.mileage }} km{% else %}Sem quilometragem registrada{% endif %}</span>
