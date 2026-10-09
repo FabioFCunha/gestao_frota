@@ -7,7 +7,7 @@ from django.template.loader import render_to_string
 
 
 class CRLVOperationalCardsTemplateTests(SimpleTestCase):
-    def render_dashboard(self, *, calendar_missing=None):
+    def render_dashboard(self, *, calendar_missing=None, pending=None):
         request = RequestFactory().get("/")
         request.user = AnonymousUser()
         return render_to_string(
@@ -28,49 +28,51 @@ class CRLVOperationalCardsTemplateTests(SimpleTestCase):
                 "dashboard_alerts": {
                     "contracts_expired": [],
                     "contracts_expiring": [],
-                    "fines_pending": [
-                        {
-                            "id": 1,
-                            "vehicle__plate_history__plate": "TTO8A04",
-                            "driver__name": "Motorista de teste",
-                            "status__name": "Pendente",
-                            "date": date(2026, 10, 1),
-                        }
-                    ],
-                    "inspections_pending": [
-                        {
-                            "id": 2,
-                            "vehicle_id": uuid4(),
-                            "plate": "RJD1234",
-                            "status": "Reprovada",
-                            "date": date(2026, 10, 2),
-                        }
-                    ],
+                    "fines_pending": [],
                     "cnh_expired": [],
+                },
+                "licensing_summary": {
+                    "pending": pending or [],
+                    "pending_count": len(pending or []),
+                    "calendar_missing_count": len(calendar_missing or []),
                 },
                 "crlv_alerts": {
                     "overdue": [],
                     "due_soon": [],
+                    "pending_in_time": [],
                     "calendar_missing": calendar_missing or [],
                 },
             },
             request=request,
         )
 
-    def test_renders_inspection_and_fine_pending_actions(self):
-        html = self.render_dashboard()
+    def test_renders_licensing_pending_card_from_licensing_data(self):
+        html = self.render_dashboard(
+            pending=[
+                {
+                    "vehicle_id": str(uuid4()),
+                    "plate": "TTO8A04",
+                    "exercise": 2026,
+                    "due_date": date(2026, 10, 1),
+                    "dossier_url": "/veiculos/00000000-0000-0000-0000-000000000001/",
+                    "status_label": "Vencido",
+                }
+            ]
+        )
 
-        self.assertIn("Vistorias e multas", html)
-        self.assertIn("Vistorias reprovadas/com ressalvas", html)
-        self.assertIn("RJD1234", html)
+        self.assertIn("Situação dos licenciamentos", html)
+        self.assertIn("viatura(s) com licenciamento pendente", html)
         self.assertIn("TTO8A04", html)
-        self.assertIn('href="/vistorias/"', html)
-        self.assertIn('href="/multas/"', html)
+        self.assertIn("Vencido", html)
+        self.assertIn('href="/calendario-licenciamento-rj/"', html)
+        self.assertNotIn("Vistorias e multas", html)
+        self.assertNotIn("Vistorias reprovadas/com ressalvas", html)
 
     def test_calendar_missing_details_are_kept_when_needed(self):
         html = self.render_dashboard(
             calendar_missing=[
                 {
+                    "vehicle_id": str(uuid4()),
                     "plate": "ABC1234",
                     "exercise": 2026,
                     "dossier_url": "/veiculos/00000000-0000-0000-0000-000000000001/",

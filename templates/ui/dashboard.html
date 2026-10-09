@@ -260,44 +260,31 @@
         </article>
 
         <article class="panel" style="border-left:4px solid #7c3aed;">
-            <h3 style="margin-top:0;">Vistorias e multas</h3>
-            <p style="margin:0 0 12px;color:#64748b;font-size:.9rem;">Pontos de atenção: confira se estas pendências afetam a regularização de cada viatura.</p>
-            <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;">
-                <div><strong>{{ dashboard_alerts.inspections_pending|length }}</strong><br><span style="font-size:.85rem;">Vistorias reprovadas/com ressalvas</span></div>
-                <div><strong>{{ dashboard_alerts.fines_pending|length }}</strong><br><span style="font-size:.85rem;">Multas pendentes/em análise/recurso</span></div>
+            <h3 style="margin-top:0;">Situação dos licenciamentos</h3>
+            <p style="margin:0 0 12px;color:#64748b;font-size:.9rem;">Cruzamento do exercício do CRLV confirmado com os prazos do calendário anual de licenciamento.</p>
+            <div style="display:grid;gap:8px;">
+                <div><strong>{{ licensing_summary.pending_count }}</strong> viatura(s) com licenciamento pendente</div>
+                <div><strong>{{ licensing_summary.calendar_missing_count }}</strong> viatura(s) sem prazo cadastrado para o exercício atual</div>
             </div>
 
-            {% if dashboard_alerts.inspections_pending %}
+            {% if licensing_summary.pending %}
             <div class="crlv-pending-list">
-                <strong>Vistorias</strong>
-                {% for item in dashboard_alerts.inspections_pending|slice:":4" %}
+                {% for item in licensing_summary.pending|slice:":5" %}
                 <div>
-                    <a href="{% url 'vehicle_dossier' item.vehicle_id %}"><strong>{{ item.plate }}</strong></a>
-                    — {{ item.status }} — {{ item.date|date:"d/m/Y" }}
+                    <a href="{{ item.dossier_url }}"><strong>{{ item.plate }}</strong></a>
+                    — exercício {{ item.exercise }} — {{ item.status_label }}
+                    {% if item.due_date %}; prazo {{ item.due_date|date:"d/m/Y" }}{% endif %}
                 </div>
                 {% endfor %}
             </div>
             {% endif %}
 
-            {% if dashboard_alerts.fines_pending %}
-            <div class="crlv-pending-list">
-                <strong>Multas</strong>
-                {% for item in dashboard_alerts.fines_pending|slice:":4" %}
-                <div>
-                    <a href="{% url 'fine_list' %}"><strong>{{ item.vehicle__plate_history__plate|default:"Sem placa" }}</strong></a>
-                    — {{ item.status__name }} — {{ item.date|date:"d/m/Y" }}
-                </div>
-                {% endfor %}
-            </div>
-            {% endif %}
-
-            {% if dashboard_alerts.inspections_pending or dashboard_alerts.fines_pending %}
+            {% if licensing_summary.pending or licensing_summary.calendar_missing_count %}
             <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
-                <a class="secondary-action" href="{% url 'inspection_list' %}">Ver vistorias</a>
-                <a class="secondary-action" href="{% url 'fine_list' %}">Ver multas</a>
+                <a class="secondary-action" href="{% url 'licensing_calendar' %}">Consultar calendário de licenciamento</a>
             </div>
             {% else %}
-            <p class="empty" style="margin-top:12px;">Nenhuma pendência de vistoria ou multa identificada no escopo atual.</p>
+            <p class="empty" style="margin-top:12px;">Nenhuma pendência de licenciamento identificada no escopo atual.</p>
             {% endif %}
         </article>
     </div>
