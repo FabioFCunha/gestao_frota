@@ -9,11 +9,15 @@
 #dashboard-informe-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:1100; align-items:center; justify-content:center; padding:20px; }
 #dashboard-informe-modal .panel { width:min(680px,96vw); max-height:90vh; overflow:auto; }
 .dashboard-informe-actions { margin-top:22px; display:flex; gap:10px; justify-content:flex-end; flex-wrap:wrap; }
-.crlv-overview-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; }
-.crlv-pending-list { margin-top:10px; max-height:180px; overflow:auto; }
-.crlv-pending-list > div { padding:7px 0; border-bottom:1px solid #eee; }
-@media (max-width: 900px) { .crlv-overview-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
-@media (max-width: 620px) { .crlv-overview-grid { grid-template-columns:minmax(0,1fr); } }
+.crlv-overview-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; }
+.crlv-status-card { display:flex; flex-direction:column; min-width:0; padding:20px; }
+.crlv-status-card h3 { margin:0 0 8px; font-size:1.05rem; }
+.crlv-status-count { display:block; margin-bottom:4px; font-size:1.35rem; font-weight:750; letter-spacing:-.03em; }
+.crlv-status-card .crlv-pending-list { margin-top:12px; max-height:260px; overflow:auto; }
+.crlv-status-card .crlv-pending-list > div { padding:10px 0; border-bottom:1px solid #e5e7eb; line-height:1.5; }
+.crlv-status-actions { display:flex; gap:10px; flex-wrap:wrap; margin-top:auto; padding-top:16px; }
+.crlv-status-actions > a, .crlv-status-actions > button { justify-content:center; text-align:center; }
+@media (max-width: 760px) { .crlv-overview-grid { grid-template-columns:minmax(0,1fr); } }
 </style>
 
 <div id="dashboard-informe-modal">
@@ -82,42 +86,6 @@
         <b>{{ plate_alert_counts.crlv_vencido }}</b>
     </button>
     {% endif %}
-    {% if plate_alert_counts.revisao_vencida %}
-    <button class="fd-chip" type="button" data-filter="revisao_vencida">
-        <i class="fd-dot fd-dot--red"></i>
-        <span>Revisão vencida</span>
-        <b>{{ plate_alert_counts.revisao_vencida }}</b>
-    </button>
-    {% endif %}
-    {% if plate_alert_counts.revisao_proxima %}
-    <button class="fd-chip" type="button" data-filter="revisao_proxima">
-        <i class="fd-dot fd-dot--orange"></i>
-        <span>Revisão próxima</span>
-        <b>{{ plate_alert_counts.revisao_proxima }}</b>
-    </button>
-    {% endif %}
-    {% if plate_alert_counts.manutencao %}
-    <button class="fd-chip" type="button" data-filter="manutencao">
-        <i class="fd-dot fd-dot--purple"></i>
-        <span>Manutenção</span>
-        <b>{{ plate_alert_counts.manutencao }}</b>
-    </button>
-    {% endif %}
-    {% if plate_alert_counts.multa %}
-    <button class="fd-chip" type="button" data-filter="multa">
-        <i class="fd-dot fd-dot--yellow"></i>
-        <span>Multas</span>
-        <b>{{ plate_alert_counts.multa }}</b>
-    </button>
-    {% endif %}
-    {% if plate_alert_counts.contrato %}
-    <button class="fd-chip" type="button" data-filter="contrato">
-        <i class="fd-dot fd-dot--blue"></i>
-        <span>Contrato</span>
-        <b>{{ plate_alert_counts.contrato }}</b>
-    </button>
-    {% endif %}
-
     <div class="fd-search-wrap">
         <span class="fd-search-icon">⌕</span>
         <input class="fd-search" type="text" id="plateSearch" placeholder="Buscar por placa..." autocomplete="off">
@@ -219,81 +187,59 @@
     </div>
 </section>
 
-<section class="panel" style="margin:24px 0;">
-    <div class="fd-board-head">
+<section class="panel" style="margin:24px 0;padding:22px;">
+    <div class="fd-board-head" style="align-items:center;gap:16px;flex-wrap:wrap;">
         <div>
             <span class="fd-board-title">Licenciamento anual (CRLV)</span>
-            <div style="margin-top:4px;color:#6b7280;">Alertas calculados pelas datas do calendário oficial do DETRAN-RJ e pelo exercício do CRLV confirmado no prontuário.</div>
+            <div style="margin-top:5px;color:#6b7280;">Alertas calculados pelas datas do calendário oficial do DETRAN-RJ e pelo exercício do CRLV confirmado no prontuário.</div>
         </div>
         <a class="primary-action" href="{% url 'licensing_calendar' %}">Gerenciar calendário</a>
     </div>
 
-    <div class="crlv-overview-grid" style="margin-top:12px;">
-        <article class="panel" style="border-left:4px solid #dc2626;">
-            <h3 style="margin-top:0;">Licenciamento vencido</h3>
-            <strong>{{ crlv_alerts.overdue|length }}</strong> viatura(s)
+    <div class="crlv-overview-grid" style="margin-top:18px;">
+        <article class="panel crlv-status-card" style="border-top:3px solid #dc2626;">
+            <h3>Licenciamento vencido</h3>
+            <strong class="crlv-status-count">{{ crlv_alerts.overdue|length }} viatura(s)</strong>
             {% if crlv_alerts.overdue %}
             <div class="crlv-pending-list">
                 {% for item in crlv_alerts.overdue %}
                 <div>
                     <a href="{{ item.dossier_url }}"><strong>{{ item.plate }}</strong></a>
-                    — exercício {{ item.exercise }}; venceu em {% if item.due_date %}{{ item.due_date|date:"d/m/Y" }}{% else %}data não cadastrada{% endif %}
+                    — exercício {{ item.exercise }}; vencido em {% if item.due_date %}{{ item.due_date|date:"d/m/Y" }}{% else %}data não cadastrada{% endif %}
                 </div>
                 {% endfor %}
             </div>
-            {% else %}<p class="empty">Nenhuma viatura com licenciamento vencido.</p>{% endif %}
+            {% else %}
+            <p class="empty">Nenhuma viatura com licenciamento vencido.</p>
+            {% endif %}
+            <div class="crlv-status-actions">
+                <button type="button" class="secondary-action" data-filter="crlv_vencido">Ver todas as {{ crlv_alerts.overdue|length }} viaturas vencidas</button>
+            </div>
         </article>
 
-        <article class="panel" style="border-left:4px solid #d97706;">
-            <h3 style="margin-top:0;">Licenciamento vencido ou a vencer</h3>
-            <div style="display:grid;gap:8px;margin-top:8px;">
-                <div><strong>{{ crlv_alerts.overdue|length }}</strong> viatura(s) com licenciamento vencido</div>
-                <div><strong>{{ crlv_alerts.due_soon|length }}</strong> viatura(s) com prazo nos próximos 30 dias</div>
-            </div>
+        <article class="panel crlv-status-card" style="border-top:3px solid #d97706;">
+            <h3>Vence nos próximos 30 dias</h3>
+            <strong class="crlv-status-count">{{ crlv_alerts.due_soon|length }} viatura(s)</strong>
             {% if crlv_alerts.due_soon %}
             <div class="crlv-pending-list">
                 {% for item in crlv_alerts.due_soon %}
                 <div>
                     <a href="{{ item.dossier_url }}"><strong>{{ item.plate }}</strong></a>
-                    — exercício {{ item.exercise }}; prazo {{ item.due_date|date:"d/m/Y" }}
+                    — exercício {{ item.exercise }}; vence em {{ item.due_date|date:"d/m/Y" }}
                 </div>
                 {% endfor %}
-            </div>
-            {% else %}<p class="empty">Nenhum prazo próximo.</p>{% endif %}
-        </article>
-
-        <article class="panel" style="border-left:4px solid #7c3aed;">
-            <h3 style="margin-top:0;">Situação dos licenciamentos</h3>
-            <p style="margin:0 0 12px;color:#64748b;font-size:.9rem;">Cruzamento do exercício do CRLV confirmado com os prazos do calendário anual de licenciamento.</p>
-            <div style="display:grid;gap:8px;">
-                <div><strong>{{ licensing_summary.pending_count }}</strong> viatura(s) com licenciamento pendente</div>
-                <div><strong>{{ licensing_summary.calendar_missing_count }}</strong> viatura(s) sem prazo cadastrado para o exercício atual</div>
-            </div>
-
-            {% if licensing_summary.pending %}
-            <div class="crlv-pending-list">
-                {% for item in licensing_summary.pending|slice:":5" %}
-                <div>
-                    <a href="{{ item.dossier_url }}"><strong>{{ item.plate }}</strong></a>
-                    — exercício {{ item.exercise }} — {{ item.status_label }}
-                    {% if item.due_date %}; prazo {{ item.due_date|date:"d/m/Y" }}{% endif %}
-                </div>
-                {% endfor %}
-            </div>
-            {% endif %}
-
-            {% if licensing_summary.pending or licensing_summary.calendar_missing_count %}
-            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
-                <a class="secondary-action" href="{% url 'licensing_calendar' %}">Consultar calendário de licenciamento</a>
             </div>
             {% else %}
-            <p class="empty" style="margin-top:12px;">Nenhuma pendência de licenciamento identificada no escopo atual.</p>
+            <p class="empty" style="margin:14px 0;">📅 Nenhum prazo próximo.</p>
             {% endif %}
+            <div class="crlv-status-actions">
+                <a class="secondary-action" href="{% url 'licensing_calendar' %}">Abrir calendário anual</a>
+            </div>
         </article>
     </div>
 
     {% if crlv_alerts.calendar_missing %}
-    <details style="margin-top:12px;padding:10px 12px;border:1px solid #e2e8f0;border-radius:8px;">
+    <details style="margin-top:16px;padding:12px 14px;border:1px solid #e2e8f0;border-radius:8px;">
         <summary style="cursor:pointer;font-weight:600;">Finais sem prazo cadastrado: {{ crlv_alerts.calendar_missing|length }} viatura(s)</summary>
         <p style="margin:8px 0;color:#64748b;">Cadastre os prazos oficiais assim que o DETRAN-RJ divulgar o calendário anual.</p>
         <div class="crlv-pending-list">
