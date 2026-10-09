@@ -103,7 +103,7 @@ def extract_cnh_data(file_obj):
     name = _field_value(
         upper,
         [r"NOME\s+E\s+SOBRENOME", r"NOME\s+COMPLETO", r"NOME"],
-        stops[1:],
+        stops,
         max_len=100,
     )
     # O leiaute em texto corrido pode trazer o nome na linha seguinte ao rótulo.
@@ -146,15 +146,58 @@ def extract_cnh_data(file_obj):
         [r"CPF", r"DATA\s+NASCIMENTO", r"FILIA[CÇ][AÃ]O"],
         max_len=70,
     )
-    identity = _clean(re.split(r"\s*/\s*", identity)[0]) if identity else ""
+    identity = re.sub(r"^\s*/?\s*ORG\.?\s*EMISSOR\s*/?\s*UF\s*", "", identity, flags=re.IGNORECASE)
+    identity = re.sub(r"^\s*/\s*", "", identity)
+    identity_match = re.search(r"\b\d[\d .-]{4,19}\b", identity)
+    identity = _clean(identity_match.group(0)) if identity_match else _clean(re.split(r"\s*/\s*", identity)[0])
+
+    identity_block = re.search(
+        r"DOC\.?\s*IDENTIDADE\s*/\s*ORG\.?\s*EMISSOR\s*/\s*UF\s*([^\n]+)",
+        upper,
+        re.IGNORECASE,
+    )
+    if identity_block:
+        identity_parts = _clean(identity_block.group(1)).split()
+        if identity_parts:
+            identity = identity_parts[0]
+            if len(identity_parts) >= 2:
+                # O nome do órgão pode ser composto; usamos o estado final
+                # de duas letras quando o leiaute traz todos os valores na mesma linha.
+                if re.fullmatch(r"[A-Z]{2}", identity_parts[-1]):
+                    issuing_state = identity_parts[-1]
+                    issuing_authority = " ".join(identity_parts[1:-1])
+                else:
+                    issuing_authority = " ".join(identity_parts[1:])
+                    issuing_state = ""
+            else:
+                issuing_authority = ""
+                issuing_state = ""
+        else:
+            issuing_authority = ""
+            issuing_state = ""
+    else:
+        issuing_authority = ""
+        issuing_state = ""
 
     nationality = _field_value(
         upper, [r"NACIONALIDADE"], [r"FILIA[CÇ][AÃ]O", r"VALIDADE", r"CAT\.?\s*HAB\.?"], max_len=60
     )
-    filiation = _field_value(
-        upper, [r"FILIA[CÇ][AÃ]O"], [r"PERMISS[AÃ]O", r"ACC", r"CAT\.?\s*HAB\.?", r"OBSERVA[CÇ][OÕ]ES"], max_len=180
-    )
-    parents = [part for part in re.split(r"\n| {2,}", filiation) if _clean(part)]
+    filiation_lines = [_clean(line) for line in upper.splitlines()]
+    parents = []
+    for index, line in enumerate(filiation_lines):
+        if re.search(r"FILIA[CÇ][AÃ]O", line):
+            for candidate in filiation_lines[index + 1:index + 4]:
+                if not candidate:
+                    continue
+                if re.search(r"\b(PERMISS[AÃ]O|ACC|CAT\.?\s*HAB\.?|VALIDADE|REGISTRO|OBSERVA[CÇ][OÕ]ES)\b", candidate):
+                    break
+                parents.append(candidate)
+            break
+    if not parents:
+        filiation = _field_value(
+            upper, [r"FILIA[CÇ][AÃ]O"], [r"PERMISS[AÃ]O", r"ACC", r"CAT\.?\s*HAB\.?", r"OBSERVA[CÇ][OÕ]ES"], max_len=180
+        )
+        parents = [part for part in re.split(r"\s{2,}", filiation) if _clean(part)]
     father = _clean(parents[0]) if parents else ""
     mother = _clean(parents[1]) if len(parents) > 1 else ""
 
@@ -166,8 +209,8 @@ def extract_cnh_data(file_obj):
         "name": name,
         "cpf": _cpf(upper),
         "identity_document": identity,
-        "issuing_authority": _field_value(upper, [r"ORG\.?\s*EMISSOR", r"ÓRG[ÃA]O\s+EMISSOR"], [r"UF", r"CPF", r"DATA\s+NASCIMENTO"], 50),
-        "issuing_state": _field_value(upper, [r"UF"], [r"CPF", r"DATA\s+NASCIMENTO", r"FILIA[CÇ][AÃ]O"], 12),
+        "issuing_authority": issuing_authority or _field_value(upper, [r"ORG\.?\s*EMISSOR", r"ÓRG[ÃA]O\s+EMISSOR"], [r"UF", r"CPF", r"DATA\s+NASCIMENTO"], 50),
+        "issuing_state": issuing_state or _field_value(upper, [r"UF"], [r"CPF", r"DATA\s+NASCIMENTO", r"FILIA[CÇ][AÃ]O"], 12),
         "birth_date": _date_field(upper, [r"DATA\s+NASCIMENTO", r"NASCIMENTO"]),
         "cnh_number": cnh_number,
         "cnh_category": category,
