@@ -93,6 +93,37 @@ class CNHExtractionTests(SimpleTestCase):
         self.assertEqual(data["name"], "ALBERTO FELIPE PEREIRA LOPA")
 
 
+    @patch("apps.fleet.cnh._all_text")
+    def test_extracts_columnar_ocr_fields_and_mrz_dates(self, all_text):
+        all_text.return_value = """
+        REPUBLICA FEDERATIVA DO BRASIL
+        NOME E SOBRENOME 1º HABILITAÇÃO
+        ALBERTO FELIPE PEREIRA LOPA 29/09/2006
+        DATA, LOCAL E UF DE NASCIMENTO
+        22/01/1987, RIO DE JANEIRO, RJ
+        DATA EMISSAO VALIDADE ACC
+        16/04/2024 14/04/2034
+        DOC IDENTIDADE / ORG EMISSOR UF
+        021012056533 COMAER RJ
+        CPF 5 Nº REGISTRO 9 CAT HAB
+        123.456.789-09 03044729845
+        NACIONALIDADE
+        BRASILEIRO(A)
+        I<BRA039447298<457<<<<<<<<<<<<
+        8701222M3404148BRA<<<<<<<<<<<8
+        ALBERTO<<FELIPE<PEREIRA<LOPA<<
+        """
+        upload = SimpleUploadedFile("cnh.pdf", b"%PDF-1.4 test", content_type="application/pdf")
+        data = extract_cnh_data(upload)
+        self.assertEqual(data["name"], "ALBERTO FELIPE PEREIRA LOPA")
+        self.assertEqual(data["cpf"], "123.456.789-09")
+        self.assertEqual(data["cnh_number"], "03044729845")
+        self.assertEqual(data["birth_date"], "1987-01-22")
+        self.assertEqual(data["cnh_issue_date"], "2024-04-16")
+        self.assertEqual(data["cnh_expiration"], "2034-04-14")
+        self.assertEqual(data["cnh_first_issue_date"], "2006-09-29")
+
+
 class CNHDriverFlowTests(TestCase):
     def setUp(self):
         self.media_root = tempfile.TemporaryDirectory()
@@ -207,4 +238,3 @@ class CNHDriverFlowTests(TestCase):
         driver = Driver.objects.get(name="MOTORISTA MANUAL TESTE")
         self.assertEqual(driver.registration, "MAT-CNH-MANUAL-001")
         self.assertTrue(driver.sectors.filter(pk=self.sector.pk).exists())
-

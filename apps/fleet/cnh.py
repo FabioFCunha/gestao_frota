@@ -65,17 +65,45 @@ def _iso_date(value):
 
 
 def _date_field(text, labels):
+    date_pattern = r"(\d{2}[./-]\d{2}[./-]\d{4}|\d{4}-\d{2}-\d{2})"
     for label in labels:
         match = re.search(
-            label + r"\s*(?:[:\-]|\n)?\s*(\d{2}[./-]\d{2}[./-]\d{4}|\d{4}-\d{2}-\d{2})",
+            label + r"\s*(?:[:\-]|\n)?\s*" + date_pattern,
             text,
             re.IGNORECASE,
         )
         if match:
-            normalized = match.group(1).replace(".", "/")
-            return _iso_date(normalized)
+            return _iso_date(match.group(1).replace(".", "/"))
+
+        # OCR may put the field label and its value in different columns.
+        match = re.search(label, text, re.IGNORECASE)
+        if match:
+            window = text[match.end():match.end() + 100]
+            date_match = re.search(date_pattern, window)
+            if date_match:
+                return _iso_date(date_match.group(1).replace(".", "/"))
     return ""
 
+
+def _mrz_dates(text):
+    """Read birth and expiration dates from the driver's license MRZ line."""
+    for line in text.splitlines():
+        compact = re.sub(r"\s+", "", line.upper())
+        match = re.search(r"(\d{6})\d[MF<](\d{6})\d", compact)
+        if not match:
+            continue
+        birth_raw, expiry_raw = match.groups()
+
+        def parse_mrz_date(value):
+            yy, mm, dd = int(value[:2]), int(value[2:4]), int(value[4:6])
+            year = (1900 if yy > 30 else 2000) + yy
+            try:
+                return datetime(year, mm, dd).date().isoformat()
+            except ValueError:
+                return ""
+
+        return parse_mrz_date(birth_raw), parse_mrz_date(expiry_raw)
+    return "", ""
 
 def _field_value(text, labels, stop_labels, max_len=120):
     for label in labels:
@@ -144,11 +172,11 @@ def _name_field(text):
 
 
 def _cpf(text):
-    match = re.search(
-        r"\bCPF\b\D{0,50}(\d{3}\.?\d{3}\.?\d{3}-?\d{2})\b",
-        text,
-        re.IGNORECASE,
-    )
+    pattern = r"(?<!\d)(\d{3}\.?\d{3}\.?\d{3}-?\d{2})(?!\d)"
+    match = re.search(r"\bCPF\b.{0,100}?" + pattern, text, re.IGNORECASE | re.DOTALL)
+    if not match:
+        # OCR may separate the CPF value from its label with neighboring fields.
+        match = re.search(pattern, text)
     if not match:
         return ""
     digits = re.sub(r"\D", "", match.group(1))
@@ -185,7 +213,11 @@ def extract_cnh_data(file_obj):
     if number_match:
         cnh_number = number_match.group(0)
     else:
-        cnh_number = ""
+        # Fallback for OCR layouts where the registration label is displaced.
+        candidates = re.findall(r"(?<!\d)\d{11}(?!\d)", upper)
+        cpf_digits = re.sub(r"\D", "", _cpf(upper))
+        candidates = [value for value in candidates if value != cpf_digits]
+        cnh_number = candidates[0] if len(candidates) == 1 else ""
 
     category = _field_value(
         upper,
@@ -264,18 +296,27 @@ def extract_cnh_data(file_obj):
         upper, [r"LOCAL"], [r"DATA\s+(?:DA\s+)?EMISS[AÃ]O", r"OBSERVA[CÇ][OÕ]ES"], max_len=70
     )
 
+    mrz_birth_date, mrz_expiration = _mrz_dates(upper)
+    birth_date = _date_field(upper, [r"DATA\s+NASCIMENTO", r"NASCIMENTO"]) or mrz_birth_date
+    expiration_date = mrz_expiration or _date_field(upper, [r"VALIDADE"])
+    issue_date = _date_field(upper, [r"DATA\s+(?:DA\s+)?EMISS[AÃ]O", r"EMISS[AÃ]O"])
+    first_issue_date = _date_field(
+        upper,
+        [r"1[ªº°A]\s*HABILITA[CÇ][AÃ]O", r"PRIMEIRA\s+HABILITA[CÇ][AÃ]O"],
+    )
+
     data = {
         "name": name,
         "cpf": _cpf(upper),
         "identity_document": identity,
         "issuing_authority": issuing_authority or _field_value(upper, [r"ORG\.?\s*EMISSOR", r"ÓRG[ÃA]O\s+EMISSOR"], [r"UF", r"CPF", r"DATA\s+NASCIMENTO"], 50),
         "issuing_state": issuing_state or _field_value(upper, [r"UF"], [r"CPF", r"DATA\s+NASCIMENTO", r"FILIA[CÇ][AÃ]O"], 12),
-        "birth_date": _date_field(upper, [r"DATA\s+NASCIMENTO", r"NASCIMENTO"]),
+        "birth_date": birth_date,
         "cnh_number": cnh_number,
         "cnh_category": category,
-        "cnh_expiration": _date_field(upper, [r"VALIDADE"]),
-        "cnh_issue_date": _date_field(upper, [r"DATA\s+(?:DA\s+)?EMISS[AÃ]O", r"EMISS[AÃ]O"]),
-        "cnh_first_issue_date": _date_field(upper, [r"1[ªA]\s*HABILITA[CÇ][AÃ]O", r"PRIMEIRA\s+HABILITA[CÇ][AÃ]O"]),
+        "cnh_expiration": expiration_date,
+        "cnh_issue_date": issue_date,
+        "cnh_first_issue_date": first_issue_date,
         "nationality": nationality,
         "father_name": father,
         "mother_name": mother,
