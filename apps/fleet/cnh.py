@@ -307,7 +307,7 @@ def extract_cnh_data(file_obj):
     )
     # Quando o OCR mistura o texto da MRZ com os campos, prioriza o valor
     # explícito da CNH em vez de devolver ruído como "NAN UL BA...".
-    nationality_match = re.search(r"\b(BRASILEIR[OA](?:\s*\([A-Z]\))?)\b", upper)
+    nationality_match = re.search(r"\b(BRASILEIR[OA](?:\s*\([A-Z]\))?)(?![A-Z])", upper)
     if nationality_match:
         nationality = nationality_match.group(1).replace(" ", "")
     parents = []
