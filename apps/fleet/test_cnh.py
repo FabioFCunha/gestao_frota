@@ -9,6 +9,7 @@ from django.test import TestCase, SimpleTestCase, override_settings
 
 from apps.fleet.cnh import extract_cnh_data
 from apps.fleet.models import AuditLog, Document, DocumentRelation, Driver, Sector
+from apps.ui.forms import CNHDriverCreateForm
 
 
 class CNHExtractionTests(SimpleTestCase):
@@ -134,6 +135,38 @@ class CNHExtractionTests(SimpleTestCase):
         self.assertEqual(data["father_name"], "JOSE ALBERTO DE ALMEIDA LOPA")
         self.assertEqual(data["mother_name"], "MARIA CRISTINA PEREIRA")
         self.assertEqual(data["location"], "RIO DE JANEIRO RJ")
+
+
+class CNHBrazilianDateFormatTests(SimpleTestCase):
+    def test_cnh_date_fields_render_and_accept_brazilian_dates(self):
+        form = CNHDriverCreateForm()
+        for name, expected in (
+            ("birth_date", "22/01/1987"),
+            ("cnh_expiration", "14/04/2034"),
+            ("cnh_issue_date", "16/04/2024"),
+            ("cnh_first_issue_date", "29/09/2006"),
+        ):
+            field = form.fields[name]
+            self.assertEqual(field.widget.input_type, "text")
+            self.assertEqual(field.widget.attrs.get("placeholder"), "dd/mm/aaaa")
+            self.assertEqual(field.clean(expected).isoformat(), {
+                "birth_date": "1987-01-22",
+                "cnh_expiration": "2034-04-14",
+                "cnh_issue_date": "2024-04-16",
+                "cnh_first_issue_date": "2006-09-29",
+            }[name])
+
+    def test_cnh_date_fields_format_iso_initial_values_for_brazil(self):
+        form = CNHDriverCreateForm(initial={
+            "birth_date": "1987-01-22",
+            "cnh_expiration": "2034-04-14",
+            "cnh_issue_date": "2024-04-16",
+            "cnh_first_issue_date": "2006-09-29",
+        })
+        self.assertEqual(form["birth_date"].value(), "22/01/1987")
+        self.assertEqual(form["cnh_expiration"].value(), "14/04/2034")
+        self.assertEqual(form["cnh_issue_date"].value(), "16/04/2024")
+        self.assertEqual(form["cnh_first_issue_date"].value(), "29/09/2006")
 
 
 class CNHDriverFlowTests(TestCase):
