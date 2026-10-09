@@ -137,18 +137,21 @@ class DriverForm(forms.ModelForm):
         from apps.fleet.driver_scope import effective_driver_sector_slugs
 
         allowed = effective_driver_sector_slugs(user) if user is not None else {"adm", "lei-seca"}
-        self.fields["sectors"].queryset = Sector.objects.filter(slug__in=allowed)
-        self.fields["sectors"].required = True
-        self.fields["sectors"].widget = forms.CheckboxSelectMultiple(choices=self.fields["sectors"].choices)
+        self._requested_sector = requested_sector
+        self._allowed_sector_slugs = allowed
         self._preserved_sector_ids = set()
-        if not self.instance._state.adding:
-            self._preserved_sector_ids = set(
-                self.instance.sectors.exclude(slug__in=allowed).values_list("pk", flat=True)
-            )
-        elif requested_sector in allowed:
-            self.initial["sectors"] = list(Sector.objects.filter(slug=requested_sector))
-        elif len(allowed) == 1:
-            self.initial["sectors"] = list(Sector.objects.filter(slug__in=allowed))
+        if "sectors" in self.fields:
+            self.fields["sectors"].queryset = Sector.objects.filter(slug__in=allowed)
+            self.fields["sectors"].required = True
+            self.fields["sectors"].widget = forms.CheckboxSelectMultiple(choices=self.fields["sectors"].choices)
+            if not self.instance._state.adding:
+                self._preserved_sector_ids = set(
+                    self.instance.sectors.exclude(slug__in=allowed).values_list("pk", flat=True)
+                )
+            elif requested_sector in allowed:
+                self.initial["sectors"] = list(Sector.objects.filter(slug=requested_sector))
+            elif len(allowed) == 1:
+                self.initial["sectors"] = list(Sector.objects.filter(slug__in=allowed))
 
     def _save_m2m(self):
         super()._save_m2m()
