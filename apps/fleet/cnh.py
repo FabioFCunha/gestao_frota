@@ -11,6 +11,7 @@ def _clean(value):
 
 
 def _all_text(raw):
+    """Extrai texto nativo e usa OCR quando o PDF só contém cabeçalhos/QR."""
     text = ""
     try:
         from pypdf import PdfReader
@@ -19,17 +20,39 @@ def _all_text(raw):
     except Exception:
         text = ""
 
-    if text.strip():
+    # Alguns PDFs oficiais têm uma camada de texto mínima (cabeçalho e
+    # instruções do QR-Code), enquanto os dados da CNH estão só na imagem.
+    # Portanto, texto não vazio não significa que a CNH foi efetivamente lida.
+    useful_text = bool(
+        len(re.findall(
+            r"\b(?:NOME|CPF|REGISTRO|VALIDADE|NASCIMENTO|CATEGORIA|CAT\.?\s*HAB)\b",
+            text,
+            re.IGNORECASE,
+        )) >= 3
+        and re.search(
+            r"\d{2}[./-]\d{2}[./-]\d{4}|"
+            r"\d{3}\.?\d{3}\.?\d{3}-?\d{2}|\b\d{9,11}\b",
+            text,
+        )
+    )
+    if useful_text:
         return text
 
     try:
         import pytesseract
         from pdf2image import convert_from_bytes
-        pages = convert_from_bytes(raw, dpi=250)
-        return "\n".join(pytesseract.image_to_string(page, lang="por") for page in pages)
+        pages = convert_from_bytes(raw, dpi=300)
+        ocr_text = "\n".join(
+            pytesseract.image_to_string(page, lang="por+eng", config="--psm 6")
+            for page in pages
+        )
+        # Mantém o texto nativo como complemento, mas prioriza a camada OCR
+        # para que os campos impressos na imagem também possam ser analisados.
+        return "\n".join(part for part in (ocr_text, text) if part.strip())
     except Exception:
-        return ""
-
+        # A extração nativa ainda pode permitir preenchimento manual, mesmo
+        # quando o ambiente não dispõe de OCR/Poppler.
+        return text
 
 def _iso_date(value):
     value = _clean(value)
@@ -222,6 +245,6 @@ def extract_cnh_data(file_obj):
         "mother_name": mother,
         "location": location,
         "text_extracted": text,
-        "text_extraction_succeeded": bool(text.strip()),
+        "text_extraction_succeeded": bool(name or _cpf(upper) or cnh_number or category or _date_field(upper, [r"DATA\s+NASCIMENTO", r"NASCIMENTO"]) or _date_field(upper, [r"VALIDADE"])),
     }
     return data

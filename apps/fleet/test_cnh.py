@@ -54,6 +54,22 @@ class CNHExtractionTests(SimpleTestCase):
         self.assertTrue(data["text_extraction_succeeded"])
 
 
+    @patch("apps.fleet.cnh._all_text")
+    def test_institutional_pdf_text_does_not_count_as_successful_cnh_extraction(self, all_text):
+        all_text.return_value = """
+        QR-CODE
+        Documento assinado com certificado digital em conformidade
+        com a Medida Provisória nº 2200-2/2001.
+        REPÚBLICA FEDERATIVA DO BRASIL
+        MINISTÉRIO DOS TRANSPORTES
+        SECRETARIA NACIONAL DE TRÂNSITO - SENATRAN
+        """
+        upload = SimpleUploadedFile("cnh.pdf", b"%PDF-1.4 test", content_type="application/pdf")
+        data = extract_cnh_data(upload)
+        self.assertFalse(data["text_extraction_succeeded"])
+        self.assertEqual(data["name"], "")
+        self.assertEqual(data["cpf"], "")
+
 class CNHDriverFlowTests(TestCase):
     def setUp(self):
         self.media_root = tempfile.TemporaryDirectory()
@@ -94,6 +110,12 @@ class CNHDriverFlowTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertIsNotNone(response.context["confirm_form"])
+        self.assertNotIn("sectors", response.context["confirm_form"].fields)
+        self.assertNotIn("registration", response.context["confirm_form"].fields)
+        self.assertNotIn("unit", response.context["confirm_form"].fields)
+        self.assertNotIn("phone", response.context["confirm_form"].fields)
+        self.assertNotIn("email", response.context["confirm_form"].fields)
+        self.assertNotIn("renewal_date", response.context["confirm_form"].fields)
         document = Document.objects.get(document_type__name="CNH")
         self.assertFalse(DocumentRelation.objects.filter(document=document).exists())
 
@@ -117,11 +139,11 @@ class CNHDriverFlowTests(TestCase):
                 "father_name": "JOSE DA SILVA",
                 "mother_name": "ANA PEREIRA",
                 "location": "RIO DE JANEIRO RJ",
-                "sectors": [str(self.sector.id)],
             },
         )
         self.assertEqual(response.status_code, 302)
         driver = Driver.objects.get(name="MARIA DA SILVA")
+        self.assertTrue(driver.sectors.filter(pk=self.sector.pk).exists())
         self.assertEqual(driver.cpf, "123.456.789-09")
         self.assertEqual(driver.birth_date, date(1985, 2, 1))
         self.assertEqual(driver.cnh_number, "12345678901")

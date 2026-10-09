@@ -137,18 +137,21 @@ class DriverForm(forms.ModelForm):
         from apps.fleet.driver_scope import effective_driver_sector_slugs
 
         allowed = effective_driver_sector_slugs(user) if user is not None else {"adm", "lei-seca"}
-        self.fields["sectors"].queryset = Sector.objects.filter(slug__in=allowed)
-        self.fields["sectors"].required = True
-        self.fields["sectors"].widget = forms.CheckboxSelectMultiple(choices=self.fields["sectors"].choices)
+        self._requested_sector = requested_sector
+        self._allowed_sector_slugs = allowed
         self._preserved_sector_ids = set()
-        if not self.instance._state.adding:
-            self._preserved_sector_ids = set(
-                self.instance.sectors.exclude(slug__in=allowed).values_list("pk", flat=True)
-            )
-        elif requested_sector in allowed:
-            self.initial["sectors"] = list(Sector.objects.filter(slug=requested_sector))
-        elif len(allowed) == 1:
-            self.initial["sectors"] = list(Sector.objects.filter(slug__in=allowed))
+        if "sectors" in self.fields:
+            self.fields["sectors"].queryset = Sector.objects.filter(slug__in=allowed)
+            self.fields["sectors"].required = True
+            self.fields["sectors"].widget = forms.CheckboxSelectMultiple(choices=self.fields["sectors"].choices)
+            if not self.instance._state.adding:
+                self._preserved_sector_ids = set(
+                    self.instance.sectors.exclude(slug__in=allowed).values_list("pk", flat=True)
+                )
+            elif requested_sector in allowed:
+                self.initial["sectors"] = list(Sector.objects.filter(slug=requested_sector))
+            elif len(allowed) == 1:
+                self.initial["sectors"] = list(Sector.objects.filter(slug__in=allowed))
 
     def _save_m2m(self):
         super()._save_m2m()
@@ -590,7 +593,7 @@ class VehiclePositionForm(forms.Form):
 
 class CNHUploadForm(forms.Form):
     file = forms.FileField(
-        label="Arquivo da CNH (PDF)",
+        label="Arquivo da CNH em PDF",
         widget=forms.FileInput(attrs={**INPUT, "accept": ".pdf,application/pdf"}),
     )
 
@@ -602,6 +605,14 @@ class CNHUploadForm(forms.Form):
 
 
 class CNHDriverCreateForm(DriverForm):
+    class Meta(DriverForm.Meta):
+        fields = [
+            "name", "cpf", "birth_date", "cnh_number", "cnh_category",
+            "cnh_expiration", "cnh_issue_date", "cnh_first_issue_date",
+            "identity_document", "issuing_authority", "issuing_state",
+            "nationality", "father_name", "mother_name", "location",
+        ]
+
     document_id = forms.UUIDField(widget=forms.HiddenInput())
     cnh_issue_date = forms.DateField(
         label="Data de emissão da CNH", required=False,
@@ -618,6 +629,25 @@ class CNHDriverCreateForm(DriverForm):
     father_name = forms.CharField(label="Filiação — pai", max_length=150, required=False, widget=forms.TextInput(attrs=INPUT))
     mother_name = forms.CharField(label="Filiação — mãe", max_length=150, required=False, widget=forms.TextInput(attrs=INPUT))
     location = forms.CharField(label="Local de emissão", max_length=70, required=False, widget=forms.TextInput(attrs=INPUT))
+
+    def __init__(self, *args, user=None, requested_sector=None, **kwargs):
+        super().__init__(*args, user=user, requested_sector=requested_sector, **kwargs)
+        # Renovação é um evento administrativo, não um dado impresso na CNH.
+        self.fields.pop("renewal_date", None)
+
+    def save(self, commit=True):
+        driver = super().save(commit=commit)
+        if commit:
+            from apps.fleet.models import Sector
+            allowed = getattr(self, "_allowed_sector_slugs", set())
+            sector_slug = self._requested_sector if self._requested_sector in allowed else None
+            if sector_slug is None and len(allowed) == 1:
+                sector_slug = next(iter(allowed))
+            if sector_slug:
+                sector = Sector.objects.filter(slug=sector_slug, active=True).first()
+                if sector:
+                    driver.sectors.add(sector)
+        return driver
 
     def clean_cpf(self):
         value = "".join(ch for ch in (self.cleaned_data.get("cpf") or "") if ch.isdigit())
