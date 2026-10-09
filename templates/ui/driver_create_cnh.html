@@ -62,8 +62,17 @@
             <div class="cnh-data"><small>CPF identificado</small><strong>{{ preview.cpf|default:"Não identificado" }}</strong></div>
             <div class="cnh-data"><small>Nº de registro identificado</small><strong>{{ preview.cnh_number|default:"Não identificado" }}</strong></div>
             <div class="cnh-data"><small>Categoria identificada</small><strong>{{ preview.cnh_category|default:"Não identificada" }}</strong></div>
-            <div class="cnh-data"><small>Validade identificada</small><strong>{{ preview.cnh_expiration|default:"Não identificada" }}</strong></div>
-            <div class="cnh-data"><small>Data de nascimento</small><strong>{{ preview.birth_date|default:"Não identificada" }}</strong></div>
+            <div class="cnh-data"><small>Validade identificada</small><strong>{{ preview.cnh_expiration_display|default:preview.cnh_expiration|default:"Não identificada" }}</strong></div>
+            <div class="cnh-data"><small>Data de nascimento</small><strong>{{ preview.birth_date_display|default:preview.birth_date|default:"Não identificada" }}</strong></div>
+            <div class="cnh-data"><small>Emissão da CNH</small><strong>{{ preview.cnh_issue_date_display|default:preview.cnh_issue_date|default:"Não identificada" }}</strong></div>
+            <div class="cnh-data"><small>Primeira habilitação</small><strong>{{ preview.cnh_first_issue_date_display|default:preview.cnh_first_issue_date|default:"Não identificada" }}</strong></div>
+            <div class="cnh-data"><small>Documento de identidade</small><strong>{{ preview.identity_document|default:"Não identificado" }}</strong></div>
+            <div class="cnh-data"><small>Órgão emissor</small><strong>{{ preview.issuing_authority|default:"Não identificado" }}</strong></div>
+            <div class="cnh-data"><small>UF emissora</small><strong>{{ preview.issuing_state|default:"Não identificada" }}</strong></div>
+            <div class="cnh-data"><small>Nacionalidade</small><strong>{{ preview.nationality|default:"Não identificada" }}</strong></div>
+            <div class="cnh-data"><small>Filiação — pai</small><strong>{{ preview.father_name|default:"Não identificada" }}</strong></div>
+            <div class="cnh-data"><small>Filiação — mãe</small><strong>{{ preview.mother_name|default:"Não identificada" }}</strong></div>
+            <div class="cnh-data"><small>Local de emissão</small><strong>{{ preview.location|default:"Não identificado" }}</strong></div>
         </div>
         {% endif %}
 
