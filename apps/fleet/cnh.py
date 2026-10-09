@@ -94,15 +94,23 @@ def _mrz_dates(text):
             continue
         birth_raw, expiry_raw = match.groups()
 
-        def parse_mrz_date(value):
+        def parse_mrz_date(value, field="birth"):
             yy, mm, dd = int(value[:2]), int(value[2:4]), int(value[4:6])
-            year = (1900 if yy > 30 else 2000) + yy
+            if field == "expiry":
+                # Expiration dates normally belong to this century. Using
+                # the birth-date pivot incorrectly turns YY=34 into 1934.
+                year = 2000 + yy
+                if year > datetime.now().year + 20:
+                    year -= 100
+            else:
+                # Birth dates use a pivot: YY=87 resolves to 1987.
+                year = (1900 if yy > 30 else 2000) + yy
             try:
                 return datetime(year, mm, dd).date().isoformat()
             except ValueError:
                 return ""
 
-        return parse_mrz_date(birth_raw), parse_mrz_date(expiry_raw)
+        return parse_mrz_date(birth_raw), parse_mrz_date(expiry_raw, "expiry")
     return "", ""
 
 def _field_value(text, labels, stop_labels, max_len=120):
@@ -293,7 +301,15 @@ def extract_cnh_data(file_obj):
     mother = _clean(parents[1]) if len(parents) > 1 else ""
 
     location = _field_value(
-        upper, [r"LOCAL"], [r"DATA\s+(?:DA\s+)?EMISS[AÃ]O", r"OBSERVA[CÇ][OÕ]ES"], max_len=70
+        upper,
+        [
+            r"LOCAL\s+DE\s+EMISS[AÃ]O",
+            r"LOCAL\s+DA\s+EMISS[AÃ]O",
+            r"LOCAL\s+DE\s+EXPEDI[CÇ][AÃ]O",
+            r"(?m)^\s*LOCAL\s*$",
+        ],
+        [r"DATA\s+(?:DA\s+)?EMISS[AÃ]O", r"OBSERVA[CÇ][OÕ]ES"],
+        max_len=70,
     )
 
     mrz_birth_date, mrz_expiration = _mrz_dates(upper)
