@@ -71,14 +71,17 @@ def _field_value(text, labels, stop_labels, max_len=120):
 
 
 def _cpf(text):
-    match = re.search(r"\b(\d{3}\.?\d{3}\.?\d{3}-?\d{2})\b", text)
+    match = re.search(
+        r"\bCPF\b\D{0,50}(\d{3}\.?\d{3}\.?\d{3}-?\d{2})\b",
+        text,
+        re.IGNORECASE,
+    )
     if not match:
         return ""
     digits = re.sub(r"\D", "", match.group(1))
     if len(digits) != 11:
         return ""
     return f"{digits[:3]}.{digits[3:6]}.{digits[6:9]}-{digits[9:]}"
-
 
 def extract_cnh_data(file_obj):
     """Extrai os dados mais comuns de CNHs brasileiras; valores devem ser conferidos."""
