@@ -502,6 +502,71 @@ def vehicle_crlv(request, pk):
 
 @login_required
 @module_permission("fleet.view_licensingcalendar")
+def licensing_calendar_overview(request):
+    """Consulta somente leitura dos prazos anuais por final de placa."""
+    from datetime import date
+    from apps.fleet.models import LicensingCalendar
+
+    available_years = list(
+        LicensingCalendar.objects.order_by("-exercise")
+        .values_list("exercise", flat=True)
+        .distinct()
+    )
+    requested_year = request.GET.get("exercise", "").strip()
+    try:
+        selected_year = int(requested_year) if requested_year else (
+            available_years[0] if available_years else date.today().year
+        )
+    except (TypeError, ValueError):
+        selected_year = available_years[0] if available_years else date.today().year
+
+    if available_years and selected_year not in available_years:
+        selected_year = available_years[0]
+
+    entries = list(
+        LicensingCalendar.objects.filter(exercise=selected_year)
+        .order_by("due_date", "plate_final")
+    )
+    by_final = {entry.plate_final: entry for entry in entries}
+    finals = [
+        {
+            "plate_final": final,
+            "due_date": by_final[final].due_date if final in by_final else None,
+            "notes": by_final[final].notes if final in by_final else "",
+        }
+        for final in range(10)
+    ]
+
+    grouped = {}
+    for entry in entries:
+        key = (entry.due_date, entry.notes)
+        if key not in grouped:
+            grouped[key] = {
+                "due_date": entry.due_date,
+                "notes": entry.notes,
+                "plate_finals": [],
+            }
+        grouped[key]["plate_finals"].append(entry.plate_final)
+
+    deadline_groups = sorted(
+        grouped.values(),
+        key=lambda item: (item["due_date"], item["plate_finals"][0]),
+    )
+    for item in deadline_groups:
+        item["plate_finals"].sort()
+        item["plate_finals_label"] = ", ".join(str(value) for value in item["plate_finals"])
+
+    return render(request, "ui/licensing_calendar_overview.html", {
+        "available_years": available_years,
+        "selected_year": selected_year,
+        "finals": finals,
+        "deadline_groups": deadline_groups,
+        "calendar_count": len(entries),
+    })
+
+
+@login_required
+@module_permission("fleet.view_licensingcalendar")
 def licensing_calendar(request):
     from django.db import transaction
     from apps.fleet.models import LicensingCalendar
