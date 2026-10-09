@@ -245,6 +245,6 @@ def extract_cnh_data(file_obj):
         "mother_name": mother,
         "location": location,
         "text_extracted": text,
-        "text_extraction_succeeded": bool(text.strip()),
+        "text_extraction_succeeded": bool(name or _cpf(upper) or cnh_number or category or data["birth_date"] or data["cnh_expiration"]),
     }
     return data
