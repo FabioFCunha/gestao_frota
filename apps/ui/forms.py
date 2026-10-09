@@ -590,7 +590,7 @@ class VehiclePositionForm(forms.Form):
 
 class CNHUploadForm(forms.Form):
     file = forms.FileField(
-        label="Arquivo da CNH (PDF)",
+        label="Arquivo da CNH em PDF",
         widget=forms.FileInput(attrs={**INPUT, "accept": ".pdf,application/pdf"}),
     )
 
