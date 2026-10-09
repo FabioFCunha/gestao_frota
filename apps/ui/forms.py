@@ -103,13 +103,15 @@ class DriverForm(forms.ModelForm):
 
     class Meta:
         model = Driver
-        fields = ['name', 'sectors', 'registration', 'unit', 'phone', 'email', 'cnh_number', 'cnh_category', 'cnh_expiration', 'renewal_date', 'active']
+        fields = ['name', 'sectors', 'registration', 'unit', 'phone', 'email', 'cpf', 'birth_date', 'cnh_number', 'cnh_category', 'cnh_expiration', 'renewal_date', 'active']
         labels = {
             'name': 'Nome',
             'registration': 'Matrícula',
             'unit': 'Unidade Administrativa',
             'phone': 'Telefone',
             'email': 'E-mail',
+            'cpf': 'CPF',
+            'birth_date': 'Data de nascimento',
             'cnh_number': 'Nº CNH',
             'cnh_category': 'Categoria CNH',
             'cnh_expiration': 'Validade CNH',
@@ -121,6 +123,8 @@ class DriverForm(forms.ModelForm):
             'unit': forms.Select(attrs=SELECT),
             'phone': forms.TextInput(attrs={**INPUT, 'placeholder': '(00) 00000-0000'}),
             'email': forms.EmailInput(attrs={**INPUT, 'placeholder': 'email@exemplo.com'}),
+            'cpf': forms.TextInput(attrs={**INPUT, 'placeholder': '000.000.000-00'}),
+            'birth_date': forms.DateInput(format='%Y-%m-%d', attrs={**INPUT, 'type': 'date'}),
             'cnh_number': forms.TextInput(attrs={**INPUT, 'placeholder': 'Número da CNH'}),
             'cnh_category': forms.TextInput(attrs={**INPUT, 'placeholder': 'Ex: AB, D, E'}),
             'cnh_expiration': forms.DateInput(format='%Y-%m-%d', attrs={**INPUT, 'type': 'date'}),
@@ -582,3 +586,43 @@ class VehiclePositionForm(forms.Form):
         super().__init__(*args, **kwargs)
         self.fields["sector"].queryset = Sector.objects.filter(slug__in=["adm", "lei-seca"]).order_by("name")
 
+
+
+class CNHUploadForm(forms.Form):
+    file = forms.FileField(
+        label="Arquivo da CNH (PDF)",
+        widget=forms.FileInput(attrs={**INPUT, "accept": ".pdf,application/pdf"}),
+    )
+
+    def clean_file(self):
+        file_obj = self.cleaned_data["file"]
+        if not file_obj.name.lower().endswith(".pdf"):
+            raise forms.ValidationError("Envie a CNH em arquivo PDF.")
+        return file_obj
+
+
+class CNHDriverCreateForm(DriverForm):
+    document_id = forms.UUIDField(widget=forms.HiddenInput())
+    cnh_issue_date = forms.DateField(
+        label="Data de emissão da CNH", required=False,
+        widget=forms.DateInput(format="%Y-%m-%d", attrs={**INPUT, "type": "date"}),
+    )
+    cnh_first_issue_date = forms.DateField(
+        label="Primeira habilitação", required=False,
+        widget=forms.DateInput(format="%Y-%m-%d", attrs={**INPUT, "type": "date"}),
+    )
+    identity_document = forms.CharField(label="Documento de identidade", max_length=70, required=False, widget=forms.TextInput(attrs=INPUT))
+    issuing_authority = forms.CharField(label="Órgão emissor", max_length=50, required=False, widget=forms.TextInput(attrs=INPUT))
+    issuing_state = forms.CharField(label="UF emissora", max_length=12, required=False, widget=forms.TextInput(attrs=INPUT))
+    nationality = forms.CharField(label="Nacionalidade", max_length=60, required=False, widget=forms.TextInput(attrs=INPUT))
+    father_name = forms.CharField(label="Filiação — pai", max_length=150, required=False, widget=forms.TextInput(attrs=INPUT))
+    mother_name = forms.CharField(label="Filiação — mãe", max_length=150, required=False, widget=forms.TextInput(attrs=INPUT))
+    location = forms.CharField(label="Local de emissão", max_length=70, required=False, widget=forms.TextInput(attrs=INPUT))
+
+    def clean_cpf(self):
+        value = "".join(ch for ch in (self.cleaned_data.get("cpf") or "") if ch.isdigit())
+        if not value:
+            return ""
+        if len(value) != 11:
+            raise forms.ValidationError("O CPF deve conter 11 dígitos.")
+        return f"{value[:3]}.{value[3:6]}.{value[6:9]}-{value[9:]}"
