@@ -297,15 +297,6 @@ def extract_cnh_data(file_obj):
     )
 
     mrz_birth_date, mrz_expiration = _mrz_dates(upper)
-    birth_date = _date_field(upper, [r"DATA\\s+NASCIMENTO", r"NASCIMENTO"]) or mrz_birth_date
-    expiration_date = mrz_expiration or _date_field(upper, [r"VALIDADE"])
-    issue_date = _date_field(upper, [r"DATA\\s+(?:DA\\s+)?EMISS[AÃ]O", r"EMISS[AÃ]O"])
-    first_issue_date = _date_field(
-        upper,
-        [r"1[ªº°A]\\s*HABILITA[CÇ][AÃ]O", r"PRIMEIRA\\s+HABILITA[CÇ][AÃ]O"],
-    )
-
-    mrz_birth_date, mrz_expiration = _mrz_dates(upper)
     birth_date = _date_field(upper, [r"DATA\s+NASCIMENTO", r"NASCIMENTO"]) or mrz_birth_date
     expiration_date = mrz_expiration or _date_field(upper, [r"VALIDADE"])
     issue_date = _date_field(upper, [r"DATA\s+(?:DA\s+)?EMISS[AÃ]O", r"EMISS[AÃ]O"])
