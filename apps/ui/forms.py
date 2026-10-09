@@ -630,6 +630,25 @@ class CNHDriverCreateForm(DriverForm):
     mother_name = forms.CharField(label="Filiação — mãe", max_length=150, required=False, widget=forms.TextInput(attrs=INPUT))
     location = forms.CharField(label="Local de emissão", max_length=70, required=False, widget=forms.TextInput(attrs=INPUT))
 
+    def __init__(self, *args, user=None, requested_sector=None, **kwargs):
+        super().__init__(*args, user=user, requested_sector=requested_sector, **kwargs)
+        # Renovação é um evento administrativo, não um dado impresso na CNH.
+        self.fields.pop("renewal_date", None)
+
+    def save(self, commit=True):
+        driver = super().save(commit=commit)
+        if commit:
+            from apps.fleet.models import Sector
+            allowed = getattr(self, "_allowed_sector_slugs", set())
+            sector_slug = self._requested_sector if self._requested_sector in allowed else None
+            if sector_slug is None and len(allowed) == 1:
+                sector_slug = next(iter(allowed))
+            if sector_slug:
+                sector = Sector.objects.filter(slug=sector_slug, active=True).first()
+                if sector:
+                    driver.sectors.add(sector)
+        return driver
+
     def clean_cpf(self):
         value = "".join(ch for ch in (self.cleaned_data.get("cpf") or "") if ch.isdigit())
         if not value:
