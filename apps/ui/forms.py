@@ -52,10 +52,45 @@ class CRLVVehicleCreateForm(CRLVConfirmForm):
     )
 
 class LicensingCalendarForm(forms.ModelForm):
+    plate_finals = forms.MultipleChoiceField(
+        choices=[(str(i), str(i)) for i in range(10)],
+        label="Finais das placas",
+        required=True,
+        help_text="Selecione todos os finais que compartilham este prazo.",
+        widget=forms.CheckboxSelectMultiple,
+    )
+
     class Meta:
         from apps.fleet.models import LicensingCalendar
-        model=LicensingCalendar; fields=['exercise','plate_final','due_date','notes']
-        widgets={'exercise':forms.NumberInput(attrs=INPUT),'plate_final':forms.Select(choices=[(i,i) for i in range(10)],attrs=SELECT),'due_date':forms.DateInput(attrs={**INPUT,'type':'date'}),'notes':forms.Textarea(attrs=INPUT)}
+        model = LicensingCalendar
+        fields = ["exercise", "due_date", "notes"]
+        labels = {
+            "exercise": "Exercício",
+            "due_date": "Data-limite",
+            "notes": "Observações",
+        }
+        help_texts = {
+            "exercise": "Ano do calendário oficial do DETRAN-RJ.",
+            "due_date": "Data final para regularização do licenciamento.",
+            "notes": "Informe, por exemplo, se o prazo foi prorrogado.",
+        }
+        widgets = {
+            "exercise": forms.NumberInput(attrs={**INPUT, "min": 2020, "max": 2100}),
+            "due_date": forms.DateInput(attrs={**INPUT, "type": "date"}),
+            "notes": forms.Textarea(attrs={**INPUT, "rows": 2}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance and self.instance.pk and not self.is_bound:
+            from apps.fleet.models import LicensingCalendar
+            self.fields["plate_finals"].initial = list(
+                LicensingCalendar.objects.filter(
+                    exercise=self.instance.exercise,
+                    due_date=self.instance.due_date,
+                    notes=self.instance.notes,
+                ).values_list("plate_final", flat=True)
+            )
 
 
 class DriverForm(forms.ModelForm):
