@@ -462,23 +462,106 @@ def vehicle_crlv(request, pk):
 @login_required
 @module_permission("fleet.view_licensingcalendar")
 def licensing_calendar(request):
+    from django.db import transaction
     from apps.fleet.models import LicensingCalendar
 
-    can_edit = request.user.is_system_creator or request.user.has_perm("fleet.add_licensingcalendar") or request.user.has_perm("fleet.change_licensingcalendar")
-    editing = LicensingCalendar.objects.filter(pk=request.GET.get("edit")).first() if request.GET.get("edit") else None
+    can_edit = (
+        request.user.is_system_creator
+        or request.user.has_perm("fleet.add_licensingcalendar")
+        or request.user.has_perm("fleet.change_licensingcalendar")
+    )
+    editing = (
+        LicensingCalendar.objects.filter(pk=request.GET.get("edit")).first()
+        if request.GET.get("edit") else None
+    )
     form = LicensingCalendarForm(instance=editing)
+
     if request.method == "POST":
         if not can_edit:
             raise PermissionDenied
-        instance = LicensingCalendar.objects.filter(pk=request.POST.get("calendar_id")).first()
+
+        instance = (
+            LicensingCalendar.objects.filter(pk=request.POST.get("calendar_id")).first()
+            if request.POST.get("calendar_id") else None
+        )
+        old_exercise = instance.exercise if instance else None
+        old_group_finals = []
+        if instance:
+            old_group_finals = list(
+                LicensingCalendar.objects.filter(
+                    exercise=instance.exercise,
+                    due_date=instance.due_date,
+                    notes=instance.notes,
+                ).values_list("plate_final", flat=True)
+            )
+
         form = LicensingCalendarForm(request.POST, instance=instance)
         if form.is_valid():
-            calendar = form.save(commit=False)
-            if not calendar.pk:
-                calendar.created_by = request.user
-            calendar.save()
+            exercise = form.cleaned_data["exercise"]
+            due_date = form.cleaned_data["due_date"]
+            notes = form.cleaned_data["notes"]
+            selected_finals = {int(value) for value in form.cleaned_data["plate_finals"]}
+
+            with transaction.atomic():
+                # Ao editar um grupo no mesmo exercício, retirar apenas os finais
+                # que foram desmarcados. Calendários de outros exercícios são preservados.
+                if instance and exercise == old_exercise:
+                    LicensingCalendar.objects.filter(
+                        exercise=old_exercise,
+                        due_date=instance.due_date,
+                        notes=instance.notes,
+                        plate_final__in=old_group_finals,
+                    ).exclude(plate_final__in=selected_finals).delete()
+
+                for plate_final in selected_finals:
+                    entry = LicensingCalendar.objects.filter(
+                        exercise=exercise,
+                        plate_final=plate_final,
+                    ).first()
+                    if entry:
+                        entry.due_date = due_date
+                        entry.notes = notes
+                        entry.save(update_fields=["due_date", "notes", "updated_at"])
+                    else:
+                        LicensingCalendar.objects.create(
+                            exercise=exercise,
+                            plate_final=plate_final,
+                            due_date=due_date,
+                            notes=notes,
+                            created_by=request.user,
+                        )
+
+            messages.success(request, "Calendário de licenciamento salvo com sucesso.")
             return redirect("licensing_calendar")
-    return render(request, "ui/licensing_calendar.html", {"calendars": LicensingCalendar.objects.all(), "form": form, "can_edit": can_edit, "editing": editing})
+
+    # Agrupar linhas com o mesmo exercício, prazo e observações para exibir
+    # os finais de placa como um único grupo na tabela.
+    grouped = {}
+    for item in LicensingCalendar.objects.all():
+        key = (item.exercise, item.due_date, item.notes)
+        if key not in grouped:
+            grouped[key] = {
+                "id": item.id,
+                "exercise": item.exercise,
+                "due_date": item.due_date,
+                "notes": item.notes,
+                "plate_finals": [],
+            }
+        grouped[key]["plate_finals"].append(item.plate_final)
+
+    calendars = sorted(
+        grouped.values(),
+        key=lambda row: (-row["exercise"], row["due_date"], row["plate_finals"][0]),
+    )
+    for row in calendars:
+        row["plate_finals_label"] = ", ".join(str(value) for value in sorted(row["plate_finals"]))
+
+    return render(request, "ui/licensing_calendar.html", {
+        "calendars": calendars,
+        "form": form,
+        "can_edit": can_edit,
+        "editing": editing,
+    })
 
 
 @login_required
