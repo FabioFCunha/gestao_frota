@@ -93,6 +93,56 @@ def _field_value(text, labels, stop_labels, max_len=120):
     return ""
 
 
+def _name_field(text):
+    """Extrai o nome sem confundir o rótulo SOBRENOME com o campo NOME."""
+    lines = [_clean(line) for line in text.splitlines() if _clean(line)]
+    label_re = re.compile(
+        r"(?<![A-ZÀ-Ü])(?:NOME\s+E\s+SOBRENOME|NOME\s+COMPLETO|NOME)(?![A-ZÀ-Ü])",
+        re.IGNORECASE,
+    )
+    stop_re = re.compile(
+        r"\b(?:CPF|DOC\.?\s*IDENTIDADE|IDENTIDADE|DATA\s+NASCIMENTO|"
+        r"NASCIMENTO|FILIA[CÇ][AÃ]O|VALIDADE|CAT\.?\s*HAB\.?|CATEGORIA|"
+        r"N[º°O]\s*REGISTRO|REGISTRO|1[ªA]\s*HABILITA[CÇ][AÃ]O|"
+        r"DATA\s+(?:DA\s+)?EMISS[AÃ]O|NACIONALIDADE|OBSERVA[CÇ][OÕ]ES|LOCAL)\b",
+        re.IGNORECASE,
+    )
+    name_re = re.compile(
+        r"[A-ZÀ-ÖØ-Þ][A-ZÀ-ÖØ-Þ'’.-]*"
+        r"(?:\s+[A-ZÀ-ÖØ-Þ][A-ZÀ-ÖØ-Þ'’.-]*){1,7}\Z"
+    )
+
+    def valid_name(candidate):
+        candidate = _clean(candidate)
+        stop = stop_re.search(candidate)
+        if stop:
+            candidate = _clean(candidate[:stop.start()])
+        date = re.search(r"\b\d{2}[./-]\d{2}[./-]\d{4}\b", candidate)
+        if date:
+            candidate = _clean(candidate[:date.start()])
+        if not candidate or len(candidate) > 80:
+            return ""
+        if not name_re.fullmatch(candidate):
+            return ""
+        return candidate
+
+    for index, line in enumerate(lines):
+        match = label_re.search(line)
+        if not match:
+            continue
+        # Tenta apenas o restante da mesma linha, sem consumir o restante da página.
+        candidate = valid_name(line[match.end():])
+        if candidate:
+            return candidate
+        # Em leiautes com o valor na linha seguinte, aceita somente uma linha
+        # que tenha aparência de nome, nunca cabeçalhos, datas ou números.
+        if index + 1 < len(lines):
+            candidate = valid_name(lines[index + 1])
+            if candidate:
+                return candidate
+    return ""
+
+
 def _cpf(text):
     match = re.search(
         r"\bCPF\b\D{0,50}(\d{3}\.?\d{3}\.?\d{3}-?\d{2})\b",
@@ -123,21 +173,7 @@ def extract_cnh_data(file_obj):
         r"DATA\s+(?:DA\s+)?EMISS[AÃ]O", r"NACIONALIDADE", r"OBSERVA[CÇ][OÕ]ES",
     ]
 
-    name = _field_value(
-        upper,
-        [r"NOME\s+E\s+SOBRENOME", r"NOME\s+COMPLETO", r"NOME"],
-        stops,
-        max_len=100,
-    )
-    # O leiaute em texto corrido pode trazer o nome na linha seguinte ao rótulo.
-    if not name:
-        lines = [_clean(line) for line in upper.splitlines() if _clean(line)]
-        for i, line in enumerate(lines[:-1]):
-            if re.fullmatch(r"NOME(?:\s+E\s+SOBRENOME|\s+COMPLETO)?", line):
-                candidate = lines[i + 1]
-                if candidate and not re.search(r"\b(CPF|REGISTRO|VALIDADE|NASCIMENTO|CAT\.?)\b", candidate):
-                    name = candidate
-                    break
+    name = _name_field(upper)
 
     cnh_number = _field_value(
         upper,
