@@ -1,6 +1,7 @@
 from .exit_order_bdt import exit_order_bdt_rows
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import LoginView
+from django.db import transaction
 from django.db.models import Count, Q, Prefetch
 from django.core.paginator import Paginator
 from django.core.exceptions import PermissionDenied
@@ -11,7 +12,7 @@ from django.urls import reverse
 from django.http import JsonResponse, Http404
 from django.contrib import messages
 from django.utils import timezone
-from .forms import DriverForm, DriverVehicleAssignmentForm, VehicleForm, VehicleContractForm, FineForm, RevisionActionForm, VehicleExitOrderForm, VehicleExitOrderReturnForm, VehiclePositionForm, CRLVUploadForm, CRLVConfirmForm, CRLVVehicleCreateForm, LicensingCalendarForm
+from .forms import DriverForm, DriverVehicleAssignmentForm, VehicleForm, VehicleContractForm, FineForm, RevisionActionForm, VehicleExitOrderForm, VehicleExitOrderReturnForm, VehiclePositionForm, CRLVUploadForm, CRLVConfirmForm, CRLVVehicleCreateForm, LicensingCalendarForm, CNHUploadForm, CNHDriverCreateForm
 from apps.accounts.forms import FleetAuthenticationForm
 from apps.accounts.decorators import module_permission
 from apps.fleet.models import VehiclePlate, Renter
@@ -1456,19 +1457,163 @@ def fine_list(request):
 @module_permission("fleet.add_driver")
 def driver_create(request):
     from urllib.parse import urlencode
+    from apps.fleet.models import Document, AuditLog
+    from apps.fleet.services import stage_cnh_document_for_creation, link_document
+
     requested_sector = request.GET.get("sector")
     list_url = reverse("driver_list")
     if requested_sector in {"adm", "lei-seca"}:
         list_url += "?" + urlencode({"sector": requested_sector})
-    if request.method == 'POST':
-        form = DriverForm(request.POST, user=request.user, requested_sector=requested_sector)
-        if form.is_valid():
-            form.save()
-            messages.success(request, 'Motorista cadastrado com sucesso!')
-            return redirect(list_url)
-    else:
-        form = DriverForm(user=request.user, requested_sector=requested_sector)
-    return render(request, 'ui/form.html', {'form': form, 'title': 'Cadastrar Motorista', 'back_url': 'driver_list', 'back_url_url': list_url})
+
+    # Mantém a alternativa manual, mas o fluxo principal começa pela leitura da CNH.
+    if request.GET.get("manual") == "1" or request.POST.get("manual") == "1":
+        if request.method == "POST":
+            form = DriverForm(request.POST, user=request.user, requested_sector=requested_sector)
+            if form.is_valid():
+                form.save()
+                messages.success(request, "Motorista cadastrado com sucesso!")
+                return redirect(list_url)
+        else:
+            form = DriverForm(user=request.user, requested_sector=requested_sector)
+        return render(request, "ui/form.html", {
+            "form": form,
+            "title": "Cadastrar Motorista manualmente",
+            "back_url": "driver_list",
+            "back_url_url": list_url,
+        })
+
+    upload_form = CNHUploadForm()
+    confirm_form = None
+    preview = None
+    document = None
+
+    if request.method == "POST" and request.POST.get("step") == "upload":
+        upload_form = CNHUploadForm(request.POST, request.FILES)
+        if upload_form.is_valid():
+            try:
+                document, preview = stage_cnh_document_for_creation(
+                    file_obj=upload_form.cleaned_data["file"],
+                    user=request.user,
+                )
+                confirm_form = CNHDriverCreateForm(
+                    initial={
+                        "document_id": document.id,
+                        "name": preview.get("name", ""),
+                        "cpf": preview.get("cpf", ""),
+                        "birth_date": preview.get("birth_date", ""),
+                        "cnh_number": preview.get("cnh_number", ""),
+                        "cnh_category": preview.get("cnh_category", ""),
+                        "cnh_expiration": preview.get("cnh_expiration", ""),
+                        "cnh_issue_date": preview.get("cnh_issue_date", ""),
+                        "cnh_first_issue_date": preview.get("cnh_first_issue_date", ""),
+                        "identity_document": preview.get("identity_document", ""),
+                        "issuing_authority": preview.get("issuing_authority", ""),
+                        "issuing_state": preview.get("issuing_state", ""),
+                        "nationality": preview.get("nationality", ""),
+                        "father_name": preview.get("father_name", ""),
+                        "mother_name": preview.get("mother_name", ""),
+                        "location": preview.get("location", ""),
+                    },
+                    user=request.user,
+                    requested_sector=requested_sector,
+                )
+                if not preview.get("text_extraction_succeeded"):
+                    messages.warning(
+                        request,
+                        "Não foi possível extrair texto automaticamente deste PDF. Confira o documento e preencha os campos manualmente.",
+                    )
+            except ValueError as exc:
+                upload_form.add_error("file", str(exc))
+
+    elif request.method == "POST":
+        confirm_form = CNHDriverCreateForm(
+            request.POST,
+            user=request.user,
+            requested_sector=requested_sector,
+        )
+        if confirm_form.is_valid():
+            document = get_object_or_404(Document, pk=confirm_form.cleaned_data["document_id"])
+            staged = AuditLog.objects.filter(
+                entity_type="document",
+                entity_id=document.id,
+                module="cnh",
+                action="CNH PARA CADASTRO DE MOTORISTA",
+                user=request.user,
+            ).order_by("-created_at").first()
+            already_confirmed = AuditLog.objects.filter(
+                entity_type="document",
+                entity_id=document.id,
+                module="cnh",
+                action="CNH CADASTRADA A PARTIR DE PDF",
+            ).exists()
+            if not staged:
+                confirm_form.add_error(None, "O documento não está disponível para confirmação nesta sessão. Envie a CNH novamente.")
+            elif already_confirmed:
+                confirm_form.add_error(None, "Esta CNH já foi utilizada para concluir um cadastro.")
+            else:
+                extracted = dict(staged.new_values or {})
+
+                def json_value(value):
+                    if hasattr(value, "isoformat") and not isinstance(value, str):
+                        return value.isoformat()
+                    if hasattr(value, "values_list") and hasattr(value, "model"):
+                        return [str(pk) for pk in value.values_list("pk", flat=True)]
+                    if hasattr(value, "pk"):
+                        return str(value.pk)
+                    if isinstance(value, (list, tuple, set)):
+                        return [json_value(item) for item in value]
+                    return value
+
+                reviewed_values = {
+                    key: json_value(value)
+                    for key, value in confirm_form.cleaned_data.items()
+                    if key != "document_id"
+                }
+                try:
+                    with transaction.atomic():
+                        driver = confirm_form.save()
+                        link_document(document=document, obj=driver, user=request.user)
+                        AuditLog.objects.create(
+                            user=request.user,
+                            module="cnh",
+                            action="CNH CADASTRADA A PARTIR DE PDF",
+                            entity_type="document",
+                            entity_id=document.id,
+                            new_values={
+                                "driver_id": str(driver.id),
+                                "driver_name": driver.name,
+                                "reviewed": True,
+                                "source": "CNH PDF",
+                                "extracted_data": extracted,
+                                "form_values": reviewed_values,
+                            },
+                        )
+                except ValueError as exc:
+                    confirm_form.add_error(None, str(exc))
+                else:
+                    messages.success(request, f"Motorista {driver.name} cadastrado após conferência da CNH.")
+                    return redirect(list_url)
+
+        if confirm_form and confirm_form.is_bound and confirm_form.data.get("document_id"):
+            document = Document.objects.filter(pk=confirm_form.data.get("document_id")).first()
+            if document:
+                staged_preview = AuditLog.objects.filter(
+                    entity_type="document",
+                    entity_id=document.id,
+                    module="cnh",
+                    action="CNH PARA CADASTRO DE MOTORISTA",
+                ).order_by("-created_at").first()
+                preview = dict(staged_preview.new_values or {}) if staged_preview else None
+
+    return render(request, "ui/driver_create_cnh.html", {
+        "upload_form": upload_form,
+        "confirm_form": confirm_form,
+        "preview": preview,
+        "document": document,
+        "title": "Cadastrar motorista pela CNH",
+        "back_url_url": list_url,
+        "requested_sector": requested_sector,
+    })
 
 
 @login_required

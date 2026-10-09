@@ -2072,3 +2072,49 @@ def change_vehicle_position(*, vehicle: Vehicle, sector, active: bool, user, rea
     )
     return vehicle
 
+@transaction.atomic
+def stage_cnh_document_for_creation(*, file_obj, user):
+    """Armazena a CNH original, extrai os dados e deixa o documento aguardando conferência."""
+    import mimetypes
+    from .models import Document, DocumentVersion, DocumentStatus, DocumentType, AuditLog
+    from .cnh import extract_cnh_data
+
+    ext = file_obj.name.rsplit(".", 1)[-1].lower() if "." in file_obj.name else ""
+    if ext != "pdf":
+        raise ValueError("A CNH deve ser enviada em arquivo PDF.")
+    if file_obj.size > getattr(settings, "DOCUMENT_MAX_UPLOAD_SIZE", 10 * 1024 * 1024):
+        raise ValueError("O arquivo excede o limite permitido.")
+
+    document_type, _ = DocumentType.objects.get_or_create(
+        name="CNH", defaults={"active": True},
+    )
+    status, _ = DocumentStatus.objects.get_or_create(
+        name="Ativo", defaults={"active": True},
+    )
+    document = Document.objects.create(
+        title=f"CNH - {file_obj.name}",
+        document_type=document_type,
+        status=status,
+        created_by=user,
+    )
+    DocumentVersion.objects.create(
+        document=document,
+        file=file_obj,
+        original_filename=file_obj.name,
+        file_extension=ext,
+        mime_type=mimetypes.guess_type(file_obj.name)[0] or "application/pdf",
+        file_size=file_obj.size,
+        uploaded_by=user,
+    )
+    file_obj.seek(0)
+    extracted = extract_cnh_data(file_obj)
+    AuditLog.objects.create(
+        user=user,
+        module="cnh",
+        action="CNH PARA CADASTRO DE MOTORISTA",
+        entity_type="document",
+        entity_id=document.id,
+        new_values=extracted,
+    )
+    return document, extracted
+

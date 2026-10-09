@@ -91,6 +91,8 @@ class Driver(NamedModel):
     unit = models.ForeignKey(AdministrativeUnit, null=True, blank=True, on_delete=models.PROTECT)
     phone = models.CharField(max_length=30, blank=True)
     email = models.EmailField(blank=True)
+    cpf = models.CharField("CPF", max_length=14, blank=True)
+    birth_date = models.DateField("Data de nascimento", null=True, blank=True)
     cnh_number = models.CharField("Nº CNH", max_length=20, blank=True)
     cnh_category = models.CharField("Categoria", max_length=5, blank=True)
     cnh_expiration = models.DateField("Validade CNH", null=True, blank=True)
