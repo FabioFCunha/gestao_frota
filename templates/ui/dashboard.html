@@ -9,6 +9,11 @@
 #dashboard-informe-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:1100; align-items:center; justify-content:center; padding:20px; }
 #dashboard-informe-modal .panel { width:min(680px,96vw); max-height:90vh; overflow:auto; }
 .dashboard-informe-actions { margin-top:22px; display:flex; gap:10px; justify-content:flex-end; flex-wrap:wrap; }
+.crlv-overview-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; }
+.crlv-pending-list { margin-top:10px; max-height:180px; overflow:auto; }
+.crlv-pending-list > div { padding:7px 0; border-bottom:1px solid #eee; }
+@media (max-width: 900px) { .crlv-overview-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media (max-width: 620px) { .crlv-overview-grid { grid-template-columns:minmax(0,1fr); } }
 </style>
 
 <div id="dashboard-informe-modal">
@@ -223,14 +228,14 @@
         <a class="primary-action" href="{% url 'licensing_calendar' %}">Gerenciar calendário</a>
     </div>
 
-    <div class="grid" style="margin-top:12px;grid-template-columns:repeat(3,minmax(0,1fr));">
+    <div class="crlv-overview-grid" style="margin-top:12px;">
         <article class="panel" style="border-left:4px solid #dc2626;">
             <h3 style="margin-top:0;">Licenciamento vencido</h3>
             <strong>{{ crlv_alerts.overdue|length }}</strong> viatura(s)
             {% if crlv_alerts.overdue %}
-            <div style="margin-top:10px;max-height:180px;overflow:auto;">
+            <div class="crlv-pending-list">
                 {% for item in crlv_alerts.overdue %}
-                <div style="padding:7px 0;border-bottom:1px solid #eee;">
+                <div>
                     <a href="{{ item.dossier_url }}"><strong>{{ item.plate }}</strong></a>
                     — exercício {{ item.exercise }}; venceu em {% if item.due_date %}{{ item.due_date|date:"d/m/Y" }}{% else %}data não cadastrada{% endif %}
                 </div>
@@ -243,9 +248,9 @@
             <h3 style="margin-top:0;">Vence nos próximos 30 dias</h3>
             <strong>{{ crlv_alerts.due_soon|length }}</strong> viatura(s)
             {% if crlv_alerts.due_soon %}
-            <div style="margin-top:10px;max-height:180px;overflow:auto;">
+            <div class="crlv-pending-list">
                 {% for item in crlv_alerts.due_soon %}
-                <div style="padding:7px 0;border-bottom:1px solid #eee;">
+                <div>
                     <a href="{{ item.dossier_url }}"><strong>{{ item.plate }}</strong></a>
                     — exercício {{ item.exercise }}; prazo {{ item.due_date|date:"d/m/Y" }}
                 </div>
@@ -254,23 +259,64 @@
             {% else %}<p class="empty">Nenhum prazo próximo.</p>{% endif %}
         </article>
 
-        <article class="panel" style="border-left:4px solid #64748b;">
-            <h3 style="margin-top:0;">Finais sem prazo cadastrado</h3>
-            <strong>{{ crlv_alerts.calendar_missing|length }}</strong> viatura(s)
-            {% if crlv_alerts.calendar_missing %}
-            <div style="margin-top:10px;max-height:180px;overflow:auto;">
-                {% for item in crlv_alerts.calendar_missing %}
-                <div style="padding:7px 0;border-bottom:1px solid #eee;">
-                    <a href="{{ item.dossier_url }}"><strong>{{ item.plate }}</strong></a>
-                    — exercício {{ item.exercise }}; falta cadastrar o prazo do final {{ item.plate|slice:"-1:" }}
+        <article class="panel" style="border-left:4px solid #7c3aed;">
+            <h3 style="margin-top:0;">Vistorias e multas</h3>
+            <p style="margin:0 0 12px;color:#64748b;font-size:.9rem;">Pontos de atenção: confira se estas pendências afetam a regularização de cada viatura.</p>
+            <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;">
+                <div><strong>{{ dashboard_alerts.inspections_pending|length }}</strong><br><span style="font-size:.85rem;">Vistorias reprovadas/com ressalvas</span></div>
+                <div><strong>{{ dashboard_alerts.fines_pending|length }}</strong><br><span style="font-size:.85rem;">Multas pendentes/em análise/recurso</span></div>
+            </div>
+
+            {% if dashboard_alerts.inspections_pending %}
+            <div class="crlv-pending-list">
+                <strong>Vistorias</strong>
+                {% for item in dashboard_alerts.inspections_pending|slice:":4" %}
+                <div>
+                    <a href="{% url 'vehicle_dossier' item.vehicle_id %}"><strong>{{ item.plate }}</strong></a>
+                    — {{ item.status }} — {{ item.date|date:"d/m/Y" }}
                 </div>
                 {% endfor %}
             </div>
-            <p style="margin-top:10px;">Cadastre manualmente os prazos oficiais assim que o DETRAN-RJ divulgar o calendário anual.</p>
-            {% else %}<p class="empty">Há calendário cadastrado para o exercício atual.</p>{% endif %}
-            <a href="{% url 'licensing_calendar' %}">Abrir calendário anual</a>
+            {% endif %}
+
+            {% if dashboard_alerts.fines_pending %}
+            <div class="crlv-pending-list">
+                <strong>Multas</strong>
+                {% for item in dashboard_alerts.fines_pending|slice:":4" %}
+                <div>
+                    <a href="{% url 'fine_list' %}"><strong>{{ item.vehicle__plate_history__plate|default:"Sem placa" }}</strong></a>
+                    — {{ item.status__name }} — {{ item.date|date:"d/m/Y" }}
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            {% if dashboard_alerts.inspections_pending or dashboard_alerts.fines_pending %}
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
+                <a class="secondary-action" href="{% url 'inspection_list' %}">Ver vistorias</a>
+                <a class="secondary-action" href="{% url 'fine_list' %}">Ver multas</a>
+            </div>
+            {% else %}
+            <p class="empty" style="margin-top:12px;">Nenhuma pendência de vistoria ou multa identificada no escopo atual.</p>
+            {% endif %}
         </article>
     </div>
+
+    {% if crlv_alerts.calendar_missing %}
+    <details style="margin-top:12px;padding:10px 12px;border:1px solid #e2e8f0;border-radius:8px;">
+        <summary style="cursor:pointer;font-weight:600;">Finais sem prazo cadastrado: {{ crlv_alerts.calendar_missing|length }} viatura(s)</summary>
+        <p style="margin:8px 0;color:#64748b;">Cadastre os prazos oficiais assim que o DETRAN-RJ divulgar o calendário anual.</p>
+        <div class="crlv-pending-list">
+            {% for item in crlv_alerts.calendar_missing %}
+            <div>
+                <a href="{{ item.dossier_url }}"><strong>{{ item.plate }}</strong></a>
+                — exercício {{ item.exercise }}; falta cadastrar o prazo do final {{ item.plate|slice:"-1:" }}
+            </div>
+            {% endfor %}
+        </div>
+        <a href="{% url 'licensing_calendar' %}">Abrir calendário anual</a>
+    </details>
+    {% endif %}
 </section>
 
 <section class="fd-board">
