@@ -210,6 +210,38 @@ def dashboard(request):
     }
 
     from apps.fleet.sector_scope import can_select_sector
+
+    # Pendências de vistoria vinculadas somente às viaturas do escopo do usuário.
+    # Consultamos o histórico da vistoria, mas exibimos sempre a placa atual para
+    # evitar duplicação por mudanças anteriores de placa.
+    from apps.fleet.models import VehicleInspection
+    pending_inspection_qs = (
+        VehicleInspection.objects
+        .filter(
+            vehicle_id__in=scoped_vehicle_ids,
+            status__name__in=["Reprovada", "Com ressalvas"],
+        )
+        .select_related("vehicle", "status")
+        .prefetch_related("vehicle__plate_history")
+        .order_by("-date", "-created_at")
+    )
+    pending_inspections = []
+    for inspection in pending_inspection_qs:
+        inspection_plate = next(
+            (
+                p.plate for p in inspection.vehicle.plate_history.all()
+                if p.kind == VehiclePlate.CURRENT and p.ends_on is None
+            ),
+            "Sem placa atual",
+        )
+        pending_inspections.append({
+            "id": inspection.id,
+            "vehicle_id": inspection.vehicle_id,
+            "plate": inspection_plate,
+            "status": inspection.status.name,
+            "date": inspection.date,
+        })
+
     context = {
         "show_sector_filter": can_select_sector(request.user),
         "requested_sector": requested_sector,
@@ -220,6 +252,7 @@ def dashboard(request):
             "contracts_expired": alerts.get("expired_contracts", []),
             "contracts_expiring": alerts.get("expiring_contracts", []),
             "fines_pending": alerts.get("pending_fines", []),
+            "inspections_pending": pending_inspections,
             "cnh_expired": alerts.get("expired_cnh", []),
         },
         "crlv_alerts": crlv_alerts,
