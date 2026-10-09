@@ -485,13 +485,15 @@ def licensing_calendar(request):
             if request.POST.get("calendar_id") else None
         )
         old_exercise = instance.exercise if instance else None
+        old_due_date = instance.due_date if instance else None
+        old_notes = instance.notes if instance else None
         old_group_finals = []
         if instance:
             old_group_finals = list(
                 LicensingCalendar.objects.filter(
-                    exercise=instance.exercise,
-                    due_date=instance.due_date,
-                    notes=instance.notes,
+                    exercise=old_exercise,
+                    due_date=old_due_date,
+                    notes=old_notes,
                 ).values_list("plate_final", flat=True)
             )
 
@@ -508,8 +510,8 @@ def licensing_calendar(request):
                 if instance and exercise == old_exercise:
                     LicensingCalendar.objects.filter(
                         exercise=old_exercise,
-                        due_date=instance.due_date,
-                        notes=instance.notes,
+                        due_date=old_due_date,
+                        notes=old_notes,
                         plate_final__in=old_group_finals,
                     ).exclude(plate_final__in=selected_finals).delete()
 
