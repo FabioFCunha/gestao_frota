@@ -9,6 +9,7 @@ from django.test import TestCase, SimpleTestCase, override_settings
 
 from apps.fleet.cnh import extract_cnh_data
 from apps.fleet.models import AuditLog, Document, DocumentRelation, Driver, Sector
+from apps.ui.forms import CNHDriverCreateForm
 
 
 class CNHExtractionTests(SimpleTestCase):
@@ -53,6 +54,38 @@ class CNHExtractionTests(SimpleTestCase):
         self.assertEqual(data["cnh_first_issue_date"], "2005-03-12")
         self.assertTrue(data["text_extraction_succeeded"])
 
+
+    @patch("apps.fleet.cnh._all_text")
+    def test_extracts_supplemental_fields_when_ocr_values_share_label_lines(self, all_text):
+        all_text.return_value = """
+        NOME E SOBRENOME ALBERTO FELIPE PEREIRA LOPA
+        CPF 113.483.417-93
+        DOC. IDENTIDADE / ORG. EMISSOR / UF
+        021012056533 COMAER RJ
+        DATA NASCIMENTO 22/01/1987
+        DATA EMISSAO VALIDADE ACC
+        16/04/2024 14/04/2034
+        1a HABILITACAO 29/09/2006
+        NACIONALIDADE BRASILEIRO(A)
+        FILIACAO JOSE ALBERTO DE ALMEIDA LOPA
+        MARIA CRISTINA PEREIRA
+        LOCAL RIO DE JANEIRO RJ
+        I<BRA039447298<457<<<<<<<<<<<<
+        8701222M3404148BRA<<<<<<<<<<<8
+        """
+        upload = SimpleUploadedFile("cnh.pdf", b"%PDF-1.4 test", content_type="application/pdf")
+        data = extract_cnh_data(upload)
+        self.assertEqual(data["identity_document"], "021012056533")
+        self.assertEqual(data["issuing_authority"], "COMAER")
+        self.assertEqual(data["issuing_state"], "RJ")
+        self.assertEqual(data["nationality"], "BRASILEIRO(A)")
+        self.assertEqual(data["father_name"], "JOSE ALBERTO DE ALMEIDA LOPA")
+        self.assertEqual(data["mother_name"], "MARIA CRISTINA PEREIRA")
+        self.assertEqual(data["location"], "RIO DE JANEIRO RJ")
+        self.assertEqual(data["cnh_issue_date"], "2024-04-16")
+        self.assertEqual(data["cnh_first_issue_date"], "2006-09-29")
+        self.assertEqual(data["birth_date_display"], "22/01/1987")
+        self.assertEqual(data["cnh_expiration_display"], "14/04/2034")
 
     @patch("apps.fleet.cnh._all_text")
     def test_institutional_pdf_text_does_not_count_as_successful_cnh_extraction(self, all_text):
@@ -134,6 +167,38 @@ class CNHExtractionTests(SimpleTestCase):
         self.assertEqual(data["father_name"], "JOSE ALBERTO DE ALMEIDA LOPA")
         self.assertEqual(data["mother_name"], "MARIA CRISTINA PEREIRA")
         self.assertEqual(data["location"], "RIO DE JANEIRO RJ")
+
+
+class CNHBrazilianDateFormatTests(SimpleTestCase):
+    def test_cnh_date_fields_render_and_accept_brazilian_dates(self):
+        form = CNHDriverCreateForm()
+        for name, expected in (
+            ("birth_date", "22/01/1987"),
+            ("cnh_expiration", "14/04/2034"),
+            ("cnh_issue_date", "16/04/2024"),
+            ("cnh_first_issue_date", "29/09/2006"),
+        ):
+            field = form.fields[name]
+            self.assertEqual(field.widget.input_type, "text")
+            self.assertEqual(field.widget.attrs.get("placeholder"), "dd/mm/aaaa")
+            self.assertEqual(field.clean(expected).isoformat(), {
+                "birth_date": "1987-01-22",
+                "cnh_expiration": "2034-04-14",
+                "cnh_issue_date": "2024-04-16",
+                "cnh_first_issue_date": "2006-09-29",
+            }[name])
+
+    def test_cnh_date_fields_format_iso_initial_values_for_brazil(self):
+        form = CNHDriverCreateForm(initial={
+            "birth_date": "1987-01-22",
+            "cnh_expiration": "2034-04-14",
+            "cnh_issue_date": "2024-04-16",
+            "cnh_first_issue_date": "2006-09-29",
+        })
+        self.assertIn('value="22/01/1987"', str(form["birth_date"]))
+        self.assertIn('value="14/04/2034"', str(form["cnh_expiration"]))
+        self.assertIn('value="16/04/2024"', str(form["cnh_issue_date"]))
+        self.assertIn('value="29/09/2006"', str(form["cnh_first_issue_date"]))
 
 
 class CNHDriverFlowTests(TestCase):

@@ -604,7 +604,40 @@ class CNHUploadForm(forms.Form):
         return file_obj
 
 
+class BrazilianDateInput(forms.DateInput):
+    input_type = "text"
+
+    def __init__(self, attrs=None):
+        defaults = {"class": "form-input", "placeholder": "dd/mm/aaaa", "inputmode": "numeric", "autocomplete": "off"}
+        defaults.update(attrs or {})
+        super().__init__(format="%d/%m/%Y", attrs=defaults)
+
+    def format_value(self, value):
+        if isinstance(value, str):
+            from datetime import datetime
+            raw = value.strip()
+            for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y"):
+                try:
+                    value = datetime.strptime(raw[:10], fmt).date()
+                    break
+                except ValueError:
+                    continue
+        return super().format_value(value)
+
+
+class BrazilianDateField(forms.DateField):
+    input_formats = ["%d/%m/%Y", "%d-%m-%Y", "%Y-%m-%d"]
+
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault("widget", BrazilianDateInput())
+        kwargs.setdefault("input_formats", self.input_formats)
+        super().__init__(*args, **kwargs)
+
+
 class CNHDriverCreateForm(DriverForm):
+    birth_date = BrazilianDateField(label="Data de nascimento", required=False)
+    cnh_expiration = BrazilianDateField(label="Validade CNH", required=False)
+
     class Meta(DriverForm.Meta):
         fields = [
             "name", "cpf", "birth_date", "cnh_number", "cnh_category",
@@ -614,14 +647,8 @@ class CNHDriverCreateForm(DriverForm):
         ]
 
     document_id = forms.UUIDField(widget=forms.HiddenInput())
-    cnh_issue_date = forms.DateField(
-        label="Data de emissão da CNH", required=False,
-        widget=forms.DateInput(format="%Y-%m-%d", attrs={**INPUT, "type": "date"}),
-    )
-    cnh_first_issue_date = forms.DateField(
-        label="Primeira habilitação", required=False,
-        widget=forms.DateInput(format="%Y-%m-%d", attrs={**INPUT, "type": "date"}),
-    )
+    cnh_issue_date = BrazilianDateField(label="Data de emissão da CNH", required=False)
+    cnh_first_issue_date = BrazilianDateField(label="Primeira habilitação", required=False)
     identity_document = forms.CharField(label="Documento de identidade", max_length=70, required=False, widget=forms.TextInput(attrs=INPUT))
     issuing_authority = forms.CharField(label="Órgão emissor", max_length=50, required=False, widget=forms.TextInput(attrs=INPUT))
     issuing_state = forms.CharField(label="UF emissora", max_length=12, required=False, widget=forms.TextInput(attrs=INPUT))
