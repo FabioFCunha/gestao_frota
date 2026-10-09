@@ -137,3 +137,29 @@ class CNHDriverFlowTests(TestCase):
         response = self.client.get("/motoristas/novo/?manual=1&sector=adm")
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Cadastrar Motorista manualmente")
+
+    def test_manual_registration_saves_driver_and_sector(self):
+        self.client.force_login(self.user)
+        response = self.client.post(
+            "/motoristas/novo/?manual=1&sector=adm",
+            {
+                "name": "MOTORISTA MANUAL TESTE",
+                "registration": "MAT-CNH-MANUAL-001",
+                "phone": "",
+                "email": "",
+                "cpf": "",
+                "birth_date": "",
+                "cnh_number": "",
+                "cnh_category": "",
+                "cnh_expiration": "",
+                "renewal_date": "",
+                "active": "True",
+                "sectors": [str(self.sector.pk)],
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        driver = Driver.objects.get(name="MOTORISTA MANUAL TESTE")
+        self.assertEqual(driver.registration, "MAT-CNH-MANUAL-001")
+        self.assertTrue(driver.sectors.filter(pk=self.sector.pk).exists())
+
