@@ -1,6 +1,6 @@
 {% extends 'ui/base.html' %}
-{% block title %}Cadastrar motorista pela CNH | Gestão de Frotas{% endblock %}
-{% block heading %}Cadastrar motorista pela CNH{% endblock %}
+{% block title %}{% if cnh_target %}Atualizar CNH{% else %}Cadastrar motorista pela CNH{% endif %} | Gestão de Frotas{% endblock %}
+{% block heading %}{% if cnh_target %}Inserir/atualizar CNH{% else %}Cadastrar motorista pela CNH{% endif %}{% endblock %}
 {% block content %}
 <style>
 .cnh-shell { max-width:1100px; margin:0 auto; }
@@ -13,6 +13,7 @@
 .cnh-fields > div { min-width:0; }
 .cnh-fields label { display:block; font-weight:650; margin-bottom:6px; }
 .cnh-fields input, .cnh-fields select, .cnh-fields textarea { width:100%; }
+.cnh-fields input[type="checkbox"] { width:auto; }
 .cnh-field-wide { grid-column:1/-1; }
 .cnh-data-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin-top:16px; }
 .cnh-data { border:1px solid #e2e8f0; border-radius:10px; padding:12px; min-width:0; }
@@ -30,7 +31,11 @@
     <section class="cnh-hero">
         <div style="font-size:.75rem;letter-spacing:.12em;font-weight:800;opacity:.85;margin-bottom:8px;">CADASTRO DOCUMENTAL</div>
         <h2>Leia a CNH e revise os dados antes de salvar</h2>
+        {% if cnh_target %}
+        <p>Motorista selecionado: <strong>{{ cnh_target.name }}</strong>. Confira o documento antes de confirmar o vínculo. O cadastro existente e seu histórico serão preservados.</p>
+        {% else %}
         <p>Envie o PDF da Carteira Nacional de Habilitação. O sistema tentará extrair os dados automaticamente; nada será cadastrado até você revisar e confirmar.</p>
+        {% endif %}
     </section>
 
     {% if messages %}
@@ -78,13 +83,14 @@
 
         <div class="cnh-step" style="margin-top:26px;">
             <span class="cnh-step-number">2</span>
-            <div><strong>Conferência e cadastro</strong><div style="color:#64748b;margin-top:3px;">Os campos abaixo são editáveis. Dados complementares lidos do documento também serão guardados no histórico da CNH.</div></div>
+            <div><strong>{% if cnh_target %}Conferência e vínculo ao motorista{% else %}Conferência e cadastro{% endif %}</strong><div style="color:#64748b;margin-top:3px;">Os campos abaixo são editáveis. Dados complementares lidos do documento também serão guardados no histórico da CNH.</div></div>
         </div>
 
         <form method="post" action="" style="margin-top:18px;">
             {% csrf_token %}
             <input type="hidden" name="step" value="confirm">
             {{ confirm_form.document_id }}
+            {% for error in confirm_form.document_id.errors %}<div role="alert" style="color:#b91c1c;">{{ error }}</div>{% endfor %}
             {% if confirm_form.non_field_errors %}
             <div role="alert" style="padding:12px;margin-bottom:16px;border-radius:8px;background:#fef2f2;color:#b91c1c;">{{ confirm_form.non_field_errors }}</div>
             {% endif %}
@@ -100,7 +106,7 @@
             </div>
             <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:26px;">
                 <a class="secondary-action" href="{{ back_url_url }}">Cancelar</a>
-                <button type="submit" class="primary-action">Confirmar e cadastrar motorista</button>
+                <button type="submit" class="primary-action">{% if cnh_target %}Confirmar e atualizar CNH{% else %}Confirmar e cadastrar motorista{% endif %}</button>
             </div>
         </form>
     </section>
@@ -129,9 +135,11 @@
     </section>
     {% endif %}
 
+    {% if not cnh_target %}
     <div style="text-align:center;margin:18px 0 8px;color:#64748b;">
         <a href="{% url 'driver_create' %}?manual=1{% if requested_sector %}&amp;sector={{ requested_sector|urlencode }}{% endif %}">Prefiro cadastrar manualmente</a>
     </div>
+    {% endif %}
     <p style="font-size:.82rem;color:#64748b;line-height:1.5;">A extração automática pode cometer erros. A conferência humana é obrigatória antes de concluir o cadastro. O PDF e os dados extraídos ficam vinculados ao registro documental.</p>
 </div>
 {% endblock %}

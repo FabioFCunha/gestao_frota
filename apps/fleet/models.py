@@ -97,6 +97,37 @@ class Driver(NamedModel):
     cnh_category = models.CharField("Categoria", max_length=5, blank=True)
     cnh_expiration = models.DateField("Validade CNH", null=True, blank=True)
 
+    class Meta(NamedModel.Meta):
+        constraints = [
+            models.UniqueConstraint(
+                models.Func(models.F("cpf"), models.Value(r"[^0-9]"), models.Value(""), models.Value("g"), function="REGEXP_REPLACE", output_field=models.CharField()),
+                condition=Q(cpf__regex=r"[0-9]"), name="unique_driver_normalized_cpf",
+                violation_error_message="CPF já cadastrado em outro motorista.",
+            ),
+            models.UniqueConstraint(
+                models.Func(models.F("cnh_number"), models.Value(r"[^0-9]"), models.Value(""), models.Value("g"), function="REGEXP_REPLACE", output_field=models.CharField()),
+                condition=Q(cnh_number__regex=r"[0-9]"), name="unique_driver_normalized_cnh",
+                violation_error_message="Registro de CNH já cadastrado em outro motorista.",
+            ),
+        ]
+
+    def save(self, *args, **kwargs):
+        import re
+        from django.db import transaction
+        using = kwargs.get("using") or self._state.db or "default"
+        with transaction.atomic(using=using):
+            if not self._state.adding:
+                previous = type(self).objects.using(using).select_for_update().get(pk=self.pk)
+                fields = kwargs.get("update_fields")
+                for field in ("cpf", "cnh_number"):
+                    if fields is not None and field not in fields:
+                        continue
+                    old = re.sub(r"[^0-9]", "", getattr(previous, field) or "")
+                    new = re.sub(r"[^0-9]", "", getattr(self, field) or "")
+                    if old and old != new:
+                        raise ValidationError({field: "Não é permitido trocar ou remover a identidade do motorista."})
+            return super().save(*args, **kwargs)
+
 
 class DriverCNHHistory(BaseModel):
     driver = models.ForeignKey(Driver, on_delete=models.CASCADE, related_name="cnh_history")

@@ -1,10 +1,10 @@
 from .exit_order_bdt import exit_order_bdt_rows
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import LoginView
-from django.db import transaction
+from django.db import transaction, IntegrityError
 from django.db.models import Count, Q, Prefetch
 from django.core.paginator import Paginator
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.utils.dateparse import parse_date
 import uuid
 from django.shortcuts import render, redirect, get_object_or_404
@@ -1458,7 +1458,7 @@ def fine_list(request):
 def driver_create(request):
     from urllib.parse import urlencode
     from apps.fleet.models import Document, AuditLog
-    from apps.fleet.services import stage_cnh_document_for_creation, link_document
+    from apps.fleet.services import stage_cnh_document_for_creation, link_document, cnh_confirmation_source, validate_cnh_identity
 
     requested_sector = request.GET.get("sector")
     list_url = reverse("driver_list")
@@ -1470,9 +1470,14 @@ def driver_create(request):
         if request.method == "POST":
             form = DriverForm(request.POST, user=request.user, requested_sector=requested_sector)
             if form.is_valid():
-                form.save()
-                messages.success(request, "Motorista cadastrado com sucesso!")
-                return redirect(list_url)
+                try:
+                    with transaction.atomic():
+                        form.save()
+                except (ValidationError, IntegrityError) as exc:
+                    form.add_error(None, "CPF, CNH ou matrícula já cadastrados." if isinstance(exc, IntegrityError) else str(exc))
+                else:
+                    messages.success(request, "Motorista cadastrado com sucesso!")
+                    return redirect(list_url)
         else:
             form = DriverForm(user=request.user, requested_sector=requested_sector)
         return render(request, "ui/form.html", {
@@ -1571,6 +1576,10 @@ def driver_create(request):
                 }
                 try:
                     with transaction.atomic():
+                        document, extracted = cnh_confirmation_source(
+                            document_id=document.pk, user=request.user,
+                        )
+                        validate_cnh_identity(extracted=extracted, values=confirm_form.cleaned_data)
                         driver = confirm_form.save()
                         link_document(document=document, obj=driver, user=request.user)
                         AuditLog.objects.create(
@@ -1588,8 +1597,8 @@ def driver_create(request):
                                 "form_values": reviewed_values,
                             },
                         )
-                except ValueError as exc:
-                    confirm_form.add_error(None, str(exc))
+                except (ValueError, ValidationError, IntegrityError) as exc:
+                    confirm_form.add_error(None, "CPF, CNH ou matrícula já cadastrados." if isinstance(exc, IntegrityError) else str(exc))
                 else:
                     messages.success(request, f"Motorista {driver.name} cadastrado após conferência da CNH.")
                     return redirect(list_url)
@@ -1634,9 +1643,14 @@ def driver_edit(request, pk):
     if request.method == 'POST':
         form = DriverForm(request.POST, instance=driver, user=request.user, requested_sector=requested_sector)
         if form.is_valid():
-            form.save()
-            messages.success(request, 'Dados do motorista atualizados com sucesso!')
-            return redirect(list_url)
+            try:
+                with transaction.atomic():
+                    form.save()
+            except (ValidationError, IntegrityError) as exc:
+                form.add_error(None, "CPF, CNH ou matrícula já cadastrados." if isinstance(exc, IntegrityError) else str(exc))
+            else:
+                messages.success(request, 'Dados do motorista atualizados com sucesso!')
+                return redirect(list_url)
     else:
         form = DriverForm(instance=driver, user=request.user, requested_sector=requested_sector)
     return render(request, 'ui/form.html', {'form': form, 'title': f'Editar Motorista: {driver.name}', 'back_url': 'driver_list', 'back_url_url': list_url})
@@ -2328,3 +2342,72 @@ def workshop_quick_create(request):
             workshop.save(update_fields=["active", "updated_at"])
 
     return JsonResponse({"id": str(workshop.pk), "name": workshop.name})
+
+@login_required
+@module_permission("fleet.change_driver")
+def driver_cnh(request, pk):
+    from urllib.parse import urlencode
+    from apps.fleet.models import Driver, Document, AuditLog
+    from apps.fleet.driver_scope import apply_driver_sector_scope
+    from apps.fleet.services import stage_cnh_document_for_creation, confirm_cnh_for_driver, current_cnh_document_values
+    from .forms import CNHDriverUpdateForm
+
+    requested_sector = request.GET.get("sector")
+    driver = get_object_or_404(
+        apply_driver_sector_scope(Driver.objects.all(), request.user, requested_sector), pk=pk,
+    )
+    list_url = reverse("driver_list")
+    if requested_sector in {"adm", "lei-seca"}:
+        list_url += "?" + urlencode({"sector": requested_sector})
+    upload_form = CNHUploadForm()
+    confirm_form = preview = document = None
+    if request.method == "POST" and request.POST.get("step") == "upload":
+        upload_form = CNHUploadForm(request.POST, request.FILES)
+        if upload_form.is_valid():
+            try:
+                document, preview = stage_cnh_document_for_creation(
+                    file_obj=upload_form.cleaned_data["file"], user=request.user, driver=driver,
+                )
+                initial = {"document_id": document.pk}
+                previous_values = current_cnh_document_values(driver)
+                for field in CNHDriverUpdateForm.Meta.fields:
+                    initial[field] = preview.get(field) or getattr(driver, field, "") or previous_values.get(field, "")
+                confirm_form = CNHDriverUpdateForm(
+                    initial=initial, instance=driver, user=request.user, requested_sector=requested_sector,
+                )
+            except ValueError as exc:
+                upload_form.add_error("file", str(exc))
+    elif request.method == "POST":
+        confirm_form = CNHDriverUpdateForm(
+            request.POST, instance=driver, user=request.user, requested_sector=requested_sector,
+        )
+        if confirm_form.is_valid():
+            try:
+                driver = confirm_cnh_for_driver(
+                    driver=driver, document_id=confirm_form.cleaned_data["document_id"],
+                    values=confirm_form.cleaned_data, user=request.user,
+                )
+            except (ValueError, ValidationError, IntegrityError, Document.DoesNotExist) as exc:
+                confirm_form.add_error(None, "CPF ou CNH já cadastrados em outro motorista." if isinstance(exc, IntegrityError) else "Documento não localizado." if isinstance(exc, Document.DoesNotExist) else str(exc))
+            else:
+                messages.success(request, f"CNH vinculada ao cadastro existente de {driver.name}.")
+                return redirect(list_url)
+        # Não mostrar documento de outro usuário ou de outro motorista ao reexibir erros.
+        try:
+            document_id = uuid.UUID(str(request.POST.get("document_id", "")))
+        except ValueError:
+            document_id = None
+        if document_id:
+            staged = AuditLog.objects.filter(
+                module="cnh", action="CNH PARA ATUALIZAR MOTORISTA", entity_type="document",
+                entity_id=document_id, user=request.user,
+            ).order_by("-created_at").first()
+            if staged and (staged.new_values or {}).get("driver_id") == str(driver.pk):
+                document = Document.objects.filter(pk=document_id).first()
+                preview = dict(staged.new_values or {})
+        driver.refresh_from_db()
+    return render(request, "ui/driver_create_cnh.html", {
+        "upload_form": upload_form, "confirm_form": confirm_form, "preview": preview,
+        "document": document, "cnh_target": driver, "back_url_url": list_url,
+        "requested_sector": requested_sector,
+    })

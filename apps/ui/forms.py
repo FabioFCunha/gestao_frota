@@ -137,6 +137,9 @@ class DriverForm(forms.ModelForm):
         from apps.fleet.driver_scope import effective_driver_sector_slugs
 
         allowed = effective_driver_sector_slugs(user) if user is not None else {"adm", "lei-seca"}
+        self._original_identity = {
+            field: getattr(self.instance, field) or "" for field in ("cpf", "cnh_number")
+        }
         self._requested_sector = requested_sector
         self._allowed_sector_slugs = allowed
         self._preserved_sector_ids = set()
@@ -152,6 +155,19 @@ class DriverForm(forms.ModelForm):
                 self.initial["sectors"] = list(Sector.objects.filter(slug=requested_sector))
             elif len(allowed) == 1:
                 self.initial["sectors"] = list(Sector.objects.filter(slug__in=allowed))
+
+    def clean(self):
+        import re
+        cleaned = super().clean()
+        if not self.instance._state.adding:
+            for field, old in self._original_identity.items():
+                if field not in self.fields or field in self.errors:
+                    continue
+                old = re.sub(r"[^0-9]", "", old)
+                new = re.sub(r"[^0-9]", "", cleaned.get(field) or "")
+                if old and old != new:
+                    self.add_error(field, "Não é permitido trocar ou remover a identidade do motorista.")
+        return cleaned
 
     def _save_m2m(self):
         super()._save_m2m()
@@ -683,3 +699,29 @@ class CNHDriverCreateForm(DriverForm):
         if len(value) != 11:
             raise forms.ValidationError("O CPF deve conter 11 dígitos.")
         return f"{value[:3]}.{value[3:6]}.{value[6:9]}-{value[9:]}"
+
+class CNHDriverUpdateForm(CNHDriverCreateForm):
+    identity_confirmed = forms.BooleanField(
+        label="Conferi o nome no cadastro e no PDF e confirmo que são da mesma pessoa.",
+        required=True,
+    )
+
+    class Meta(CNHDriverCreateForm.Meta):
+        fields = [field for field in CNHDriverCreateForm.Meta.fields if field != "name"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["cpf"].required = True
+        self.fields["cnh_number"].required = True
+        self.fields["cnh_expiration"].required = True
+
+    def clean_cnh_number(self):
+        import re
+        value = re.sub(r"[^0-9]", "", self.cleaned_data.get("cnh_number") or "")
+        if len(value) != 11:
+            raise forms.ValidationError("O registro da CNH deve conter 11 dígitos.")
+        return value
+
+    def save(self, commit=True):
+        # O serviço confirma a identidade, bloqueia concorrência e salva só os campos documentais.
+        raise RuntimeError("Use confirm_cnh_for_driver para atualizar a CNH.")

@@ -22,6 +22,7 @@ urlpatterns = [
     path("contratos/<uuid:pk>/editar/", views.contract_edit, name="contract_edit"),
     path("motoristas/", driver_list, name="driver_list"),
     path("motoristas/novo/", views.driver_create, name="driver_create"),
+    path("motoristas/<uuid:pk>/cnh/", views.driver_cnh, name="driver_cnh"),
     path("motoristas/<uuid:pk>/editar/", views.driver_edit, name="driver_edit"),
     path("motoristas/<uuid:pk>/vincular-veiculo/", views.driver_assign_vehicle, name="driver_assign_vehicle"),
     path("manutencoes/", maintenance_list, name="maintenance_list"),

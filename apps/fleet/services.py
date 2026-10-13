@@ -2073,7 +2073,7 @@ def change_vehicle_position(*, vehicle: Vehicle, sector, active: bool, user, rea
     return vehicle
 
 @transaction.atomic
-def stage_cnh_document_for_creation(*, file_obj, user):
+def stage_cnh_document_for_creation(*, file_obj, user, driver=None):
     """Armazena a CNH original, extrai os dados e deixa o documento aguardando conferência."""
     import mimetypes
     from .models import Document, DocumentVersion, DocumentStatus, DocumentType, AuditLog
@@ -2084,6 +2084,12 @@ def stage_cnh_document_for_creation(*, file_obj, user):
         raise ValueError("A CNH deve ser enviada em arquivo PDF.")
     if file_obj.size > getattr(settings, "DOCUMENT_MAX_UPLOAD_SIZE", 10 * 1024 * 1024):
         raise ValueError("O arquivo excede o limite permitido.")
+
+    file_obj.seek(0)
+    extracted = extract_cnh_data(file_obj)
+    if driver is not None:
+        validate_cnh_identity(extracted=extracted, values=extracted, driver=driver)
+    file_obj.seek(0)
 
     document_type, _ = DocumentType.objects.get_or_create(
         name="CNH", defaults={"active": True},
@@ -2106,15 +2112,120 @@ def stage_cnh_document_for_creation(*, file_obj, user):
         file_size=file_obj.size,
         uploaded_by=user,
     )
-    file_obj.seek(0)
-    extracted = extract_cnh_data(file_obj)
     AuditLog.objects.create(
         user=user,
         module="cnh",
-        action="CNH PARA CADASTRO DE MOTORISTA",
+        action="CNH PARA ATUALIZAR MOTORISTA" if driver is not None else "CNH PARA CADASTRO DE MOTORISTA",
         entity_type="document",
         entity_id=document.id,
-        new_values=extracted,
+        new_values={**extracted, "driver_id": str(driver.pk)} if driver is not None else extracted,
     )
     return document, extracted
 
+def validate_cnh_identity(*, extracted, values, driver=None):
+    """Confere a identidade do PDF, do formulário e dos cadastros de todos os setores."""
+    def digits(value):
+        return re.sub(r"[^0-9]", "", str(value or ""))
+    for field, label in (("cpf", "CPF"), ("cnh_number", "registro da CNH")):
+        source = digits(extracted.get(field))
+        reviewed = digits(values.get(field))
+        if len(source) != 11:
+            raise ValueError("CPF e registro devem ser reconhecidos no PDF. Envie uma CNH legível.")
+        if reviewed != source:
+            raise ValueError(f"O {label} confirmado deve ser igual ao identificado no PDF.")
+        if driver is not None:
+            current = digits(getattr(driver, field))
+            if current and current != source:
+                raise ValueError(f"O {label} do PDF não corresponde ao motorista selecionado.")
+        normalized = models.Func(
+            models.F(field), models.Value(r"[^0-9]"), models.Value(""), models.Value("g"),
+            function="REGEXP_REPLACE", output_field=models.CharField(),
+        )
+        others = Driver.objects.annotate(cnh_identity_key=normalized).filter(cnh_identity_key=source)
+        if driver is not None:
+            others = others.exclude(pk=driver.pk)
+        if others.exists():
+            raise ValueError(f"Este {label} já pertence a outro motorista. Atualize o cadastro existente.")
+
+
+@transaction.atomic
+def cnh_confirmation_source(*, document_id, user, driver=None):
+    from .models import Document, DocumentRelation
+    document = Document.objects.select_for_update().select_related("document_type").get(pk=document_id)
+    if document.document_type.name != "CNH":
+        raise ValueError("O documento enviado não é uma CNH.")
+    action = "CNH PARA ATUALIZAR MOTORISTA" if driver is not None else "CNH PARA CADASTRO DE MOTORISTA"
+    staged = AuditLog.objects.filter(
+        entity_type="document", entity_id=document.pk, module="cnh", action=action, user=user,
+    ).order_by("-created_at").first()
+    if staged is None:
+        raise ValueError("O documento não está disponível nesta sessão. Envie a CNH novamente.")
+    extracted = dict(staged.new_values or {})
+    if driver is not None and extracted.get("driver_id") != str(driver.pk):
+        raise ValueError("A CNH foi enviada para outro motorista.")
+    if DocumentRelation.objects.filter(document=document).exists() or AuditLog.objects.filter(
+        module="cnh", entity_type="document", entity_id=document.pk,
+        action__in=["CNH CADASTRADA A PARTIR DE PDF", "CNH ATUALIZADA A PARTIR DE PDF"],
+    ).exists():
+        raise ValueError("Esta CNH já foi confirmada. Envie um novo documento para atualizar.")
+    return document, extracted
+
+
+@transaction.atomic
+def confirm_cnh_for_driver(*, driver, document_id, values, user):
+    from .models import DriverCNHHistory
+    from django.utils.dateparse import parse_date
+    if not values.get("identity_confirmed"):
+        raise ValueError("Confirme que o cadastro e a CNH são da mesma pessoa.")
+    # O lock do documento impede reutilização; o do motorista serializa renovações.
+    document, extracted = cnh_confirmation_source(document_id=document_id, user=user, driver=driver)
+    driver = Driver.objects.select_for_update().get(pk=driver.pk)
+    validate_cnh_identity(extracted=extracted, values=values, driver=driver)
+    fields = (
+        "cpf", "birth_date", "cnh_number", "cnh_category", "cnh_expiration",
+        "cnh_issue_date", "cnh_first_issue_date", "identity_document", "issuing_authority",
+        "issuing_state", "nationality", "father_name", "mother_name", "location",
+    )
+    previous_document_values = current_cnh_document_values(driver)
+    model_fields = {field.name for field in Driver._meta.concrete_fields}
+    old_values = {}
+    reviewed = {}
+    changed = []
+    for field in fields:
+        old = getattr(driver, field) if field in model_fields else previous_document_values.get(field, "")
+        old_values[field] = old.isoformat() if hasattr(old, "isoformat") else old
+        value = values.get(field)
+        # OCR ausente ou campo em branco não apaga informação existente.
+        if value not in (None, "") and field in model_fields:
+            setattr(driver, field, value)
+            changed.append(field)
+        current = getattr(driver, field) if field in model_fields else value if value not in (None, "") else old
+        reviewed[field] = current.isoformat() if hasattr(current, "isoformat") else current
+    driver.save(update_fields=[*changed, "updated_at"])
+    link_document(document=document, obj=driver, user=user)
+    if driver.cnh_expiration and (
+        old_values["cnh_expiration"] != reviewed["cnh_expiration"]
+        or old_values["cnh_number"] != reviewed["cnh_number"]
+        or old_values["cnh_category"] != reviewed["cnh_category"]
+    ):
+        DriverCNHHistory.objects.create(
+            driver=driver, renewal_date=parse_date(str(reviewed.get("cnh_issue_date") or "")) or timezone.localdate(),
+            new_expiration=driver.cnh_expiration, cnh_number=driver.cnh_number,
+            cnh_category=driver.cnh_category,
+        )
+    AuditLog.objects.create(
+        user=user, module="cnh", action="CNH ATUALIZADA A PARTIR DE PDF",
+        entity_type="document", entity_id=document.pk, old_values=old_values,
+        new_values={"driver_id": str(driver.pk), "driver_name": driver.name,
+                    "extracted_data": extracted, "form_values": reviewed, "reviewed": True},
+    )
+    return driver
+
+
+
+def current_cnh_document_values(driver):
+    audit = AuditLog.objects.filter(
+        module="cnh", action__in=["CNH CADASTRADA A PARTIR DE PDF", "CNH ATUALIZADA A PARTIR DE PDF"],
+        new_values__driver_id=str(driver.pk),
+    ).order_by("-created_at").first()
+    return dict((audit.new_values or {}).get("form_values") or {}) if audit else {}
