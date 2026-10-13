@@ -4,7 +4,7 @@
 {% block content %}
 <section class="panel" style="max-width:760px">
   <h2>CRLV — {{ current_plate }}</h2>
-  <p>Use esta tela pela seção <strong>Veículos</strong> para registrar um novo exercício do CRLV. O prontuário permanece somente informativo.</p>
+  <p>Envie o PDF do CRLV para registrar um novo exercício ou atualizar o documento. Confira os dados extraídos antes de confirmar.</p>
   {% if not confirm_form %}
   <form method="post" enctype="multipart/form-data">{% csrf_token %}<input type="hidden" name="step" value="upload">
     {{ upload_form.as_p }}<button class="primary-action" type="submit">Anexar CRLV</button>
