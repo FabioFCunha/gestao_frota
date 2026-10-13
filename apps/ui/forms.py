@@ -727,11 +727,19 @@ class CNHDriverUpdateForm(CNHDriverCreateForm):
         raise RuntimeError("Use confirm_cnh_for_driver para atualizar a CNH.")
 
 class DriverDocumentEditForm(CNHDriverCreateForm):
-    """Mesmos campos documentais da confirmação de CNH, sem exigir novo PDF."""
+    """Campos documentais e telefone do motorista, sem exigir novo PDF."""
+
+    class Meta(CNHDriverCreateForm.Meta):
+        fields = ["name", "phone", *CNHDriverCreateForm.Meta.fields[1:]]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields.pop("document_id", None)
+        self.fields["phone"].label = "Telefone / WhatsApp"
+        self.fields["phone"].widget = forms.TextInput(attrs={
+            **INPUT, "type": "tel", "autocomplete": "tel", "inputmode": "tel",
+            "placeholder": "(21) 99999-9999",
+        })
         if self.instance.horus_user_id:
             self.fields["name"].disabled = True
             self.fields["name"].help_text = "Nome recebido do Horus."

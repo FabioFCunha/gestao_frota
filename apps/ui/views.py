@@ -1651,7 +1651,10 @@ def driver_edit(request, pk):
     )
     if request.method == "POST" and form.is_valid():
         try:
-            driver = update_driver_document_data(driver=driver, values=form.cleaned_data, user=request.user)
+            values = dict(form.cleaned_data)
+            if "phone" not in request.POST:
+                values.pop("phone", None)
+            driver = update_driver_document_data(driver=driver, values=values, user=request.user)
         except (ValidationError, IntegrityError) as exc:
             form.add_error(None, "CPF ou CNH já cadastrados em outro motorista." if isinstance(exc, IntegrityError) else str(exc))
         else:

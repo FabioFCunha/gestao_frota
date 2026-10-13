@@ -2237,7 +2237,7 @@ def update_driver_document_data(*, driver, values, user):
     from django.utils.dateparse import parse_date
     driver = Driver.objects.select_for_update().get(pk=driver.pk)
     fields = (
-        "name", "cpf", "birth_date", "cnh_number", "cnh_category", "cnh_expiration",
+        "name", "phone", "cpf", "birth_date", "cnh_number", "cnh_category", "cnh_expiration",
         "cnh_issue_date", "cnh_first_issue_date", "identity_document", "issuing_authority",
         "issuing_state", "nationality", "father_name", "mother_name", "location",
     )

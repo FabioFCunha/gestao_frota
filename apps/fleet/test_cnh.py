@@ -868,11 +868,15 @@ class CNHExistingDriverTests(TestCase):
         response = self.client.get(f"/motoristas/{self.driver.pk}/editar/?sector=adm")
         self.assertEqual(response.status_code, 200)
         form = response.context["confirm_form"]
-        self.assertEqual([field.name for field in form.visible_fields()], CNHDriverCreateForm.Meta.fields)
+        self.assertEqual([field.name for field in form.visible_fields()], ["name", "phone", *CNHDriverCreateForm.Meta.fields[1:]])
         self.assertNotIn("document_id", form.fields)
         self.assertNotIn("registration", form.fields)
         self.assertNotIn("sectors", form.fields)
-        self.assertNotIn("phone", form.fields)
+        self.assertIn("phone", form.fields)
+        self.assertEqual(form["phone"].value(), "21999999999")
+        self.assertEqual(form.fields["phone"].label, "Telefone / WhatsApp")
+        self.assertIn('type="tel"', str(form["phone"]))
+        self.assertContains(response, 'class="cnh-whatsapp-icon"')
         self.assertEqual(form["father_name"].value(), "JOSE DA SILVA")
         self.assertEqual(form["mother_name"].value(), "ANA PEREIRA")
         self.assertIn('value="05/06/2025"', str(form["cnh_issue_date"]))
@@ -894,7 +898,7 @@ class CNHExistingDriverTests(TestCase):
             "mother_name": "ANA PEREIRA CORRIGIDA", "issuing_authority": "COMAER", "issuing_state": "RJ",
             "nationality": "BRASILEIRA", "identity_document": "123456789", "location": "RIO DE JANEIRO RJ",
             "cnh_issue_date": "05/06/2030", "cnh_expiration": "31/12/2035",
-            "registration": "MATRICULA ADULTERADA", "phone": "0", "email": "outra@example.com",
+            "registration": "MATRICULA ADULTERADA", "phone": "(21) 98888-7777", "email": "outra@example.com",
             "active": "False", "sectors": [],
         })
         self.assertEqual(response.status_code, 302)
@@ -903,7 +907,7 @@ class CNHExistingDriverTests(TestCase):
         self.assertEqual(self.driver.name, original_name)
         self.assertEqual(self.driver.horus_user_id, original_horus_id)
         self.assertEqual(self.driver.registration, "HORUS-17")
-        self.assertEqual(self.driver.phone, "21999999999")
+        self.assertEqual(self.driver.phone, "(21) 98888-7777")
         self.assertEqual(self.driver.email, "maria@example.com")
         self.assertTrue(self.driver.active)
         self.assertEqual(self.bdt.driver_id, self.driver.pk)
@@ -975,6 +979,50 @@ class CNHExistingDriverTests(TestCase):
         self.assertEqual(self.confirm(second, father_name="", cnh_expiration="2035-12-31").status_code, 302)
         audit = AuditLog.objects.get(action="CNH ATUALIZADA A PARTIR DE PDF", entity_id=second.pk)
         self.assertEqual(audit.new_values["form_values"]["father_name"], "PAI CONFERIDO")
+
+
+    def test_manual_phone_edit_saves_current_number_and_audits_without_cnh_renewal(self):
+        self.upload()
+        self.assertEqual(self.confirm(self.document()).status_code, 302)
+        old_history_count = self.driver.cnh_history.count()
+        response = self.client.post(f"/motoristas/{self.driver.pk}/editar/?sector=adm", {
+            **self.extracted, "phone": "+55 (21) 98888-7777",
+        })
+        self.assertEqual(response.status_code, 302)
+        self.driver.refresh_from_db()
+        self.assertEqual(self.driver.phone, "+55 (21) 98888-7777")
+        self.assertEqual(self.driver.cnh_history.count(), old_history_count)
+        self.assertEqual(self.driver.cpf, self.extracted["cpf"])
+        self.assertEqual(self.driver.cnh_number, self.extracted["cnh_number"])
+        self.assertEqual(Document.objects.count(), 1)
+        audit = AuditLog.objects.get(action="CNH EDITADA MANUALMENTE", entity_id=self.driver.pk)
+        self.assertEqual(audit.old_values["phone"], "21999999999")
+        self.assertEqual(audit.new_values["form_values"]["phone"], "+55 (21) 98888-7777")
+        response = self.client.get(f"/motoristas/{self.driver.pk}/editar/?sector=adm")
+        self.assertEqual(response.context["confirm_form"]["phone"].value(), "+55 (21) 98888-7777")
+
+    def test_omitted_phone_preserves_existing_number(self):
+        response = self.client.post(f"/motoristas/{self.driver.pk}/editar/?sector=adm", {**self.extracted})
+        self.assertEqual(response.status_code, 302)
+        self.driver.refresh_from_db()
+        self.assertEqual(self.driver.phone, "21999999999")
+
+    def test_explicit_empty_phone_clears_number(self):
+        response = self.client.post(f"/motoristas/{self.driver.pk}/editar/?sector=adm", {**self.extracted, "phone": ""})
+        self.assertEqual(response.status_code, 302)
+        self.driver.refresh_from_db()
+        self.assertEqual(self.driver.phone, "")
+        audit = AuditLog.objects.get(action="CNH EDITADA MANUALMENTE", entity_id=self.driver.pk)
+        self.assertEqual(audit.old_values["phone"], "21999999999")
+        self.assertEqual(audit.new_values["form_values"]["phone"], "")
+
+    def test_phone_maximum_length_validation_is_preserved(self):
+        response = self.client.post(f"/motoristas/{self.driver.pk}/editar/?sector=adm", {**self.extracted, "phone": "1" * 31})
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("phone", response.context["confirm_form"].errors)
+        self.driver.refresh_from_db()
+        self.assertEqual(self.driver.phone, "21999999999")
+        self.assertFalse(AuditLog.objects.filter(action="CNH EDITADA MANUALMENTE").exists())
 
 
 class CNHConcurrentDriverIdentityTests(TransactionTestCase):
