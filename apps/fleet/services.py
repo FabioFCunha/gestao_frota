@@ -2225,7 +2225,48 @@ def confirm_cnh_for_driver(*, driver, document_id, values, user):
 
 def current_cnh_document_values(driver):
     audit = AuditLog.objects.filter(
-        module="cnh", action__in=["CNH CADASTRADA A PARTIR DE PDF", "CNH ATUALIZADA A PARTIR DE PDF"],
+        module="cnh", action__in=["CNH CADASTRADA A PARTIR DE PDF", "CNH ATUALIZADA A PARTIR DE PDF", "CNH EDITADA MANUALMENTE"],
         new_values__driver_id=str(driver.pk),
     ).order_by("-created_at").first()
     return dict((audit.new_values or {}).get("form_values") or {}) if audit else {}
+
+@transaction.atomic
+def update_driver_document_data(*, driver, values, user):
+    """Salva campos da CNH e auditoria sem modificar vínculo, setor ou arquivos."""
+    from .models import DriverCNHHistory
+    from django.utils.dateparse import parse_date
+    driver = Driver.objects.select_for_update().get(pk=driver.pk)
+    fields = (
+        "name", "cpf", "birth_date", "cnh_number", "cnh_category", "cnh_expiration",
+        "cnh_issue_date", "cnh_first_issue_date", "identity_document", "issuing_authority",
+        "issuing_state", "nationality", "father_name", "mother_name", "location",
+    )
+    old_document_values = current_cnh_document_values(driver)
+    model_fields = {field.name for field in Driver._meta.concrete_fields}
+    old_values, reviewed, changed = {}, {}, []
+    for field in fields:
+        old = getattr(driver, field) if field in model_fields else old_document_values.get(field, "")
+        old_values[field] = old.isoformat() if hasattr(old, "isoformat") else old
+        if field not in values or (field == "name" and driver.horus_user_id):
+            value = old
+        else:
+            value = values[field]
+        if field in model_fields:
+            setattr(driver, field, value)
+            changed.append(field)
+        reviewed[field] = value.isoformat() if hasattr(value, "isoformat") else value
+    # Driver.save mantém a identidade; a restrição de banco impede duplicidade concorrente.
+    driver.save(update_fields=[*changed, "updated_at"])
+    if driver.cnh_expiration and any(
+        old_values[field] != reviewed[field] for field in ("cnh_expiration", "cnh_number", "cnh_category")
+    ):
+        DriverCNHHistory.objects.create(
+            driver=driver, renewal_date=parse_date(str(reviewed.get("cnh_issue_date") or "")) or timezone.localdate(),
+            new_expiration=driver.cnh_expiration, cnh_number=driver.cnh_number, cnh_category=driver.cnh_category,
+        )
+    AuditLog.objects.create(
+        user=user, module="cnh", action="CNH EDITADA MANUALMENTE", entity_type="driver", entity_id=driver.pk,
+        old_values=old_values, new_values={"driver_id": str(driver.pk), "driver_name": driver.name,
+                                        "form_values": reviewed, "reviewed": True},
+    )
+    return driver

@@ -1629,31 +1629,40 @@ def driver_create(request):
 @module_permission("fleet.change_driver")
 def driver_edit(request, pk):
     from apps.fleet.models import Driver
-
     from apps.fleet.driver_scope import apply_driver_sector_scope
+    from apps.fleet.services import current_cnh_document_values, update_driver_document_data
+    from .forms import DriverDocumentEditForm
     from urllib.parse import urlencode
     requested_sector = request.GET.get("sector")
     list_url = reverse("driver_list")
     if requested_sector in {"adm", "lei-seca"}:
         list_url += "?" + urlencode({"sector": requested_sector})
     driver = get_object_or_404(
-        apply_driver_sector_scope(Driver.objects.all(), request.user, requested_sector),
-        pk=pk,
+        apply_driver_sector_scope(Driver.objects.all(), request.user, requested_sector), pk=pk,
     )
-    if request.method == 'POST':
-        form = DriverForm(request.POST, instance=driver, user=request.user, requested_sector=requested_sector)
-        if form.is_valid():
-            try:
-                with transaction.atomic():
-                    form.save()
-            except (ValidationError, IntegrityError) as exc:
-                form.add_error(None, "CPF, CNH ou matrícula já cadastrados." if isinstance(exc, IntegrityError) else str(exc))
-            else:
-                messages.success(request, 'Dados do motorista atualizados com sucesso!')
-                return redirect(list_url)
-    else:
-        form = DriverForm(instance=driver, user=request.user, requested_sector=requested_sector)
-    return render(request, 'ui/form.html', {'form': form, 'title': f'Editar Motorista: {driver.name}', 'back_url': 'driver_list', 'back_url_url': list_url})
+    previous_values = current_cnh_document_values(driver)
+    initial = {}
+    model_fields = {field.name for field in Driver._meta.concrete_fields}
+    for field in DriverDocumentEditForm.Meta.fields:
+        initial[field] = getattr(driver, field) if field in model_fields else previous_values.get(field, "")
+    form = DriverDocumentEditForm(
+        request.POST if request.method == "POST" else None,
+        instance=driver, initial=initial, user=request.user, requested_sector=requested_sector,
+    )
+    if request.method == "POST" and form.is_valid():
+        try:
+            driver = update_driver_document_data(driver=driver, values=form.cleaned_data, user=request.user)
+        except (ValidationError, IntegrityError) as exc:
+            form.add_error(None, "CPF ou CNH já cadastrados em outro motorista." if isinstance(exc, IntegrityError) else str(exc))
+        else:
+            messages.success(request, "Dados documentais do motorista atualizados com sucesso!")
+            return redirect(list_url)
+    if request.method == "POST":
+        driver.refresh_from_db()
+    return render(request, "ui/driver_create_cnh.html", {
+        "confirm_form": form, "form": form, "cnh_target": driver, "cnh_edit_mode": True,
+        "back_url_url": list_url, "requested_sector": requested_sector,
+    })
 
 
 @login_required

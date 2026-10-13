@@ -1,6 +1,6 @@
 {% extends 'ui/base.html' %}
-{% block title %}{% if cnh_target %}Atualizar CNH{% else %}Cadastrar motorista pela CNH{% endif %} | Gestão de Frotas{% endblock %}
-{% block heading %}{% if cnh_target %}Inserir/atualizar CNH{% else %}Cadastrar motorista pela CNH{% endif %}{% endblock %}
+{% block title %}{% if cnh_edit_mode %}Editar motorista{% elif cnh_target %}Atualizar CNH{% else %}Cadastrar motorista pela CNH{% endif %} | Gestão de Frotas{% endblock %}
+{% block heading %}{% if cnh_edit_mode %}Editar motorista{% elif cnh_target %}Inserir/atualizar CNH{% else %}Cadastrar motorista pela CNH{% endif %}{% endblock %}
 {% block content %}
 <style>
 .cnh-shell { max-width:1100px; margin:0 auto; }
@@ -30,8 +30,10 @@
 
     <section class="cnh-hero">
         <div style="font-size:.75rem;letter-spacing:.12em;font-weight:800;opacity:.85;margin-bottom:8px;">CADASTRO DOCUMENTAL</div>
-        <h2>Leia a CNH e revise os dados antes de salvar</h2>
-        {% if cnh_target %}
+        <h2>{% if cnh_edit_mode %}Revise os dados do motorista{% else %}Leia a CNH e revise os dados antes de salvar{% endif %}</h2>
+        {% if cnh_edit_mode %}
+        <p>Motorista: <strong>{{ cnh_target.name }}</strong>. Os dados documentais já registrados estão preenchidos abaixo.</p>
+        {% elif cnh_target %}
         <p>Motorista selecionado: <strong>{{ cnh_target.name }}</strong>. Confira o documento antes de confirmar o vínculo. O cadastro existente e seu histórico serão preservados.</p>
         {% else %}
         <p>Envie o PDF da Carteira Nacional de Habilitação. O sistema tentará extrair os dados automaticamente; nada será cadastrado até você revisar e confirmar.</p>
@@ -46,6 +48,7 @@
 
     {% if confirm_form %}
     <section class="panel" style="padding:24px;margin-bottom:22px;">
+        {% if not cnh_edit_mode %}
         <div class="cnh-step">
             <span class="cnh-step-number">1</span>
             <div><strong>Documento lido</strong><div style="color:#64748b;margin-top:3px;">{{ document.title|default:"CNH enviada" }} — confira os dados extraídos abaixo e corrija os campos necessários.</div></div>
@@ -81,16 +84,19 @@
         </div>
         {% endif %}
 
+        {% endif %}
         <div class="cnh-step" style="margin-top:26px;">
-            <span class="cnh-step-number">2</span>
-            <div><strong>{% if cnh_target %}Conferência e vínculo ao motorista{% else %}Conferência e cadastro{% endif %}</strong><div style="color:#64748b;margin-top:3px;">Os campos abaixo são editáveis. Dados complementares lidos do documento também serão guardados no histórico da CNH.</div></div>
+            {% if not cnh_edit_mode %}<span class="cnh-step-number">2</span>{% endif %}
+            <div><strong>{% if cnh_edit_mode %}Dados do motorista{% elif cnh_target %}Conferência e vínculo ao motorista{% else %}Conferência e cadastro{% endif %}</strong><div style="color:#64748b;margin-top:3px;">Os campos abaixo são editáveis. Dados complementares lidos do documento também serão guardados no histórico da CNH.</div></div>
         </div>
 
         <form method="post" action="" style="margin-top:18px;">
             {% csrf_token %}
+            {% if not cnh_edit_mode %}
             <input type="hidden" name="step" value="confirm">
             {{ confirm_form.document_id }}
             {% for error in confirm_form.document_id.errors %}<div role="alert" style="color:#b91c1c;">{{ error }}</div>{% endfor %}
+            {% endif %}
             {% if confirm_form.non_field_errors %}
             <div role="alert" style="padding:12px;margin-bottom:16px;border-radius:8px;background:#fef2f2;color:#b91c1c;">{{ confirm_form.non_field_errors }}</div>
             {% endif %}
@@ -106,7 +112,7 @@
             </div>
             <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:26px;">
                 <a class="secondary-action" href="{{ back_url_url }}">Cancelar</a>
-                <button type="submit" class="primary-action">{% if cnh_target %}Confirmar e atualizar CNH{% else %}Confirmar e cadastrar motorista{% endif %}</button>
+                <button type="submit" class="primary-action">{% if cnh_edit_mode %}Salvar alterações{% elif cnh_target %}Confirmar e atualizar CNH{% else %}Confirmar e cadastrar motorista{% endif %}</button>
             </div>
         </form>
     </section>
@@ -140,6 +146,8 @@
         <a href="{% url 'driver_create' %}?manual=1{% if requested_sector %}&amp;sector={{ requested_sector|urlencode }}{% endif %}">Prefiro cadastrar manualmente</a>
     </div>
     {% endif %}
+    {% if not cnh_edit_mode %}
     <p style="font-size:.82rem;color:#64748b;line-height:1.5;">A extração automática pode cometer erros. A conferência humana é obrigatória antes de concluir o cadastro. O PDF e os dados extraídos ficam vinculados ao registro documental.</p>
+    {% endif %}
 </div>
 {% endblock %}

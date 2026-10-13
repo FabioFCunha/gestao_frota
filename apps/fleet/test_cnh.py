@@ -861,6 +861,122 @@ class CNHExistingDriverTests(TestCase):
         self.assertEqual(DocumentRelation.objects.filter(object_id=self.driver.pk).count(), 1)
 
 
+    def test_manual_edit_has_same_document_fields_and_prefills_pdf_values(self):
+        from apps.ui.forms import CNHDriverCreateForm
+        self.upload()
+        self.assertEqual(self.confirm(self.document()).status_code, 302)
+        response = self.client.get(f"/motoristas/{self.driver.pk}/editar/?sector=adm")
+        self.assertEqual(response.status_code, 200)
+        form = response.context["confirm_form"]
+        self.assertEqual([field.name for field in form.visible_fields()], CNHDriverCreateForm.Meta.fields)
+        self.assertNotIn("document_id", form.fields)
+        self.assertNotIn("registration", form.fields)
+        self.assertNotIn("sectors", form.fields)
+        self.assertNotIn("phone", form.fields)
+        self.assertEqual(form["father_name"].value(), "JOSE DA SILVA")
+        self.assertEqual(form["mother_name"].value(), "ANA PEREIRA")
+        self.assertIn('value="05/06/2025"', str(form["cnh_issue_date"]))
+        self.assertIn('value="31/12/2030"', str(form["cnh_expiration"]))
+        self.assertTrue(form.fields["name"].disabled)
+        self.assertNotContains(response, "Documento lido")
+        self.assertNotContains(response, "Não foi possível reconhecer o texto")
+        self.assertContains(response, "Salvar alterações")
+
+    def test_manual_document_edit_persists_extra_fields_and_keeps_horus_pdf_and_sectors(self):
+        from apps.fleet.services import current_cnh_document_values
+        self.upload()
+        document = self.document()
+        self.assertEqual(self.confirm(document).status_code, 302)
+        original_name = self.driver.name
+        original_horus_id = self.driver.horus_user_id
+        response = self.client.post(f"/motoristas/{self.driver.pk}/editar/?sector=adm", {
+            **self.extracted, "name": "NOME ADULTERADO", "father_name": "JOSE DA SILVA CORRIGIDO",
+            "mother_name": "ANA PEREIRA CORRIGIDA", "issuing_authority": "COMAER", "issuing_state": "RJ",
+            "nationality": "BRASILEIRA", "identity_document": "123456789", "location": "RIO DE JANEIRO RJ",
+            "cnh_issue_date": "05/06/2030", "cnh_expiration": "31/12/2035",
+            "registration": "MATRICULA ADULTERADA", "phone": "0", "email": "outra@example.com",
+            "active": "False", "sectors": [],
+        })
+        self.assertEqual(response.status_code, 302)
+        self.driver.refresh_from_db()
+        self.bdt.refresh_from_db()
+        self.assertEqual(self.driver.name, original_name)
+        self.assertEqual(self.driver.horus_user_id, original_horus_id)
+        self.assertEqual(self.driver.registration, "HORUS-17")
+        self.assertEqual(self.driver.phone, "21999999999")
+        self.assertEqual(self.driver.email, "maria@example.com")
+        self.assertTrue(self.driver.active)
+        self.assertEqual(self.bdt.driver_id, self.driver.pk)
+        self.assertEqual(Driver.objects.count(), 1)
+        self.assertEqual(set(self.driver.sectors.values_list("pk", flat=True)), {self.sector.pk})
+        self.assertTrue(DocumentRelation.objects.filter(document=document, object_id=self.driver.pk).exists())
+        self.assertEqual(Document.objects.count(), 1)
+        self.assertEqual(self.driver.cnh_history.count(), 2)
+        values = current_cnh_document_values(self.driver)
+        self.assertEqual(values["father_name"], "JOSE DA SILVA CORRIGIDO")
+        self.assertEqual(values["mother_name"], "ANA PEREIRA CORRIGIDA")
+        self.assertEqual(values["identity_document"], "123456789")
+        self.assertEqual(values["cnh_issue_date"], "2030-06-05")
+        original_audit = AuditLog.objects.get(action="CNH ATUALIZADA A PARTIR DE PDF", entity_id=document.pk)
+        self.assertEqual(original_audit.new_values["form_values"]["father_name"], "JOSE DA SILVA")
+        response = self.client.get(f"/motoristas/{self.driver.pk}/editar/?sector=adm")
+        self.assertEqual(response.context["confirm_form"]["father_name"].value(), "JOSE DA SILVA CORRIGIDO")
+
+    def test_manual_document_edit_can_clear_extra_field_without_changing_source_pdf(self):
+        from apps.fleet.services import current_cnh_document_values
+        self.upload()
+        self.assertEqual(self.confirm(self.document()).status_code, 302)
+        response = self.client.post(f"/motoristas/{self.driver.pk}/editar/?sector=adm", {**self.extracted, "father_name": ""})
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(current_cnh_document_values(self.driver)["father_name"], "")
+        audit = AuditLog.objects.get(action="CNH EDITADA MANUALMENTE", entity_id=self.driver.pk)
+        self.assertEqual(audit.old_values["father_name"], "JOSE DA SILVA")
+        self.assertEqual(Document.objects.count(), 1)
+
+    def test_manual_edit_of_driver_without_cnh_does_not_require_pdf_or_change_membership(self):
+        response = self.client.post(f"/motoristas/{self.driver.pk}/editar/?sector=adm", {
+            "name": "ADULTERADO", "father_name": "PAI INFORMADO", "mother_name": "MAE INFORMADA",
+        })
+        self.assertEqual(response.status_code, 302)
+        self.driver.refresh_from_db()
+        self.assertEqual(self.driver.name, "MARIA DA SILVA HORUS")
+        self.assertEqual(self.driver.cpf, "")
+        self.assertEqual(self.driver.cnh_number, "")
+        self.assertTrue(self.driver.sectors.filter(pk=self.sector.pk).exists())
+        self.assertFalse(Document.objects.exists())
+
+    def test_manual_edit_rejects_identity_change_and_duplicate_with_no_partial_save(self):
+        self.upload()
+        self.assertEqual(self.confirm(self.document()).status_code, 302)
+        url = f"/motoristas/{self.driver.pk}/editar/?sector=adm"
+        for field, value in (("cpf", "987.654.321-00"), ("cnh_number", "99999999999")):
+            with self.subTest(field=field):
+                response = self.client.post(url, {**self.extracted, field: value, "father_name": "ALTERADO"})
+                self.assertEqual(response.status_code, 200)
+                self.assertTrue(response.context["confirm_form"].errors)
+        self.assertFalse(AuditLog.objects.filter(action="CNH EDITADA MANUALMENTE").exists())
+        other = Driver.objects.create(name="LEGADO SEM CPF")
+        other.sectors.add(self.sector)
+        response = self.client.post(f"/motoristas/{other.pk}/editar/?sector=adm", {**self.extracted, "name": "LEGADO SEM CPF"})
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context["confirm_form"].errors)
+        other.refresh_from_db()
+        self.assertEqual(other.cpf, "")
+
+    def test_pdf_update_after_manual_edit_uses_latest_document_history(self):
+        self.upload()
+        first = self.document()
+        self.assertEqual(self.confirm(first).status_code, 302)
+        response = self.client.post(f"/motoristas/{self.driver.pk}/editar/?sector=adm", {**self.extracted, "father_name": "PAI CONFERIDO"})
+        self.assertEqual(response.status_code, 302)
+        response = self.upload({**self.extracted, "father_name": "", "cnh_expiration": "2035-12-31"})
+        self.assertEqual(response.context["confirm_form"]["father_name"].value(), "PAI CONFERIDO")
+        second = Document.objects.exclude(pk=first.pk).get()
+        self.assertEqual(self.confirm(second, father_name="", cnh_expiration="2035-12-31").status_code, 302)
+        audit = AuditLog.objects.get(action="CNH ATUALIZADA A PARTIR DE PDF", entity_id=second.pk)
+        self.assertEqual(audit.new_values["form_values"]["father_name"], "PAI CONFERIDO")
+
+
 class CNHConcurrentDriverIdentityTests(TransactionTestCase):
     def test_concurrent_first_fill_accepts_one_driver_for_same_cpf(self):
         from concurrent.futures import ThreadPoolExecutor

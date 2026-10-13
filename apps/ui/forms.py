@@ -725,3 +725,23 @@ class CNHDriverUpdateForm(CNHDriverCreateForm):
     def save(self, commit=True):
         # O serviço confirma a identidade, bloqueia concorrência e salva só os campos documentais.
         raise RuntimeError("Use confirm_cnh_for_driver para atualizar a CNH.")
+
+class DriverDocumentEditForm(CNHDriverCreateForm):
+    """Mesmos campos documentais da confirmação de CNH, sem exigir novo PDF."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields.pop("document_id", None)
+        if self.instance.horus_user_id:
+            self.fields["name"].disabled = True
+            self.fields["name"].help_text = "Nome recebido do Horus."
+
+    def clean_cnh_number(self):
+        import re
+        value = re.sub(r"[^0-9]", "", self.cleaned_data.get("cnh_number") or "")
+        if value and len(value) != 11:
+            raise forms.ValidationError("O registro da CNH deve conter 11 dígitos.")
+        return value
+
+    def save(self, commit=True):
+        raise RuntimeError("Use update_driver_document_data para salvar a edição documental.")
