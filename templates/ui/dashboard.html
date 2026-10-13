@@ -94,73 +94,9 @@
 
 
 
-<section class="panel" style="margin:24px 0;padding:22px;">
-    <div class="fd-board-head" style="align-items:center;gap:16px;flex-wrap:wrap;">
-        <div>
-            <span class="fd-board-title">Licenciamento anual (CRLV)</span>
-            <div style="margin-top:5px;color:#6b7280;">Alertas calculados pelas datas do calendário oficial do DETRAN-RJ e pelo exercício do CRLV confirmado no prontuário.</div>
-        </div>
-        <a class="primary-action" href="{% url 'licensing_calendar' %}">Gerenciar calendário</a>
-    </div>
-
-    <div class="crlv-overview-grid" style="margin-top:18px;">
-        <article class="panel crlv-status-card" style="border-top:3px solid #dc2626;">
-            <h3>Licenciamento vencido</h3>
-            <strong class="crlv-status-count">{{ crlv_alerts.overdue|length }} viatura(s)</strong>
-            {% if crlv_alerts.overdue %}
-            <div class="crlv-pending-list">
-                {% for item in crlv_alerts.overdue %}
-                <div>
-                    <a href="{{ item.dossier_url }}"><strong>{{ item.plate }}</strong></a>
-                    — exercício {{ item.exercise }}; vencido em {% if item.due_date %}{{ item.due_date|date:"d/m/Y" }}{% else %}data não cadastrada{% endif %}
-                </div>
-                {% endfor %}
-            </div>
-            {% else %}
-            <p class="empty">Nenhuma viatura com licenciamento vencido.</p>
-            {% endif %}
-            <div class="crlv-status-actions">
-                <button type="button" class="fd-chip" data-filter="crlv_vencido">Ver todas as {{ crlv_alerts.overdue|length }} viaturas vencidas</button>
-            </div>
-        </article>
-
-        <article class="panel crlv-status-card" style="border-top:3px solid #d97706;">
-            <h3>Vence nos próximos 30 dias</h3>
-            <strong class="crlv-status-count">{{ crlv_alerts.due_soon|length }} viatura(s)</strong>
-            {% if crlv_alerts.due_soon %}
-            <div class="crlv-pending-list">
-                {% for item in crlv_alerts.due_soon %}
-                <div>
-                    <a href="{{ item.dossier_url }}"><strong>{{ item.plate }}</strong></a>
-                    — exercício {{ item.exercise }}; vence em {{ item.due_date|date:"d/m/Y" }}
-                </div>
-                {% endfor %}
-            </div>
-            {% else %}
-            <p class="empty" style="margin:14px 0;">📅 Nenhum prazo próximo.</p>
-            {% endif %}
-            <div class="crlv-status-actions">
-                <a class="secondary-action" href="{% url 'licensing_calendar_overview' %}">Abrir calendário anual</a>
-            </div>
-        </article>
-    </div>
-
-    {% if crlv_alerts.calendar_missing %}
-    <details style="margin-top:16px;padding:12px 14px;border:1px solid #e2e8f0;border-radius:8px;">
-        <summary style="cursor:pointer;font-weight:600;">Finais sem prazo cadastrado: {{ crlv_alerts.calendar_missing|length }} viatura(s)</summary>
-        <p style="margin:8px 0;color:#64748b;">Cadastre os prazos oficiais assim que o DETRAN-RJ divulgar o calendário anual.</p>
-        <div class="crlv-pending-list">
-            {% for item in crlv_alerts.calendar_missing %}
-            <div>
-                <a href="{{ item.dossier_url }}"><strong>{{ item.plate }}</strong></a>
-                — exercício {{ item.exercise }}; falta cadastrar o prazo do final {{ item.plate|slice:"-1:" }}
-            </div>
-            {% endfor %}
-        </div>
-        <a href="{% url 'licensing_calendar_overview' %}">Abrir calendário anual</a>
-    </details>
-    {% endif %}
-</section>
+<div style="display:flex;justify-content:flex-end;margin:20px 0;">
+    <a class="primary-action" href="{% url 'licensing_calendar' %}">Gerenciar calendário</a>
+</div>
 
 <section class="fd-board">
     <div class="fd-board-head">
