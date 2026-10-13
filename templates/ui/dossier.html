@@ -85,7 +85,7 @@
 
     <!-- IDENTIFICAÇÃO -->
     <article class="panel">
-        <div class="panel-title" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;"><div><h3>🚗 Identificação</h3></div><a class="primary-action" href="{% url 'vehicle_crlv' vehicle.id %}">Inserir / atualizar CRLV</a></div>
+        <div class="panel-title" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;"><div><h3>🚗 Identificação</h3></div>{% if perms.fleet.change_vehicle %}<a class="primary-action" href="{% url 'vehicle_crlv' vehicle.id %}">Inserir / atualizar CRLV</a>{% endif %}</div>
         <ul style="list-style:none;padding:0;line-height:2;">
             <li><strong>Marca:</strong> {{ vehicle.brand.name|default:"-" }}</li>
             <li><strong>Modelo:</strong> {{ vehicle.model.name|default:"-" }}</li>
