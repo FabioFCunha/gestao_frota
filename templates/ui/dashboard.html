@@ -13,7 +13,7 @@
 .crlv-status-card { display:flex; flex-direction:column; min-width:0; padding:20px; }
 .crlv-status-card h3 { margin:0 0 8px; font-size:1.05rem; }
 .crlv-status-count { display:block; margin-bottom:4px; font-size:1.35rem; font-weight:750; letter-spacing:-.03em; }
-.crlv-status-card .crlv-pending-list { margin-top:12px; max-height:260px; overflow:auto; }
+.crlv-status-card .crlv-pending-list { margin-top:12px; max-height:520px; overflow:auto; }
 .crlv-status-card .crlv-pending-list > div { padding:10px 0; border-bottom:1px solid #e5e7eb; line-height:1.5; }
 .crlv-status-actions { display:flex; gap:10px; flex-wrap:wrap; margin-top:auto; padding-top:16px; }
 .crlv-status-actions > a, .crlv-status-actions > button { justify-content:center; text-align:center; }
@@ -92,100 +92,7 @@
     </div>
 </section>
 
-<section style="margin:24px 0;">
-    <div class="fd-board-head">
-        <div>
-            <span class="fd-board-title">Informes</span>
-            <div style="margin-top:4px;color:#6b7280;">Contratos e multas que exigem acompanhamento.</div>
-        </div>
-    </div>
 
-    <div class="grid" style="margin-top:12px; grid-template-columns: repeat(3, 1fr);">
-        <article class="panel" style="display:flex; flex-direction:column;">
-            <div class="panel-title">
-                <div><h3>📄 Contratos</h3></div>
-            </div>
-            <div style="display:grid;gap:8px;">
-                <div><strong>{{ dashboard_alerts.contracts_expired|length }}</strong> contrato(s) vencido(s)</div>
-                <div><strong>{{ dashboard_alerts.contracts_expiring|length }}</strong> contrato(s) a vencer</div>
-            </div>
-            {% if dashboard_alerts.contracts_expired or dashboard_alerts.contracts_expiring %}
-            <div style="margin-top:14px; max-height:85px; overflow-y:auto; padding-right:4px;">
-                {% for c in dashboard_alerts.contracts_expired %}
-                <div style="padding:8px 0;border-bottom:1px solid #eee;">
-                    <button type="button" class="dashboard-informe-item" data-informe-id="contract-{{ c.id }}" data-informe-title="Contrato {{ c.number }}"><strong>{{ c.number }}</strong> — vencido em {{ c.ends_on|date:"d/m/Y" }}</button>
-                </div>
-                {% endfor %}
-                {% for c in dashboard_alerts.contracts_expiring %}
-                <div style="padding:8px 0;border-bottom:1px solid #eee;">
-                    <button type="button" class="dashboard-informe-item" data-informe-id="contract-{{ c.id }}" data-informe-title="Contrato {{ c.number }}"><strong>{{ c.number }}</strong> — vence em {{ c.ends_on|date:"d/m/Y" }}</button>
-                </div>
-                {% endfor %}
-            </div>
-            <div style="margin-top:auto; padding-top:14px;">
-                <a class="primary-action" href="{% url 'contract_list' %}" style="display:inline-block; text-align:center; width:100%;">
-                    Ver todos os contratos
-                </a>
-            </div>
-            {% else %}
-            <div class="empty" style="margin-top:auto; margin-bottom:auto;">Nenhum contrato exige atenção no momento.</div>
-            {% endif %}
-        </article>
-
-        <article class="panel" style="display:flex; flex-direction:column;">
-            <div class="panel-title">
-                <div><h3>⚑ Multas</h3></div>
-            </div>
-            <div style="display:grid;gap:8px;">
-                <div><strong>{{ dashboard_alerts.fines_pending|length }}</strong> multa(s) pendente(s) ou em análise/recurso</div>
-            </div>
-            {% if dashboard_alerts.fines_pending %}
-            <div style="margin-top:14px; max-height:85px; overflow-y:auto; padding-right:4px;">
-                {% for f in dashboard_alerts.fines_pending %}
-                <div style="padding:8px 0;border-bottom:1px solid #eee;">
-                    <button type="button" class="dashboard-informe-item" data-informe-id="fine-{{ f.id }}" data-informe-title="Multa {{ f.vehicle__plate_history__plate|default:"Sem placa" }}"><strong>{{ f.vehicle__plate_history__plate|default:"Sem placa" }}</strong>
-                    — {{ f.status__name }} — {{ f.date|date:"d/m/Y" }}</button>
-                </div>
-                {% endfor %}
-            </div>
-            <div style="margin-top:auto; padding-top:14px;">
-                <a class="primary-action" href="{% url 'fine_list' %}" style="display:inline-block; text-align:center; width:100%;">
-                    Ver todas as multas
-                </a>
-            </div>
-            {% else %}
-            <div class="empty" style="margin-top:auto; margin-bottom:auto;">Nenhuma multa pendente no momento.</div>
-            {% endif %}
-        </article>
-
-        <article class="panel" style="display:flex; flex-direction:column;">
-            <div class="panel-title">
-                <div><h3>🪪 CNHs Vencidas</h3></div>
-            </div>
-            <div style="display:grid;gap:8px;">
-                <div><strong>{{ dashboard_alerts.cnh_expired|length }}</strong> motorista(s) com CNH vencida</div>
-            </div>
-            {% if dashboard_alerts.cnh_expired %}
-            <div style="margin-top:14px; max-height:85px; overflow-y:auto; padding-right:4px;">
-                {% for d in dashboard_alerts.cnh_expired %}
-                <div style="padding:8px 0;border-bottom:1px solid #eee;">
-                    <a href="{% url 'driver_list' %}?status=cnh_vencida" class="dashboard-informe-item" style="display:block; text-decoration:none; color:inherit;">
-                        <strong>{{ d.name }}</strong> - {{ d.cnh_number }} (venceu em {{ d.cnh_expiration|date:"d/m/Y" }})
-                    </a>
-                </div>
-                {% endfor %}
-            </div>
-            <div style="margin-top:auto; padding-top:14px;">
-                <a class="primary-action" href="{% url 'driver_list' %}?status=cnh_vencida" style="display:inline-block; text-align:center; width:100%;">
-                    Ver todos os motoristas
-                </a>
-            </div>
-            {% else %}
-            <div class="empty" style="margin-top:auto; margin-bottom:auto;">Nenhuma CNH vencida identificada.</div>
-            {% endif %}
-        </article>
-    </div>
-</section>
 
 <section class="panel" style="margin:24px 0;padding:22px;">
     <div class="fd-board-head" style="align-items:center;gap:16px;flex-wrap:wrap;">
