@@ -118,6 +118,62 @@ def _cnh_field_text(raw):
         return ""
     return ""
 
+
+def _cnh_missing_fields(raw, *, name=False, first_issue=False, location=False):
+    """Recupera campos vazios em faixas das imagens do modelo digital da CNH."""
+    recovered = {}
+    states = {
+        "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS",
+        "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO",
+    }
+
+    def crop_text(image, bounds):
+        box = tuple(round(value * (image.width if index % 2 == 0 else image.height))
+                    for index, value in enumerate(bounds))
+        crop = image.crop(box)
+        crop = crop.resize((crop.width * 2, crop.height * 2))
+        # As bordas dos campos são reconhecidas como barras verticais.
+        return "\n".join(_clean(line.replace("|", " ")) for line in _cnh_ocr(crop).upper().splitlines())
+
+    try:
+        from pypdf import PdfReader
+        reader = PdfReader(io.BytesIO(raw))
+        for page in reader.pages:
+            for embedded in page.images:
+                image = embedded.image.convert("RGB")
+                if image.width < 500 or image.width <= image.height:
+                    continue
+                is_front = False
+                if (name and not recovered.get("name")) or (first_issue and not recovered.get("cnh_first_issue_date")):
+                    header = crop_text(image, (0.16, 0.24, 1.0, 0.35))
+                    header_name = _name_field(header)
+                    header_date = _date_field(header, [r"1[ªº°A]\s*HABILITA[CÇ][AÃ]O", r"PRIMEIRA\s+HABILITA[CÇ][AÃ]O"])
+                    is_front = bool(header_name or header_date)
+                    if name and header_name:
+                        recovered["name"] = header_name
+                    if first_issue and header_date:
+                        recovered["cnh_first_issue_date"] = header_date
+                if location and not recovered.get("location") and not is_front:
+                    local = crop_text(image, (0.14, 0.71, 0.70, 0.82))
+                    # Exige rótulo próprio e cidade/UF; não usa o local de nascimento.
+                    lines = [_clean(line) for line in local.splitlines() if _clean(line)]
+                    for index, line in enumerate(lines[:-1]):
+                        if line != "LOCAL":
+                            continue
+                        match = re.fullmatch(r"([A-ZÀ-ÖØ-Þ][A-ZÀ-ÖØ-Þ'’ .-]+?)[, ]+([A-Z]{2})", lines[index + 1])
+                        if match and match.group(2) in states:
+                            recovered["location"] = _clean(match.group(1)) + ", " + match.group(2)
+                            break
+                if ((not name or recovered.get("name"))
+                        and (not first_issue or recovered.get("cnh_first_issue_date"))
+                        and (not location or recovered.get("location"))):
+                    return recovered
+    except Exception:
+        # Falha no complemento não apaga dados já extraídos.
+        pass
+    return recovered
+
+
 def _iso_date(value):
     value = _clean(value)
     for fmt in ("%d/%m/%Y", "%d-%m-%Y", "%Y-%m-%d"):
@@ -486,6 +542,14 @@ def extract_cnh_data(file_obj):
         upper,
         [r"1[ªº°A]\s*HABILITA[CÇ][AÃ]O", r"PRIMEIRA\s+HABILITA[CÇ][AÃ]O"],
     )
+
+    if not name or not first_issue_date or not location:
+        missing_fields = _cnh_missing_fields(
+            raw, name=not bool(name), first_issue=not bool(first_issue_date), location=not bool(location),
+        )
+        name = name or missing_fields.get("name", "")
+        first_issue_date = first_issue_date or missing_fields.get("cnh_first_issue_date", "")
+        location = location or missing_fields.get("location", "")
 
     data = {
         "name": name,

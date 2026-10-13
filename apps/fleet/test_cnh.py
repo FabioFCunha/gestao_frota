@@ -1005,3 +1005,138 @@ class CNHConcurrentDriverIdentityTests(TransactionTestCase):
             outcomes = list(executor.map(fill, [driver.pk for driver in drivers]))
         self.assertCountEqual(outcomes, ["accepted", "duplicate"])
         self.assertEqual(Driver.objects.exclude(cpf="").count(), 1)
+
+class CNHMissingDigitalFieldsTests(SimpleTestCase):
+    noisy_text = """
+2e 1NOMEESOBRENOME ve mantração
+MAURICIO DE JESUS ARAUJO 29/05/1989 n | Caia
+3 DATA, LOCAL E UF DE NASCIMENTO
+04/01/1971, RIO DE JANEIRO, RJ
+4a DATA EMISSÃO 4b VALIDADE ACC
+01/06/2023 30/05/2028
+4c DOC IDENTIDADE / ORG EMISSOR / UF
+054887039 DETRAN RJ
+CPF 5 Nº REGISTRO 9 CAT HAB
+990.565.777-00 00107964386 AB
+NACIONALIDADE
+BRASILEIRO
+FILIAÇÃO
+WILSON REINALDO DE ARAUJO
+MARIA ERMELINDA DE JESUS ARAUJO
+ASSINATURA DO PORTADOR
+N toca med Sossnenie
+a SAO JOAO DE MERITI, RJ RJ957899459
+I<BRA001079643<862<<<<<<<<<<<<
+7101043M2805302BRA<<<<<<<<<<<6
+MAURICIO<<DE<JESUS<ARAUJO<<<<<
+"""
+    header_text = "2 e 1 NOME E SOBRENOME 1º HABILITAÇÃO\n| MAURICIO DE JESUS ARAUJO | | 29/05/1989 |\n"
+
+    @patch("apps.fleet.cnh._cnh_missing_fields")
+    @patch("apps.fleet.cnh._all_text")
+    def test_recovers_missing_mauricio_fields_without_replacing_other_data(self, all_text, missing):
+        all_text.return_value = self.noisy_text
+        missing.return_value = {}
+        before = extract_cnh_data(b"pdf")
+        missing.return_value = {"name": "MAURICIO DE JESUS ARAUJO", "cnh_first_issue_date": "1989-05-29", "location": "SAO JOAO DE MERITI, RJ"}
+        after = extract_cnh_data(b"pdf")
+        self.assertEqual(after["name"], "MAURICIO DE JESUS ARAUJO")
+        self.assertEqual(after["cnh_first_issue_date"], "1989-05-29")
+        self.assertEqual(after["cnh_first_issue_date_display"], "29/05/1989")
+        self.assertEqual(after["location"], "SAO JOAO DE MERITI, RJ")
+        for key in before:
+            if key not in {"name", "cnh_first_issue_date", "cnh_first_issue_date_display", "location"}:
+                self.assertEqual(after[key], before[key], key)
+        missing.assert_called_with(b"pdf", name=True, first_issue=True, location=True)
+        self.assertEqual(after["cpf"], "990.565.777-00")
+        self.assertEqual(after["cnh_number"], "00107964386")
+        self.assertEqual(after["cnh_category"], "AB")
+
+    @patch("apps.fleet.cnh._cnh_missing_fields")
+    @patch("apps.fleet.cnh._all_text")
+    def test_complete_fields_do_not_trigger_additional_ocr(self, all_text, missing):
+        all_text.return_value = "NOME E SOBRENOME\nJOAO DA SILVA\n1ª HABILITAÇÃO\n01/02/1990\nLOCAL\nRIO DE JANEIRO, RJ\n"
+        data = extract_cnh_data(b"pdf")
+        self.assertEqual(data["name"], "JOAO DA SILVA")
+        self.assertEqual(data["cnh_first_issue_date"], "1990-02-01")
+        self.assertEqual(data["location"], "RIO DE JANEIRO, RJ")
+        missing.assert_not_called()
+
+    @patch("apps.fleet.cnh._cnh_missing_fields")
+    @patch("apps.fleet.cnh._all_text")
+    def test_existing_name_and_first_issue_date_cannot_be_replaced(self, all_text, missing):
+        all_text.return_value = "NOME E SOBRENOME\nJOAO DA SILVA\n1ª HABILITAÇÃO\n01/02/1990\n"
+        missing.return_value = {"name": "OUTRA PESSOA", "cnh_first_issue_date": "2020-01-01", "location": "RIO DE JANEIRO, RJ"}
+        data = extract_cnh_data(b"pdf")
+        self.assertEqual(data["name"], "JOAO DA SILVA")
+        self.assertEqual(data["cnh_first_issue_date"], "1990-02-01")
+        missing.assert_called_with(b"pdf", name=False, first_issue=False, location=True)
+
+    def _reader(self):
+        from types import SimpleNamespace
+        from PIL import Image
+        return SimpleNamespace(pages=[SimpleNamespace(images=[
+            SimpleNamespace(image=Image.new("RGB", (591, 591))),
+            SimpleNamespace(image=Image.new("RGB", (963, 680))),
+            SimpleNamespace(image=Image.new("RGB", (963, 680))),
+        ])])
+
+    @patch("pypdf.PdfReader")
+    @patch("apps.fleet.cnh._cnh_ocr")
+    def test_crops_header_and_back_skips_qr_and_stops_after_recovery(self, ocr, reader):
+        from apps.fleet.cnh import _cnh_missing_fields
+        reader.return_value = self._reader()
+        ocr.side_effect = [self.header_text, "LOCAL\n| SAO JOAO DE MERITI, RJ |\n"]
+        data = _cnh_missing_fields(b"pdf", name=True, first_issue=True, location=True)
+        self.assertEqual(data, {"name": "MAURICIO DE JESUS ARAUJO", "cnh_first_issue_date": "1989-05-29", "location": "SAO JOAO DE MERITI, RJ"})
+        self.assertEqual(ocr.call_count, 2)
+        self.assertEqual(ocr.call_args_list[0].args[0].size, (1618, 150))
+        self.assertEqual(ocr.call_args_list[1].args[0].size, (1078, 150))
+
+    @patch("pypdf.PdfReader")
+    @patch("apps.fleet.cnh._cnh_ocr")
+    def test_header_only_does_not_read_back(self, ocr, reader):
+        from apps.fleet.cnh import _cnh_missing_fields
+        reader.return_value = self._reader()
+        ocr.return_value = self.header_text
+        data = _cnh_missing_fields(b"pdf", name=True, first_issue=True)
+        self.assertEqual(data["name"], "MAURICIO DE JESUS ARAUJO")
+        self.assertEqual(data["cnh_first_issue_date"], "1989-05-29")
+        ocr.assert_called_once()
+
+    @patch("pypdf.PdfReader")
+    @patch("apps.fleet.cnh._cnh_ocr")
+    def test_location_requires_its_own_label_and_a_valid_state(self, ocr, reader):
+        from apps.fleet.cnh import _cnh_missing_fields
+        reader.return_value = self._reader()
+        ocr.side_effect = ["DATA, LOCAL E UF DE NASCIMENTO\n04/01/1971, RIO DE JANEIRO, RJ\n", "LOCAL\nCIDADE, AD\n"]
+        self.assertEqual(_cnh_missing_fields(b"pdf", location=True), {})
+
+    @patch("pypdf.PdfReader")
+    @patch("apps.fleet.cnh._cnh_ocr")
+    def test_later_ocr_failure_preserves_recovered_header_fields(self, ocr, reader):
+        from apps.fleet.cnh import _cnh_missing_fields
+        reader.return_value = self._reader()
+        ocr.side_effect = [self.header_text, RuntimeError("OCR indisponível")]
+        data = _cnh_missing_fields(b"pdf", name=True, first_issue=True, location=True)
+        self.assertEqual(data["name"], "MAURICIO DE JESUS ARAUJO")
+        self.assertEqual(data["cnh_first_issue_date"], "1989-05-29")
+        self.assertNotIn("location", data)
+
+    def test_real_mauricio_pdf_when_supplied(self):
+        import os
+        from pathlib import Path
+        filename = os.environ.get("CNH_MAURICIO_VALIDATION_PDF")
+        if not filename:
+            self.skipTest("PDF real fornecido pela validação isolada da VPS.")
+        data = extract_cnh_data(Path(filename).read_bytes())
+        expected = {
+            "name": "MAURICIO DE JESUS ARAUJO", "cnh_first_issue_date": "1989-05-29",
+            "cnh_first_issue_date_display": "29/05/1989", "location": "SAO JOAO DE MERITI, RJ",
+            "cpf": "990.565.777-00", "cnh_number": "00107964386", "cnh_category": "AB",
+            "birth_date": "1971-01-04", "cnh_expiration": "2028-05-30", "cnh_issue_date": "2023-06-01",
+            "identity_document": "054887039", "issuing_authority": "DETRAN", "issuing_state": "RJ",
+            "father_name": "WILSON REINALDO DE ARAUJO", "mother_name": "MARIA ERMELINDA DE JESUS ARAUJO",
+        }
+        for key, value in expected.items():
+            self.assertEqual(data[key], value, key)
