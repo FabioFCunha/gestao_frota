@@ -33,6 +33,12 @@ services:
     depends_on:
       database:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/driver/app/manifest.webmanifest', timeout=3)"]
+      interval: 5s
+      timeout: 5s
+      start_period: 30s
+      retries: 20
     volumes:
       - pilot_static:/app/staticfiles
       - pilot_media:/app/media
@@ -45,7 +51,8 @@ services:
       - pilot_static:/staticfiles:ro
       - pilot_media:/media:ro
     depends_on:
-      - web
+      web:
+        condition: service_healthy
 volumes:
   pilot_database:
   pilot_static:
