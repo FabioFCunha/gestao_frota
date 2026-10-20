@@ -18,6 +18,8 @@ ASSETS = {"app.js": "text/javascript", "rules.mjs": "text/javascript",
 @login_required
 @ensure_csrf_cookie
 def app(request):
+    if request.user.is_superuser:
+        return redirect("/api/driver/management/")
     member = Member.objects.filter(user=request.user, active=True, company__active=True).first()
     if not member:
         return HttpResponse("Usuário sem empresa ativa.", status=403)
