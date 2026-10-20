@@ -292,3 +292,24 @@ class TenantTests(TestCase):
         response = self.client.post('/entrar/', {'username': self.ua.username, 'password': 'Senha-segura-123'})
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.url, '/')
+
+    def test_manager_login_ignores_driver_app_next_and_preserves_desktop_links(self):
+        for destination in ('/api/driver/management/', '/api/driver/app/', '/api/driver/panel/', 'http://testserver/api/driver/management/'):
+            with self.subTest(destination=destination):
+                self.client.logout()
+                response = self.client.post('/entrar/', {'username': self.ua.username, 'password': 'Senha-segura-123', 'next': destination})
+                self.assertRedirects(response, '/', fetch_redirect_response=False)
+        self.client.logout()
+        response = self.client.post('/entrar/', {'username': self.ua.username, 'password': 'Senha-segura-123', 'next': '/veiculos/'})
+        self.assertRedirects(response, '/veiculos/', fetch_redirect_response=False)
+
+    def test_already_authenticated_manager_login_does_not_reuse_driver_next(self):
+        response = self.client.get('/entrar/?next=/api/driver/management/')
+        self.assertRedirects(response, '/', fetch_redirect_response=False)
+
+    def test_driver_login_always_opens_app_even_with_desktop_next(self):
+        user = get_user_model().objects.create_user(username='motorista-login', password='Senha-segura-123')
+        Member.objects.create(company=self.a, user=user, driver=self.da, role=Member.DRIVER)
+        self.client.logout()
+        response = self.client.post('/entrar/', {'username': user.username, 'password': 'Senha-segura-123', 'next': '/'})
+        self.assertRedirects(response, '/api/driver/app/', fetch_redirect_response=False)

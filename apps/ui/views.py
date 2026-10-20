@@ -26,13 +26,18 @@ class FleetLoginView(LoginView):
     redirect_authenticated_user = True
 
     def get_success_url(self):
-        if hasattr(self.request, 'company_member') and not self.get_redirect_url():
+        if hasattr(self.request, 'company_member'):
             if self.request.user.is_superuser:
                 return '/api/driver/management/'
+            from urllib.parse import urlsplit
             from apps.driverops.models import Member
             member = Member.objects.filter(user=self.request.user, active=True, company__active=True).first()
             if member and member.role == Member.DRIVER:
                 return '/api/driver/app/'
+            if member and member.role == Member.MANAGER:
+                next_url = self.get_redirect_url()
+                if not next_url or urlsplit(next_url).path.startswith('/api/driver/'):
+                    return '/'
         return super().get_success_url()
 
 
