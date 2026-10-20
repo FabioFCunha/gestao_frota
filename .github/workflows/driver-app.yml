@@ -38,6 +38,21 @@ jobs:
       - run: python manage.py check
       - run: python manage.py makemigrations driverops --check --dry-run
       - run: python manage.py test apps.driverops --verbosity 2
+      - run: pip install playwright
+      - run: playwright install --with-deps chromium
+      - run: python manage.py test apps.driverops.tests_pwa_browser --verbosity 2
+        env:
+          PWA_BROWSER_TESTS: "1"
+  pwa:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: node --check apps/driverops/pwa/app.js
+      - run: node --check apps/driverops/pwa/sw.js
+      - run: node --test apps/driverops/pwa/rules.test.mjs
   mobile:
     runs-on: ubuntu-latest
     defaults:

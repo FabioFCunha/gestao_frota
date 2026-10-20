@@ -163,6 +163,7 @@ def bootstrap(request):
     if member.role != Member.MANAGER:
         vehicles = vehicles.filter(drivers=member)
     return Response({
+        "member_id": member.pk,
         "name": request.user.get_full_name() or request.user.username,
         "company": member.company.name, "role": member.role,
         "checklist_items": CHECKS,
@@ -312,7 +313,7 @@ def transition(request, trip, action):
 
 
 @api_view(["POST"])
-@authentication_classes([DeviceAuthentication])
+@authentication_classes([DeviceAuthentication, SessionAuthentication])
 @permission_classes([IsAuthenticated])
 def operation(request, pk, action):
     if action not in ("start", "finish", "append", "close"):
@@ -339,7 +340,7 @@ def parse_point(raw):
 
 
 @api_view(["POST"])
-@authentication_classes([DeviceAuthentication])
+@authentication_classes([DeviceAuthentication, SessionAuthentication])
 @permission_classes([IsAuthenticated])
 def locations(request, pk, leg_id):
     member = member_for(request)
@@ -400,7 +401,7 @@ def tracking(request, pk):
 
 
 @api_view(["POST"])
-@authentication_classes([DeviceAuthentication])
+@authentication_classes([DeviceAuthentication, SessionAuthentication])
 @permission_classes([IsAuthenticated])
 def upload_photo(request, pk, leg_id):
     member = member_for(request)

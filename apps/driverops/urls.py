@@ -1,9 +1,14 @@
 from django.urls import path
-from . import views
+from . import views, pwa
 from .portal import dashboard
 
 app_name = "driverops"
 urlpatterns = [
+    path("app/", pwa.app),
+    path("app/manifest.webmanifest", pwa.manifest),
+    path("app/icon-<int:size>.png", pwa.icon),
+    path("app/signout/", pwa.signout),
+    path("app/<str:name>", pwa.asset),
     path("panel/", dashboard),
     path("login/", views.login),
     path("logout/", views.logout),
