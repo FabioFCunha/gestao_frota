@@ -180,3 +180,8 @@ class DriverAppTests(TestCase):
             self.assertEqual(response.status_code,401)
         response=self.client.post("/api/driver/login/",{"username":"motorista","password":"errada"},format="json")
         self.assertEqual(response.status_code,429)
+
+    def test_password_change_revokes_existing_token(self):
+        self.user.set_password("Nova-senha-segura-456")
+        self.user.save()
+        self.assertEqual(self.client.get("/api/driver/bootstrap/").status_code,401)

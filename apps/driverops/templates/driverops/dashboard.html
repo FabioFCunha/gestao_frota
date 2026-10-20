@@ -34,7 +34,7 @@ async function show(id,fit=true){
    if(fit)map.setView([last.latitude,last.longitude],13);
  }
  const el=document.getElementById('detail');el.hidden=false;
- el.innerHTML='<h2>'+esc(trip.vehicle)+'</h2><p>'+esc(message)+'</p><p>Abertura: '+esc(dt(trip.opened_at))+' · Fechamento: '+esc(dt(trip.closed_at))+'</p><p>OS: '+esc(trip.exit_order)+'</p><div class="scroll"><table><thead><tr><th>Destino</th><th>Saída</th><th>Chegada</th><th>KM inicial / final</th><th>KM percorridos</th><th>Duração</th></tr></thead><tbody>'+trip.legs.map(l=>'<tr><td>'+esc(l.destination)+'</td><td>'+esc(dt(l.started_at))+'</td><td>'+esc(dt(l.ended_at))+'</td><td>'+esc(l.started_km)+' / '+esc(l.ended_km)+'</td><td>'+esc(l.distance_km)+'</td><td>'+esc(l.duration_seconds===null?null:Math.round(l.duration_seconds/60)+' min')+'</td></tr>').join('')+'</tbody></table></div><h3>Vistorias</h3>'+trip.legs.map(l=>'<details><summary>'+esc(l.position+'. '+l.destination)+'</summary><pre>'+esc(JSON.stringify({saida:l.departure_checklist,chegada:l.arrival_checklist,observacoes:l.notes},null,2))+'</pre></details>').join('')+'<h3>Fotos</h3>'+trip.photos.map(p=>'<a target="_blank" rel="noopener" href="'+base+'photos/'+encodeURIComponent(p.id)+'/">'+esc(p.moment==='arrival'?'Chegada':'Saída')+' · '+esc(p.leg.slice(0,8))+'</a> ').join('')+'<h3>Auditoria</h3>'+trip.events.map(e=>'<p>'+esc(dt(e.at))+' · '+esc(e.action)+' · usuário '+esc(e.user)+'</p>').join('');
+ el.innerHTML='<h2>'+esc(trip.vehicle)+'</h2><p>'+esc(message)+'</p><p>Abertura: '+esc(dt(trip.opened_at))+' · Fechamento: '+esc(dt(trip.closed_at))+'</p><p>OS: '+esc(trip.exit_order_number)+'</p><div class="scroll"><table><thead><tr><th>Destino</th><th>Saída</th><th>Chegada</th><th>KM inicial / final</th><th>KM percorridos</th><th>Duração</th></tr></thead><tbody>'+trip.legs.map(l=>'<tr><td>'+esc(l.destination)+'</td><td>'+esc(dt(l.started_at))+'</td><td>'+esc(dt(l.ended_at))+'</td><td>'+esc(l.started_km)+' / '+esc(l.ended_km)+'</td><td>'+esc(l.distance_km)+'</td><td>'+esc(l.duration_seconds===null?null:Math.round(l.duration_seconds/60)+' min')+'</td></tr>').join('')+'</tbody></table></div><h3>Vistorias</h3>'+trip.legs.map(l=>'<details><summary>'+esc(l.position+'. '+l.destination)+'</summary><pre>'+esc(JSON.stringify({saida:l.departure_checklist,chegada:l.arrival_checklist,observacoes:l.notes},null,2))+'</pre></details>').join('')+'<h3>Fotos</h3>'+trip.photos.map(p=>'<a target="_blank" rel="noopener" href="'+base+'photos/'+encodeURIComponent(p.id)+'/">'+esc(p.moment==='arrival'?'Chegada':'Saída')+' · '+esc(p.leg.slice(0,8))+'</a> ').join('')+'<h3>Auditoria</h3>'+trip.events.map(e=>'<p>'+esc(dt(e.at))+' · '+esc(e.action)+' · usuário '+esc(e.user_name)+'</p>').join('');
 }
 async function refresh(){
  try{
@@ -43,7 +43,7 @@ async function refresh(){
  for(const trip of trips){
    const card=document.createElement('article'),title=document.createElement('h2'),text=document.createElement('p'),button=document.createElement('button');
    title.textContent=trip.vehicle+' · '+(trip.closed_at?'Encerrado':'Aberto');
-   text.textContent=dt(trip.opened_at)+' · '+trip.legs.length+' destino(s)';
+   text.textContent=trip.driver+' · '+dt(trip.opened_at)+' · '+trip.legs.length+' destino(s)';
    button.textContent='Ver percurso e vistorias';button.onclick=()=>show(trip.id).catch(fail);
    card.append(title,text,button);el.append(card);
  }

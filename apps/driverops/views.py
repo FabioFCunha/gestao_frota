@@ -42,6 +42,8 @@ def member_for(request):
 def trip_data(trip):
     return {
         "id": str(trip.pk), "vehicle": trip.vehicle.label,
+        "driver": trip.member.driver.name if trip.member.driver_id else trip.member.user.username,
+        "exit_order_number": trip.exit_order.number if trip.exit_order_id else None,
         "opened_at": trip.opened_at, "closed_at": trip.closed_at,
         "closing_reason": trip.closing_reason,
         "exit_order": str(trip.exit_order_id) if trip.exit_order_id else None,
@@ -167,6 +169,13 @@ def bootstrap(request):
         "vehicles": [{"id": v.pk, "label": v.label,
                       "suggested_km": VehicleMileage.objects.filter(vehicle=v.vehicle).order_by("-date", "-created_at").values_list("mileage", flat=True).first()}
                      for v in vehicles],
+        "exit_orders": [{
+            "id": str(o.pk), "number": o.number,
+            "vehicle": CompanyVehicle.objects.get(vehicle_id=o.vehicle_id).pk,
+            "destination": o.destination,
+        } for o in VehicleExitOrder.objects.filter(
+            vehicle_id__in=vehicles.values("vehicle_id"), driver=member.driver, state="PENDING"
+        )] if member.driver_id else [],
         "active_trip": next((trip_data(t) for t in Trip.objects.filter(member=member, closed_at=None).select_related("vehicle")), None)
     })
 
@@ -368,7 +377,9 @@ def detail(request, pk):
     member = member_for(request)
     trip = owned_trip(member, pk)
     data = trip_data(trip)
-    data["events"] = [{"action": e.action, "at": e.created_at, "user": str(e.user_id), "data": e.data}
+    data["events"] = [{"action": e.action, "at": e.created_at, "user": str(e.user_id),
+                      "user_name": (e.user.get_full_name() or e.user.username) if e.user else "Usuário removido",
+                      "data": e.data}
                       for e in trip.events.order_by("created_at")]
     data["photos"] = [{"id": str(p.pk), "leg": str(p.leg_id), "moment": p.moment}
                       for p in InspectionPhoto.objects.filter(leg__trip=trip)]

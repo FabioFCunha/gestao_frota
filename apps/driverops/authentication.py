@@ -20,7 +20,7 @@ class DeviceAuthentication(BaseAuthentication):
         if not session or not session.member.active or not session.member.company.active:
             raise AuthenticationFailed("Sessão expirada ou acesso desativado.")
         user = session.member.user
-        if not user.is_active or user.must_change_password:
+        if not user.is_active or user.must_change_password or user.last_changed_at > session.created_at:
             raise AuthenticationFailed("Atualize sua senha pelo portal.")
         return user, session
 

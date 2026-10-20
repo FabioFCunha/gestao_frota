@@ -1,7 +1,5 @@
 name: Driver app checks
 on:
-  push:
-    branches: ["codex/app-motorista-bdt-20261020"]
   pull_request:
     paths:
       - "apps/driverops/**"
@@ -51,7 +49,10 @@ jobs:
         with:
           node-version: "22"
       - run: npm install --ignore-scripts
-      - name: Inspect production dependency advisories
+      - name: Record initial dependency lock for review
+        run: |
+          node -e "console.log('DRIVER_LOCK_START');console.log(JSON.stringify(require('./package-lock.json')));console.log('DRIVER_LOCK_END')"
+      - name: Report dependency advisories (not a release approval)
         run: |
           npm audit --omit=dev --json > audit.json || true
           node -e "const a=require('./audit.json'); console.log(JSON.stringify({metadata:a.metadata,vulnerabilities:a.vulnerabilities},null,2))"

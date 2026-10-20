@@ -8,7 +8,7 @@ de integrar. Não executar git reset, git clean ou substituir arquivos em produ�
 ## Fluxo implementado
 
 1. Administrador da plataforma cadastra empresa, usuário/motorista e veículo atribuído.
-2. Motorista entra e abre BDT com destinos ordenados; OS existente é opcional.
+2. Motorista entra e abre BDT com destinos ordenados; OS existente é opcional e pode ser selecionada entre as pendentes do veículo/motorista.
 3. Confirma KM inicial e vistoria; inicia o primeiro trecho e autoriza localização.
 4. Abre Google Maps ou Waze para o destino do trecho ativo.
 5. Ao chegar, informa KM final, vistoria, observações e conclui o trecho.
@@ -97,7 +97,7 @@ O primeiro npm install deve gerar um package-lock para ser revisado e versionado
 - **Operação inteiramente offline ainda não é permitida**: início/chegada só aparecem
   confirmados depois da aceitação pelo servidor. A fila recupera falhas de envio/resposta.
   Não iniciar outro trecho enquanto houver operação pendente.
-- Sessões expiram em 7 dias. É possível entrar novamente com o mesmo usuário mantendo a fila.
+- Sessões expiram em 7 dias e alterações da conta/senha invalidam os tokens anteriores. É possível entrar novamente com o mesmo usuário mantendo a fila.
   Troca de usuário e saída são bloqueadas quando há BDT ativo ou dados a sincronizar.
 - Permissões e otimização de bateria podem interromper GPS, especialmente ao encerrar
   o app no sistema. Não prometer rastreamento contínuo nessas condições.
@@ -151,3 +151,15 @@ Antes de produção: reconciliar alterações locais da VPS, backup e restauraç
 limitação de login compartilhada entre workers/instâncias (o throttle de homologação
 usa cache local), limites no proxy, monitoramento, retenção e política de localização,
 assinatura dos apps, revisão de dependências/lockfile e teste em Android/iOS.
+
+## Resultado da revisão de dependências inicial
+
+O npm audit do SDK55 reportou 32 pacotes afetados por propagação de quatro avisos
+diretos: braces (alto, <=3.0.3), node-forge (alto, <=1.4.0), sprintf-js (moderado,
+<=1.1.3) e uuid (moderado, <11.1.1). Os caminhos incluem ferramentas Expo/Metro,
+certificados de desenvolvimento e Jest. Isso não comprova exploração do aplicativo
+nativo, mas também não é aprovação de segurança para release.
+Não aplicar npm audit fix --force: a sugestão automática incluía downgrade do Expo
+para SDK44, incompatível com esta implementação.
+O CI registra os avisos sem ocultá-los. Revisão das versões corrigidas e exposição
+do ambiente de build continua sendo bloqueador de liberação comercial.

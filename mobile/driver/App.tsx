@@ -23,6 +23,7 @@ function Screen() {
 
   async function refresh() {
     const b: Bootstrap = await api('bootstrap/');
+    await SecureStore.setItemAsync('driver-has-active-trip', b.active_trip ? 'yes' : 'no');
     setBoot(b); setTrip(b.active_trip); setVehicle(v=>v ?? b.vehicles[0]?.id ?? null);
     setHistory(await api('trips/'));
     setReady(true);
@@ -72,7 +73,7 @@ function Screen() {
     const result = await api('login/',{username:user,password});
     const previous = await SecureStore.getItemAsync('driver-owner');
     const state = await gpsStatus();
-    if (previous && previous!==String(result.member_id) && (state.pending || await pendingCommand())) {
+    if (previous && previous!==String(result.member_id) && (state.pending || state.active || await SecureStore.getItemAsync('driver-has-active-trip') === 'yes' || await pendingCommand())) {
       throw new Error('Há dados pendentes de outro motorista. Entre com a conta anterior e sincronize antes de trocar.');
     }
     await saveToken(result.token);
@@ -120,15 +121,19 @@ function Screen() {
       {btn('Sincronizar',async()=>{await retryCommand(); await flush(); await refresh();})}</View>
       {boot?.role!=='driver' ? <Text>Use o painel do gestor para acompanhar os BDTs da empresa.</Text> : !trip ? <View style={s.card}>
         <Text style={s.h2}>Abrir BDT</Text><Text style={s.muted}>Escolha o veículo e informe os destinos na ordem da viagem.</Text>
-        {boot.vehicles.map(v=><View key={v.id}>{btn((v.id===vehicle?'✓ ':'')+v.label,async()=>{setVehicle(v.id);})}</View>)}
+        {boot.vehicles.map(v=><View key={v.id}>{btn((v.id===vehicle?'✓ ':'')+v.label,async()=>{setVehicle(v.id);setOS('');})}</View>)}
         {field('Destinos: um endereço completo por linha',dest,setDest,false,true)}
-        {field('ID da OS (opcional)',os,setOS)}
+        <Text style={s.label}>Ordem de saída (opcional)</Text>
+        {btn((!os?'✓ ':'')+'Sem OS',async()=>setOS(''))}
+        {boot.exit_orders.filter(o=>o.vehicle===vehicle).map(o=><View key={o.id}>
+          {btn((os===o.id?'✓ ':'')+o.number+' · '+o.destination,async()=>{setOS(o.id);if(!dest.trim())setDest(o.destination);})}
+        </View>)}
         {btn('Abrir BDT',async()=>{
           const result:Trip = await command('trips/',{vehicle,destinations:dest.split('\n').map(v=>v.trim()).filter(Boolean),...(os?{exit_order:os}:{})});
           setTrip(result); setDest(''); setOS(''); await refresh();
         },pending||!vehicle)}
       </View> : <>
-        <View style={s.card}><Text style={s.h2}>BDT · {trip.vehicle}</Text><Text>{trip.id.slice(0,8)} · aberto {new Date(trip.opened_at).toLocaleString('pt-BR')}</Text>
+        <View style={s.card}><Text style={s.h2}>BDT · {trip.vehicle}</Text><Text>Motorista: {trip.driver} · OS: {trip.exit_order_number??'Sem OS'}</Text><Text>{trip.id.slice(0,8)} · aberto {new Date(trip.opened_at).toLocaleString('pt-BR')}</Text>
           {trip.legs.map(l=><View key={l.id} style={s.leg}>
             <Text style={s.label}>{l.position}. {l.destination}</Text>
             <Text>{l.ended_at?'Concluído':l.started_at?'Em deslocamento':'Aguardando início'}</Text>
