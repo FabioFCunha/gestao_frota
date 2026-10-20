@@ -43,13 +43,13 @@ function Screen() {
     setStatus((s.active ? 'GPS em deslocamento' : 'GPS parado')+' · '+s.pending+' posições pendentes'+(s.rejected ? ' · '+s.rejected+' posições fora do intervalo; confira data/hora do celular' : '')+(s.error?' · '+s.error:''));
     setPending(!!await pendingCommand());
   }
-  async function run(work:()=>Promise<void>) {
+  async function run(work:()=>Promise<void>, silent = false) {
     if (running.current) return;
     running.current = true;
     setBusy(true);
     try { await work(); }
     catch (e) {
-      Alert.alert('Atenção', e instanceof Error ? e.message : 'Não foi possível concluir.');
+      if (!silent) Alert.alert('Atenção', e instanceof Error ? e.message : 'Não foi possível concluir.');
       if (e instanceof ApiError && e.status === 401) { setReady(false); setBoot(null); }
     } finally { running.current = false; setBusy(false); await updateStatus().catch(()=>{}); }
   }
@@ -63,7 +63,7 @@ function Screen() {
   useEffect(()=>{
     if (!ready) return;
     const timer = setInterval(()=>{
-      if (AppState.currentState === 'active') void run(async()=>{await flush(10); await refresh();});
+      if (AppState.currentState === 'active') void run(async()=>{await flush(10); await refresh();}, true);
     },30000);
     return ()=>clearInterval(timer);
   },[ready]);

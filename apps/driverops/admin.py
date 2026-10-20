@@ -51,3 +51,6 @@ class CompanyVehicleAdmin(PlatformAdmin):
     form = VehicleForm
     list_display = ["label", "company", "active"]
     filter_horizontal = ["drivers"]
+
+    def get_readonly_fields(self, request, obj=None):
+        return ["company", "vehicle"] if obj and obj.trip_set.exists() else []
