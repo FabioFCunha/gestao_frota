@@ -1,0 +1,39 @@
+{
+  "expo": {
+    "name": "Transfrota Motorista",
+    "slug": "transfrota-driver",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "transfrota",
+    "ios": {
+      "bundleIdentifier": "digital.transfrota.driver",
+      "supportsTablet": false
+    },
+    "android": {
+      "package": "digital.transfrota.driver"
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Sua posição registra o percurso durante um trecho do BDT.",
+          "locationAlwaysAndWhenInUsePermission": "Permita a localização durante os trechos, inclusive com o mapa aberto ou a tela bloqueada.",
+          "isIosBackgroundLocationEnabled": true,
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": false,
+          "cameraPermission": "Use a câmera para registrar a vistoria do veículo.",
+          "microphonePermission": false
+        }
+      ],
+      "expo-secure-store",
+      "expo-sqlite"
+    ],
+    "extra": {}
+  }
+}

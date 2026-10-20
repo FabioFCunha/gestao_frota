@@ -1,0 +1,29 @@
+{
+  "name": "transfrota-driver",
+  "version": "0.1.0",
+  "private": true,
+  "main": "index.js",
+  "scripts": {
+    "start": "expo start --dev-client",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "expo": "~55.0.31",
+    "react": "19.2.0",
+    "react-native": "0.83.10",
+    "expo-location": "~55.1.14",
+    "expo-task-manager": "~55.0.20",
+    "expo-secure-store": "~55.0.18",
+    "expo-sqlite": "~55.0.20",
+    "expo-crypto": "~55.0.19",
+    "expo-image-picker": "~55.0.24",
+    "expo-dev-client": "~55.0.40",
+    "react-native-safe-area-context": "~5.6.2"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.2",
+    "typescript": "~5.9.2"
+  }
+}

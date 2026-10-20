@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Acompanhamento de BDTs · Transfrota</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+body{margin:0;background:#f1f5f9;font:16px system-ui;color:#0f172a}main{max-width:1200px;margin:auto;padding:24px}header{display:flex;justify-content:space-between;align-items:center}h1{font-size:28px}#map{height:420px;border-radius:16px;margin:20px 0}article{background:white;border-radius:14px;padding:18px;margin:14px 0}button{padding:10px 16px;border:0;border-radius:8px;background:#0f766e;color:white;cursor:pointer}table{width:100%;border-collapse:collapse}td,th{padding:10px;text-align:left;border-bottom:1px solid #ddd}.scroll{overflow:auto}.muted{color:#475569}.error{color:#b91c1c}pre{white-space:pre-wrap}a{color:#0f766e}
+</style></head><body><main><header><div><strong>TRANSFROTA</strong><h1>BDTs dos motoristas</h1></div><button id="refresh">Atualizar</button></header>
+<p id="status" role="status">Carregando…</p>
+<p class="muted">Atualização a cada 30 segundos com a página aberta. A localização pode atrasar por falta de sinal, permissões ou restrições do celular.</p>
+<div id="map"></div><div id="trips"></div><article id="detail" hidden></article>
+</main><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script>
+'use strict';
+const map=L.map('map').setView([-14.2,-51.9],4);
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; OpenStreetMap contributors'}).addTo(map);
+let selected=null, layer=L.layerGroup().addTo(map);
+const base='/api/driver/';
+const esc=v=>String(v??'—').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const dt=v=>v?new Date(v).toLocaleString('pt-BR'):'—';
+async function get(path){const r=await fetch(base+path,{headers:{Accept:'application/json'},credentials:'same-origin'});if(!r.ok)throw Error('Acesso indisponível. Verifique sua sessão e vínculo com a empresa.');return r.json();}
+async function show(id,fit=true){
+ selected=id;
+ const [trip,tracking]=await Promise.all([get('trips/'+id+'/'),get('trips/'+id+'/tracking/')]);
+ if(selected!==id)return;
+ layer.clearLayers();
+ const groups={};
+ for(const p of tracking.points)(groups[p.leg]??=[]).push([p.latitude,p.longitude]);
+ for(const values of Object.values(groups))L.polyline(values,{color:'#0f766e'}).addTo(layer);
+ const last=tracking.points.at(-1);
+ let message='Sem posições recebidas para este BDT.';
+ if(last){
+   const age=Math.max(0,Math.round((Date.parse(tracking.server_time)-Date.parse(last.measured_at))/60000));
+   message='Última posição medida há '+age+' min; recebida em '+dt(last.received_at)+'; precisão de '+Math.round(last.accuracy)+' m. Traçado limitado às últimas 1.000 posições.';
+   L.marker([last.latitude,last.longitude]).bindPopup(message).addTo(layer);
+   if(fit)map.setView([last.latitude,last.longitude],13);
+ }
+ const el=document.getElementById('detail');el.hidden=false;
+ el.innerHTML='<h2>'+esc(trip.vehicle)+'</h2><p>'+esc(message)+'</p><p>Abertura: '+esc(dt(trip.opened_at))+' · Fechamento: '+esc(dt(trip.closed_at))+'</p><p>OS: '+esc(trip.exit_order)+'</p><div class="scroll"><table><thead><tr><th>Destino</th><th>Saída</th><th>Chegada</th><th>KM inicial / final</th><th>KM percorridos</th><th>Duração</th></tr></thead><tbody>'+trip.legs.map(l=>'<tr><td>'+esc(l.destination)+'</td><td>'+esc(dt(l.started_at))+'</td><td>'+esc(dt(l.ended_at))+'</td><td>'+esc(l.started_km)+' / '+esc(l.ended_km)+'</td><td>'+esc(l.distance_km)+'</td><td>'+esc(l.duration_seconds===null?null:Math.round(l.duration_seconds/60)+' min')+'</td></tr>').join('')+'</tbody></table></div><h3>Vistorias</h3>'+trip.legs.map(l=>'<details><summary>'+esc(l.position+'. '+l.destination)+'</summary><pre>'+esc(JSON.stringify({saida:l.departure_checklist,chegada:l.arrival_checklist,observacoes:l.notes},null,2))+'</pre></details>').join('')+'<h3>Fotos</h3>'+trip.photos.map(p=>'<a target="_blank" rel="noopener" href="'+base+'photos/'+encodeURIComponent(p.id)+'/">'+esc(p.moment==='arrival'?'Chegada':'Saída')+' · '+esc(p.leg.slice(0,8))+'</a> ').join('')+'<h3>Auditoria</h3>'+trip.events.map(e=>'<p>'+esc(dt(e.at))+' · '+esc(e.action)+' · usuário '+esc(e.user)+'</p>').join('');
+}
+async function refresh(){
+ try{
+ const trips=await get('trips/');
+ const el=document.getElementById('trips');el.replaceChildren();
+ for(const trip of trips){
+   const card=document.createElement('article'),title=document.createElement('h2'),text=document.createElement('p'),button=document.createElement('button');
+   title.textContent=trip.vehicle+' · '+(trip.closed_at?'Encerrado':'Aberto');
+   text.textContent=dt(trip.opened_at)+' · '+trip.legs.length+' destino(s)';
+   button.textContent='Ver percurso e vistorias';button.onclick=()=>show(trip.id).catch(fail);
+   card.append(title,text,button);el.append(card);
+ }
+ document.getElementById('status').textContent='Atualizado em '+new Date().toLocaleTimeString('pt-BR')+'. Exibindo os 100 BDTs mais recentes.';
+ if(selected)await show(selected,false);
+ }catch(e){fail(e);}
+}
+function fail(e){document.getElementById('status').textContent=e.message;}
+document.getElementById('refresh').onclick=refresh;
+setInterval(()=>{if(!document.hidden)refresh();},30000);refresh();
+</script></body></html>

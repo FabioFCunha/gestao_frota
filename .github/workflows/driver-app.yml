@@ -1,0 +1,58 @@
+name: Driver app checks
+on:
+  push:
+    branches: ["codex/app-motorista-bdt-20261020"]
+  pull_request:
+    paths:
+      - "apps/driverops/**"
+      - "config/driver*"
+      - "mobile/driver/**"
+      - ".github/workflows/driver-app.yml"
+permissions:
+  contents: read
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: driverops_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DJANGO_SETTINGS_MODULE: config.driver_settings
+      POSTGRES_DB: driverops_test
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_HOST: 127.0.0.1
+      DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1,testserver
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - run: python manage.py check
+      - run: python manage.py makemigrations driverops --check --dry-run
+      - run: python manage.py test apps.driverops --verbosity 2
+  mobile:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile/driver
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm install --ignore-scripts
+      - run: npx expo install --check
+      - run: npm run typecheck
+      - run: npx expo export --platform android --output-dir dist
+        env:
+          EXPO_PUBLIC_API_URL: https://homologacao.example.com/api/driver/
