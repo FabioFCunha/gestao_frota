@@ -83,9 +83,11 @@ git merge --ff-only origin/codex/empresas-interface-completa-20261020
 bash scripts/update-company-pilot.sh
 ```
 
-O script cria dump PostgreSQL com permissões restritas, salva a configuração e
-identifica a imagem anterior, valida o Django e aplica a migração antes de recriar
-somente o serviço web. Recarrega o proxy interno para resolver o novo IP do web.
+O script salva a configuração e a imagem anterior, constrói e valida o Django.
+Pausa brevemente o web do piloto para impedir gravações durante o dump PostgreSQL
+e a migração de vínculos. O banco continua ligado. Se o dump ou a migração falhar,
+reinicia o contêiner antigo; na atualização, recria somente web e espera sua saúde.
+Recarrega o proxy interno para resolver o novo IP do web.
 O `sied_proxy` e a produção não são recriados. Em falha de migração, o script para
 antes da troca do web; não continuar manualmente sem resolver a causa.
 

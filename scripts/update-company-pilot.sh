@@ -14,14 +14,24 @@ git rev-parse HEAD > "$backup_dir/commit.txt"
 git diff > "$backup_dir/local-changes.patch"
 cp deploy/pwa/compose.yaml "$backup_dir/compose.yaml"
 cp deploy/pwa/nginx.conf "$backup_dir/nginx.conf"
-"${compose[@]}" exec -T database sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > "$backup_dir/database.dump"
-test -s "$backup_dir/database.dump"
 web_id=$("${compose[@]}" ps -q web)
 old_image=$(docker inspect --format '{{.Image}}' "$web_id")
 docker image tag "$old_image" "transfrota-company-rollback:$(basename "$backup_dir")"
 "${compose[@]}" build web
 "${compose[@]}" run --rm --no-deps -T web python manage.py check
-"${compose[@]}" run --rm --no-deps -T web python manage.py migrate --noinput
+# Pause writes while claiming the existing graph; restore the old container if
+# the backup/migration fails before web is replaced. The database stays running.
+"${compose[@]}" stop web
+if ! "${compose[@]}" exec -T database sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > "$backup_dir/database.dump" || [ ! -s "$backup_dir/database.dump" ]; then
+    "${compose[@]}" start web
+    echo 'Backup falhou; a versão anterior foi reiniciada.' >&2
+    exit 1
+fi
+if ! "${compose[@]}" run --rm --no-deps -T web python manage.py migrate --noinput; then
+    "${compose[@]}" start web
+    echo 'Migração falhou; a versão anterior foi reiniciada. Confira os vínculos antes de tentar novamente.' >&2
+    exit 1
+fi
 "${compose[@]}" up -d --no-deps --wait --wait-timeout 120 web
 "${compose[@]}" exec -T proxy nginx -t
 "${compose[@]}" exec -T proxy nginx -s reload
