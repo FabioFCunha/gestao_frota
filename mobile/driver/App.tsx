@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Alert, AppState, Button, Linking, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import * as SecureStore from 'expo-secure-store';
@@ -8,6 +8,7 @@ import { command, flush, gpsStatus, pendingCommand, prepareGPS, retryCommand, st
 import type { Bootstrap, Checklist, Leg, Trip } from './src/types';
 
 function Screen() {
+  const running = useRef(false);
   const [ready, setReady] = useState(false), [busy, setBusy] = useState(false);
   const [user, setUser] = useState(''), [password, setPassword] = useState('');
   const [boot, setBoot] = useState<Bootstrap|null>(null), [trip, setTrip] = useState<Trip|null>(null);
@@ -42,13 +43,14 @@ function Screen() {
     setPending(!!await pendingCommand());
   }
   async function run(work:()=>Promise<void>) {
-    if (busy) return;
+    if (running.current) return;
+    running.current = true;
     setBusy(true);
     try { await work(); }
     catch (e) {
       Alert.alert('Atenção', e instanceof Error ? e.message : 'Não foi possível concluir.');
       if (e instanceof ApiError && e.status === 401) { setReady(false); setBoot(null); }
-    } finally { setBusy(false); await updateStatus().catch(()=>{}); }
+    } finally { running.current = false; setBusy(false); await updateStatus().catch(()=>{}); }
   }
   useEffect(()=>{
     void run(async()=>{if(await token()) await refresh();});

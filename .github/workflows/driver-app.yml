@@ -51,6 +51,10 @@ jobs:
         with:
           node-version: "22"
       - run: npm install --ignore-scripts
+      - name: Inspect production dependency advisories
+        run: |
+          npm audit --omit=dev --json > audit.json || true
+          node -e "const a=require('./audit.json'); console.log(JSON.stringify({metadata:a.metadata,vulnerabilities:a.vulnerabilities},null,2))"
       - run: npx expo install --check
       - run: npm run typecheck
       - run: npx expo export --platform android --output-dir dist

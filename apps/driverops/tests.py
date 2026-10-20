@@ -4,6 +4,7 @@ from datetime import timedelta
 from PIL import Image
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from django.core.cache import cache
 from django.utils import timezone
 from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework.test import APIClient
@@ -14,6 +15,7 @@ from .views import CHECKS
 
 class DriverAppTests(TestCase):
     def setUp(self):
+        cache.clear()
         self.client = APIClient()
         self.company = Company.objects.create(name="Empresa A")
         self.other = Company.objects.create(name="Empresa B")
@@ -170,3 +172,11 @@ class DriverAppTests(TestCase):
         self.assertEqual(self.client.get("/").status_code,403)
         self.assertEqual(self.client.get("/api/vehicles/").status_code,403)
         self.assertEqual(self.client.get("/api/driver/bootstrap/").status_code,200)
+
+    def test_login_throttle(self):
+        self.client.credentials()
+        for _ in range(9):
+            response=self.client.post("/api/driver/login/",{"username":"motorista","password":"errada"},format="json")
+            self.assertEqual(response.status_code,401)
+        response=self.client.post("/api/driver/login/",{"username":"motorista","password":"errada"},format="json")
+        self.assertEqual(response.status_code,429)

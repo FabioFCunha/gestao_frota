@@ -34,6 +34,8 @@ def member_for(request):
     ).first()
     if not member:
         raise PermissionDenied("Usuário sem vínculo ativo com uma empresa.")
+    if member.role == Member.DRIVER and (not member.driver_id or not member.driver.active):
+        raise PermissionDenied("Motorista sem cadastro ativo.")
     return member
 
 
