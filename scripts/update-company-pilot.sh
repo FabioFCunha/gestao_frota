@@ -22,7 +22,7 @@ docker image tag "$old_image" "transfrota-company-rollback:$(basename "$backup_d
 "${compose[@]}" build web
 "${compose[@]}" run --rm --no-deps -T web python manage.py check
 "${compose[@]}" run --rm --no-deps -T web python manage.py migrate --noinput
-"${compose[@]}" up -d --no-deps web
+"${compose[@]}" up -d --no-deps --wait --wait-timeout 120 web
 "${compose[@]}" exec -T proxy nginx -t
 "${compose[@]}" exec -T proxy nginx -s reload
 "${compose[@]}" ps

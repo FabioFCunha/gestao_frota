@@ -33,6 +33,9 @@ def apply_driver_vehicle_scope(queryset, user, requested_sector=None, lookup="se
 
 
 def can_show_driver_sector_filter(user):
+    from .tenant_scope import company_id
+    if company_id():
+        return False
     return bool(
         user and user.is_authenticated
         and (user.email or "").strip().casefold() == "fabiocunhaosp@gmail.com"
