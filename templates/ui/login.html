@@ -105,12 +105,13 @@
         <div class="flex flex-col items-center text-center mb-8">
           <div class="relative mb-5 group cursor-pointer w-full flex justify-center">
             <!-- Logo Operação Lei Seca - Grande, ocupando o topo -->
-            <img 
+            {% if request.company_mode %}<span class="text-3xl font-extrabold tracking-tight text-white">TRANSFROTA</span>{% else %}
+            <img
               src="{% static 'images/operacao-lei-seca-logo.png' %}" 
               alt="Operação Lei Seca" 
               class="w-full max-w-[280px] object-contain transition-transform duration-300 group-hover:scale-105"
               style="filter: drop-shadow(0 0 20px rgba(37, 99, 235, 0.4)) drop-shadow(0 0 8px rgba(255,255,255,0.15));"
-            >
+            >{% endif %}
           </div>
 
           <!-- Título do Sistema -->

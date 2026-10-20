@@ -13,3 +13,9 @@ MIDDLEWARE.insert(
     MIDDLEWARE.index("django.contrib.auth.middleware.AuthenticationMiddleware") + 1,
     "apps.driverops.middleware.CompanyBoundaryMiddleware",
 )
+
+AUTHENTICATION_BACKENDS = [
+    'django.contrib.auth.backends.ModelBackend',
+    'apps.driverops.backends.CompanyManagerBackend',
+]
+REST_FRAMEWORK['DEFAULT_PERMISSION_CLASSES'] = ['apps.driverops.permissions.CompanyAuthenticated']

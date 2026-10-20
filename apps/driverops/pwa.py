@@ -24,7 +24,7 @@ def app(request):
     if not member:
         return HttpResponse("Usuário sem empresa ativa.", status=403)
     if member.role != Member.DRIVER:
-        return redirect("/api/driver/panel/")
+        return redirect("/")
     response = render(request, "driverops/app.html")
     response["Cache-Control"] = "private, no-store"
     response["Content-Security-Policy"] = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"

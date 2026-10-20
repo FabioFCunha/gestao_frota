@@ -16,19 +16,33 @@ class AssignedVehicleChoice(forms.ModelMultipleChoiceField):
         return obj.label
 
 
-class CompanyForm(forms.ModelForm):
-    class Meta:
-        model = Company
-        fields = ["name"]
-        labels = {"name": "Nome da empresa"}
+class CompanyForm(UserCreationForm):
+    company_name = forms.CharField(label="Nome da empresa", max_length=160)
+    manager_name = forms.CharField(label="Nome do primeiro gestor", max_length=150)
+    email = forms.EmailField(label="E-mail do gestor")
 
-    def clean_name(self):
-        name = " ".join(self.cleaned_data["name"].split())
-        if not name:
-            raise forms.ValidationError("Informe o nome da empresa.")
+    class Meta:
+        model = get_user_model()
+        fields = ['company_name', 'manager_name', 'username', 'email', 'password1', 'password2']
+        labels = {'username': 'Login do gestor'}
+
+    def clean_company_name(self):
+        name = " ".join(self.cleaned_data['company_name'].split())
         if Company.objects.filter(name__iexact=name).exists():
-            raise forms.ValidationError("Essa empresa já existe. Selecione-a na lista acima.")
+            raise forms.ValidationError('Essa empresa já existe.')
         return name
+
+    def save_company(self):
+        user = super().save(commit=False)
+        parts = self.cleaned_data['manager_name'].split(maxsplit=1)
+        user.first_name, user.last_name = parts[0], parts[1] if len(parts) > 1 else ''
+        user.email = self.cleaned_data['email']
+        user.is_staff = False
+        user.is_superuser = False
+        user.save()
+        company = Company.objects.create(name=self.cleaned_data['company_name'])
+        Member.objects.create(company=company, user=user, role=Member.MANAGER)
+        return company
 
 
 class MemberForm(UserCreationForm):
@@ -51,10 +65,12 @@ class MemberForm(UserCreationForm):
         self.fields["password1"].label = "Senha inicial"
         self.fields["password2"].label = "Confirme a senha"
         self.fields["vehicles"].queryset = CompanyVehicle.objects.filter(company=company, active=True).order_by("label")
+        self.fields["existing_driver"].queryset = Driver.objects.filter(active=True, member__isnull=True)
         if platform:
-            self.fields["existing_driver"].queryset = Driver.objects.filter(active=True, member__isnull=True)
-        else:
-            self.fields.pop("existing_driver")
+            self.fields['role'].choices = [(Member.MANAGER, 'Gestor')]
+            self.fields['vehicles'].widget = forms.HiddenInput()
+            self.fields['existing_driver'].widget = forms.HiddenInput()
+
 
     def clean(self):
         data = super().clean()

@@ -17,9 +17,10 @@
     <!-- Brand -->
     <div class="sb-brand">
       <div class="sb-brand-icon">
-        <img src="{% static 'images/operacao-lei-seca-logo.png' %}" alt="Logo" style="width:56px; height:56px; object-fit:contain; filter: drop-shadow(0 0 12px rgba(37, 99, 235, 0.5)) drop-shadow(0 0 4px rgba(255,255,255,0.2));">
-      </div>
-      <span class="brand-name" style="font-size: 13px !important; color: #94a3b8 !important; letter-spacing: 0.15em; margin-top: 8px;">GESTÃO DE FROTAS</span>
+        {% if request.company %}<i data-lucide="truck" style="width:44px;height:44px;color:#fff"></i>{% else %}<img src="{% static 'images/operacao-lei-seca-logo.png' %}" alt="Logo" style="width:56px; height:56px; object-fit:contain; filter: drop-shadow(0 0 12px rgba(37, 99, 235, 0.5)) drop-shadow(0 0 4px rgba(255,255,255,0.2));">
+      {% endif %}</div>
+      <span class="brand-name" style="font-size: 13px !important; color: #94a3b8 !important; letter-spacing: 0.15em; margin-top: 8px;">{% if request.company %}TRANSFROTA{% else %}GESTÃO DE FROTAS{% endif %}</span>
+      {% if request.company %}<span style="color:#fff;text-align:center;margin-top:8px">{{ request.company.name }}</span>{% endif %}
     </div>
 
     <!-- Navigation -->
@@ -39,7 +40,7 @@
         <i data-lucide="car" class="sb-icon"></i>
         <span>Veículos</span>
       </a>
-      <a class="sb-link {% if '/bdts/' in request.path %}active{% endif %}" href="/bdts/">
+      <a class="sb-link {% if '/bdts/' in request.path %}active{% endif %}" href="{% if request.company %}/api/driver/panel/{% else %}/bdts/{% endif %}">
         <i data-lucide="route" class="sb-icon"></i>
         <span>BDTs</span>
       </a>
@@ -63,7 +64,9 @@
         <i data-lucide="clipboard-list" class="sb-icon"></i>
         <span>Ordens de saída</span>
       </a>
-      {% if request.user.is_system_creator %}
+      {% if request.company_manager %}
+      <a class="sb-link" href="/api/driver/management/"><i data-lucide="shield-check" class="sb-icon"></i><span>Acessos e motoristas</span></a>
+      {% elif request.user.is_system_creator %}
       <a class="sb-link {% if '/usuarios/' in request.path or '/perfis/' in request.path %}active{% endif %}" href="{% url 'user_list' %}">
         <i data-lucide="shield-check" class="sb-icon"></i>
         <span>Usuários e permissões</span>

@@ -146,8 +146,8 @@
                         <a href="{% url 'vehicle_crlv' vehicle.id %}" class="vl-action-btn vl-action-btn--outline">CRLV</a>
                     {% endif %}
                     <a href="{% url 'vehicle_contract_edit' vehicle.id %}" class="vl-action-btn vl-action-btn--outline">Contrato</a>
-                    {% if can_manage_vehicle_status and vehicle.sector.slug == 'adm' %}
-                        <a href="{% url 'vehicle_position_edit' vehicle.id %}" class="vl-action-btn vl-action-btn--outline">Gestão ADM</a>
+                    {% if request.company_manager or can_manage_vehicle_status and vehicle.sector.slug == 'adm' %}
+                        <a href="{% url 'vehicle_position_edit' vehicle.id %}" class="vl-action-btn vl-action-btn--outline">{% if request.company %}Situação do veículo{% else %}Gestão ADM{% endif %}</a>
                         <form method="post" action="{% url 'vehicle_set_active' vehicle.id %}" style="display:inline" onsubmit="return confirm('Confirma {% if vehicle.active %}inativar{% else %}ativar{% endif %} a viatura desta placa?');">
                             {% csrf_token %}
                             <input type="hidden" name="active" value="{% if vehicle.active %}false{% else %}true{% endif %}">

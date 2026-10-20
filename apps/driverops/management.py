@@ -1,6 +1,7 @@
 from urllib.parse import urlencode
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.forms import SetPasswordForm
 from django.db import transaction, IntegrityError
 from django.http import HttpResponseForbidden, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
@@ -47,7 +48,7 @@ def management(request):
     if request.method not in ("GET","POST"):
         return HttpResponseBadRequest("Método não permitido.")
     action = request.POST.get("action") if request.method == "POST" else None
-    if action and action not in ("company","member","vehicle","assign","use_company"):
+    if action and action not in ("company","member","vehicle","assign","use_company","access","password"):
         return HttpResponseBadRequest("Operação inválida.")
     company_form = CompanyForm(request.POST if action=="company" else None,auto_id="company_%s")
     member_form = MemberForm(request.POST if action=="member" else None,company=company,platform=request.user.is_superuser,auto_id="person_%s") if company else None
@@ -59,11 +60,15 @@ def management(request):
         if action != "company" and company is None:
             return HttpResponseBadRequest("Selecione uma empresa ativa.")
         if action == "company" and company_form.is_valid():
-            with transaction.atomic():
-                created = company_form.save()
-                audit(request,created,"EMPRESA CRIADA",created.pk,{"name":created.name})
-            messages.success(request,"Empresa criada. Agora cadastre as pessoas e os veículos abaixo.")
-            return back(created)
+            try:
+                with transaction.atomic():
+                    created = company_form.save_company()
+                    audit(request,created,"EMPRESA CRIADA",created.pk,{"name":created.name})
+            except IntegrityError:
+                company_form.add_error(None, 'Este login ou cadastro já existe. Confira os dados.')
+            else:
+                messages.success(request,"Empresa e gestor criados. O gestor já pode entrar na interface completa da frota.")
+                return back(created)
         if action == "use_company":
             with transaction.atomic():
                 obj, created = Member.objects.get_or_create(user=request.user,
@@ -121,7 +126,7 @@ def management(request):
                             if data["mileage"] is not None:
                                 VehicleMileage.objects.create(vehicle=vehicle,mileage=data["mileage"],
                                     recorded_by=request.user,notes="Cadastro inicial pelo painel da empresa.")
-                        assignment = CompanyVehicle.objects.create(company=company,vehicle=vehicle,label=data["label"] or data["plate"])
+                        assignment, _ = CompanyVehicle.objects.update_or_create(company=company,vehicle=vehicle,defaults={"label":data["label"] or data["plate"]})
                         assignment.drivers.set(data["drivers"])
                         audit(request,company,"VEÍCULO VINCULADO",vehicle.pk,
                               {"label":assignment.label,"drivers":[m.pk for m in data["drivers"]]})
@@ -129,6 +134,42 @@ def management(request):
                 return back(company)
             except IntegrityError:
                 form.add_error(None,"Este usuário, motorista, placa ou veículo já foi cadastrado. Confira a lista e tente novamente.")
+        if action in ('password', 'access'):
+            try:
+                member_key = int(request.POST.get('member', ''))
+            except (ValueError, TypeError):
+                return HttpResponseBadRequest('Usuário inválido.')
+        if action == 'password':
+            member = get_object_or_404(Member, company=company, pk=member_key)
+            if member.user.is_superuser or member.user_id == request.user.pk:
+                return HttpResponseForbidden('Use Alterar senha para sua própria conta.')
+            password_form = SetPasswordForm(member.user, request.POST)
+            if password_form.is_valid():
+                with transaction.atomic():
+                    password_form.save()
+                    from .models import DeviceSession
+                    DeviceSession.objects.filter(member=member).delete()
+                    audit(request,company,'SENHA REDEFINIDA',member.user_id,{})
+                messages.success(request,'Senha redefinida. Informe a nova senha ao usuário.')
+            else:
+                messages.error(request,' '.join(str(error) for errors in password_form.errors.values() for error in errors))
+            return back(company)
+        if action == 'access':
+            member = get_object_or_404(Member, company=company, pk=member_key)
+            if member.user.is_superuser:
+                return HttpResponseForbidden('Acesso reservado à plataforma.')
+            if member.user_id == request.user.pk:
+                return HttpResponseBadRequest('Você não pode desativar seu próprio acesso.')
+            active = request.POST.get('active') == 'true'
+            with transaction.atomic():
+                Company.objects.select_for_update().get(pk=company.pk)
+                if member.role == Member.MANAGER and not active and not Member.objects.filter(company=company, role=Member.MANAGER, active=True).exclude(pk=member.pk).exists():
+                    return HttpResponseBadRequest('Mantenha pelo menos um gestor ativo.')
+                member.active = active
+                member.save(update_fields=['active'])
+                audit(request,company,'ACESSO ALTERADO',member.user_id,{'active':active})
+            messages.success(request,'Acesso atualizado.')
+            return back(company)
         if action == "assign":
             try:
                 vehicle_key = int(request.POST.get("vehicle", ""))

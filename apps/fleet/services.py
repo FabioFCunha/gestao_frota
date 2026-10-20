@@ -1555,8 +1555,9 @@ def create_vehicle_from_crlv(
         raise ValueError("Informe o exercício do CRLV.")
     if not brand_name or not model_name:
         raise ValueError("Marca e modelo são obrigatórios para incluir o veículo.")
-    if not sector or not status:
-        raise ValueError("Setor e situação são obrigatórios para incluir o veículo.")
+    from .tenant_scope import company_id
+    if not status or (not sector and not company_id()):
+        raise ValueError("Informe a situação do veículo e, no modo institucional, o setor.")
 
     from .models import Document
     if document.document_type.name.casefold() != "crlv":
@@ -2018,13 +2019,16 @@ def change_vehicle_position(*, vehicle: Vehicle, sector, active: bool, user, rea
     reason = (reason or "").strip()
     if len(reason) < 5:
         raise ValueError("Informe o motivo da alteração.")
-    if sector is None or sector.slug not in {"adm", "lei-seca"}:
+    from .tenant_scope import company_id
+    if not company_id() and (sector is None or sector.slug not in {"adm", "lei-seca"}):
         raise ValueError("Setor de destino inválido.")
+    if company_id():
+        sector = vehicle.sector
 
     old_sector = vehicle.sector
     old_active = vehicle.active
     old_sector_id = vehicle.sector_id
-    new_sector_id = sector.id
+    new_sector_id = sector.id if sector else None
     active_changed = old_active != active
 
     if old_sector_id == new_sector_id and not active_changed:
@@ -2065,7 +2069,7 @@ def change_vehicle_position(*, vehicle: Vehicle, sector, active: bool, user, rea
             "active": old_active,
         },
         new_values={
-            "sector": {"id": str(sector.id), "name": sector.name, "slug": sector.slug},
+            "sector": {"id": str(sector.id), "name": sector.name, "slug": sector.slug} if sector else None,
             "active": active,
         },
         reason=reason,

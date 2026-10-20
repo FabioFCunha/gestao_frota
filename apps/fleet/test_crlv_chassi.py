@@ -6,6 +6,10 @@ from django.contrib.auth import get_user_model
 from unittest.mock import patch
 
 class CRLVChassiExtractionTests(TestCase):
+    def test_instruction_is_not_a_vin(self):
+        self.assertEqual(extract_chassi('CHASSI LEIA O QR CODE E BAIXE'), '')
+        self.assertEqual(extract_chassi('CHASSI\nLEIA O QR CODE E BAIXE\n9BWAH5BZ1TT647425'), '9BWAH5BZ1TT647425')
+
     def test_a_context_explicit(self):
         text = "PLACA ABC1234\nCHASSI: 9BWZZZ377VT004251\nRENAVAM 123"
         self.assertEqual(extract_chassi(text), "9BWZZZ377VT004251")

@@ -17,7 +17,10 @@ class SystemParameter(models.Model):
     def __str__(self):
         return self.key
 
-class BaseModel(models.Model):
+from .tenant_scope import TenantModel
+
+
+class BaseModel(TenantModel):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -590,7 +593,7 @@ class Maintenance(BaseModel):
     sei_processes = GenericRelation('SEIProcessRelation')
     documents = GenericRelation('DocumentRelation')
 
-class VehicleHistory(models.Model):
+class VehicleHistory(TenantModel):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     vehicle = models.ForeignKey(Vehicle, on_delete=models.PROTECT, related_name="history")
     field = models.CharField(max_length=100)
@@ -601,7 +604,7 @@ class VehicleHistory(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
 
-class AuditLog(models.Model):
+class AuditLog(TenantModel):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL)
     module = models.CharField(max_length=80)

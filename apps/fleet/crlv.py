@@ -141,7 +141,7 @@ def extract_chassi(text):
         normalized_candidates = []
         for candidate in candidates:
             normalized = normalize_chassi(candidate)
-            if normalized and any(ch.isdigit() for ch in normalized):
+            if normalized and sum(ch.isdigit() for ch in candidate) >= 4:
                 if normalized not in normalized_candidates:
                     normalized_candidates.append(normalized)
 

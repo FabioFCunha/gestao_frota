@@ -29,16 +29,17 @@ class ManagementTests(TestCase):
 
     def test_platform_can_open_without_membership_and_create_company(self):
         self.assertEqual(self.client.get(BASE).status_code,200)
-        response=self.client.post(BASE,{"action":"company","name":"Empresa nova"})
+        response=self.client.post(BASE,{"action":"company","company_name":"Empresa nova","manager_name":"Gestor novo","email":"gestor@example.com","username":"gestor-novo","password1":"Senha-segura-321","password2":"Senha-segura-321"})
         self.assertEqual(response.status_code,302)
         self.assertTrue(Company.objects.filter(name="Empresa nova").exists())
         self.assertTrue(AuditLog.objects.filter(action="EMPRESA CRIADA",user=self.admin).exists())
-        response=self.client.post(BASE,{"action":"company","name":" empresa NOVA "})
+        response=self.client.post(BASE,{"action":"company","company_name":" empresa NOVA "})
         self.assertEqual(response.status_code,200)
         self.assertEqual(Company.objects.filter(name__iexact="Empresa nova").count(),1)
 
     def test_driver_access_is_created_with_all_links_and_no_elevated_privileges(self):
         vehicle=self.vehicle()
+        self.client.force_login(self.manager)
         data=self.member_data(vehicles=[vehicle.pk])
         response=self.client.post(BASE,data)
         self.assertEqual(response.status_code,302)
@@ -65,7 +66,7 @@ class ManagementTests(TestCase):
         self.assertEqual(VehicleMileage.objects.get(vehicle=obj.vehicle).mileage,12000)
         response=self.client.post(BASE,{"action":"vehicle","plate":"ABC1D23"})
         self.assertEqual(response.status_code,200)
-        self.assertContains(response,"Esta placa já está cadastrada")
+        self.assertIn("Esta placa já está cadastrada",str(response.context["vehicle_form"].errors))
         self.assertEqual(CompanyVehicle.objects.count(),1)
 
     def test_manager_cannot_read_or_mutate_another_company(self):
@@ -96,10 +97,14 @@ class ManagementTests(TestCase):
     def test_can_link_existing_vehicle_and_driver_without_duplicate_records(self):
         vehicle=Vehicle.objects.create(status=VehicleStatus.objects.create(name="Disponível"))
         driver=Driver.objects.create(name="Motorista já cadastrado")
+        from apps.driverops.ownership import bind_graph
+        bind_graph(Driver,driver.pk,self.company.pk)
+        self.client.force_login(self.manager)
         response=self.client.post(BASE,self.member_data(existing_driver=str(driver.pk)))
         self.assertEqual(response.status_code,302)
         member=Member.objects.get(user__username="motorista-novo")
         self.assertEqual(member.driver,driver)
+        self.client.force_login(self.admin)
         response=self.client.post(BASE,{"action":"vehicle","company":str(self.company.pk),
             "existing_vehicle":str(vehicle.pk),"label":"Veículo existente","drivers":[member.pk]})
         self.assertEqual(response.status_code,302)
@@ -108,7 +113,7 @@ class ManagementTests(TestCase):
         self.assertTrue(CompanyVehicle.objects.get(vehicle=vehicle).drivers.filter(pk=member.pk).exists())
         self.client.force_login(self.manager)
         self.assertNotIn("existing_vehicle",VehicleForm(company=self.company).fields)
-        self.assertNotIn("existing_driver",MemberForm(company=self.company).fields)
+        self.assertIn("existing_driver",MemberForm(company=self.company).fields)
 
     def test_self_manager_link_does_not_move_existing_membership(self):
         self.assertEqual(self.client.post(BASE,{"action":"use_company","company":str(self.company.pk)}).status_code,302)

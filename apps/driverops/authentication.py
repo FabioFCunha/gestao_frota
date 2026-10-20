@@ -19,6 +19,8 @@ class DeviceAuthentication(BaseAuthentication):
         ).first()
         if not session or not session.member.active or not session.member.company.active:
             raise AuthenticationFailed("Sessão expirada ou acesso desativado.")
+        from apps.fleet.tenant_scope import Scope, set_scope
+        set_scope(Scope(company_id=session.member.company_id,actor_id=session.member.user_id))
         user = session.member.user
         if not user.is_active or user.must_change_password or user.last_changed_at > session.created_at:
             raise AuthenticationFailed("Atualize sua senha pelo portal.")

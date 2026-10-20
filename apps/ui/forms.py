@@ -40,6 +40,12 @@ class CRLVConfirmForm(forms.Form):
 
 
 class CRLVVehicleCreateForm(CRLVConfirmForm):
+    def __init__(self,*args,**kwargs):
+        super().__init__(*args,**kwargs)
+        from apps.fleet.tenant_scope import company_id
+        if company_id():
+            self.fields.pop('sector',None)
+
     sector = forms.ModelChoiceField(
         queryset=Sector.objects.filter(active=True).order_by("name"),
         label="Setor",
@@ -137,6 +143,10 @@ class DriverForm(forms.ModelForm):
         from apps.fleet.driver_scope import effective_driver_sector_slugs
 
         allowed = effective_driver_sector_slugs(user) if user is not None else {"adm", "lei-seca"}
+        from apps.fleet.tenant_scope import company_id
+        if company_id():
+            self.fields.pop("sectors",None)
+            allowed = set()
         self._original_identity = {
             field: getattr(self.instance, field) or "" for field in ("cpf", "cnh_number")
         }
@@ -604,6 +614,11 @@ class VehiclePositionForm(forms.Form):
         from apps.fleet.models import Sector
         super().__init__(*args, **kwargs)
         self.fields["sector"].queryset = Sector.objects.filter(slug__in=["adm", "lei-seca"]).order_by("name")
+        from apps.fleet.tenant_scope import company_id
+        if company_id():
+            self.fields.pop('sector')
+            self.fields['reason'].widget.attrs['placeholder'] = 'Informe o motivo da alteração da situação do veículo.'
+
 
 
 
