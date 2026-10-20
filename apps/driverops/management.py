@@ -49,9 +49,9 @@ def management(request):
     action = request.POST.get("action") if request.method == "POST" else None
     if action and action not in ("company","member","vehicle","assign","use_company"):
         return HttpResponseBadRequest("Operação inválida.")
-    company_form = CompanyForm(request.POST if action=="company" else None)
-    member_form = MemberForm(request.POST if action=="member" else None,company=company,platform=request.user.is_superuser) if company else None
-    vehicle_form = VehicleForm(request.POST if action=="vehicle" else None,company=company,platform=request.user.is_superuser) if company else None
+    company_form = CompanyForm(request.POST if action=="company" else None,auto_id="company_%s")
+    member_form = MemberForm(request.POST if action=="member" else None,company=company,platform=request.user.is_superuser,auto_id="person_%s") if company else None
+    vehicle_form = VehicleForm(request.POST if action=="vehicle" else None,company=company,platform=request.user.is_superuser,auto_id="vehicle_%s") if company else None
     assignment_error = None
     if request.method == "POST":
         if action in ("company","use_company") and not request.user.is_superuser:
@@ -135,7 +135,7 @@ def management(request):
             except (ValueError, TypeError):
                 return HttpResponseBadRequest("Veículo inválido.")
             assignment = get_object_or_404(CompanyVehicle,company=company,pk=vehicle_key)
-            form = AssignmentForm(request.POST,company=company,vehicle=assignment)
+            form = AssignmentForm(request.POST,company=company,vehicle=assignment,auto_id=f"allowed_{assignment.pk}_%s")
             if form.is_valid():
                 with transaction.atomic():
                     CompanyVehicle.objects.select_for_update().get(pk=assignment.pk)
@@ -148,7 +148,7 @@ def management(request):
             assignment_error=(assignment.pk,form)
     vehicles = list(CompanyVehicle.objects.filter(company=company).select_related("vehicle").order_by("label")) if company else []
     for vehicle in vehicles:
-        vehicle.assignment_form = assignment_error[1] if assignment_error and assignment_error[0]==vehicle.pk else AssignmentForm(company=company,vehicle=vehicle)
+        vehicle.assignment_form = assignment_error[1] if assignment_error and assignment_error[0]==vehicle.pk else AssignmentForm(company=company,vehicle=vehicle,auto_id=f"allowed_{vehicle.pk}_%s")
     members = Member.objects.filter(company=company).select_related("user","driver").order_by("user__first_name","user__username") if company else []
     return render(request,"driverops/management.html",{
         "company":company,"companies":companies,"company_form":company_form,
