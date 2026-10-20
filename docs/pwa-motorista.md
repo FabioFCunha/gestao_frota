@@ -69,3 +69,49 @@ Nenhum endereço público de homologação é criado automaticamente por esta br
 CI: testes Django de sessão/CSRF/manifest/cache, regras JS no Node e fluxo completo
 em Chromium com Playwright (BDT com ida e retorno). Teste de navegador automatizado
 não substitui instalação e permissões em celular físico.
+
+## Subir um piloto isolado e testar sem domínio novo
+
+Os arquivos deploy/pwa/compose.yaml e nginx.conf criam banco, volumes e proxy
+exclusivos. A porta fica vinculada a 127.0.0.1:8003; não altera portas 80/443 ou o
+proxy do SIED. Não copie o .env de produção.
+
+Na VPS, em um checkout novo:
+
+```sh
+git clone --branch codex/app-motorista-bdt-20261020 https://github.com/FabioFCunha/gestao_frota.git /root/transfrota-pwa-piloto
+cd /root/transfrota-pwa-piloto
+python3 - <<'PY'
+import secrets
+from pathlib import Path
+path = Path("deploy/pwa/.env")
+if path.exists():
+    raise SystemExit("Arquivo já existe; nenhuma alteração feita.")
+path.write_text(
+    "PWA_SECRET_KEY=" + secrets.token_urlsafe(48) + "\n"
+    "PWA_DB_PASSWORD=" + secrets.token_urlsafe(32) + "\n"
+    "PWA_ALLOWED_HOSTS=localhost,127.0.0.1\n"
+    "PWA_CSRF_ORIGINS=http://localhost:8003,http://127.0.0.1:8003\n"
+)
+path.chmod(0o600)
+print("Configuração exclusiva do piloto criada.")
+PY
+docker compose --env-file deploy/pwa/.env -f deploy/pwa/compose.yaml up -d --build
+docker compose --env-file deploy/pwa/.env -f deploy/pwa/compose.yaml exec web python manage.py createsuperuser
+```
+
+No computador, crie um túnel SSH (substitua SERVIDOR pelo IP/host usado para acessar a VPS):
+
+```sh
+ssh -L 8003:127.0.0.1:8003 root@SERVIDOR
+```
+
+Mantenha o túnel aberto e entre em http://localhost:8003/admin/ para cadastrar
+empresa, motorista e vínculo de veículo conforme docs/app-motorista.md.
+Crie uma conta comum para o motorista; depois saia da conta de administrador e
+abra http://localhost:8003/api/driver/app/ com essa conta.
+Localhost permite testar service worker e localização no computador.
+Isso não libera acesso pelo celular: para instalar no telefone é necessário
+publicar este piloto em um domínio HTTPS próprio, configurando DNS, certificado,
+ALLOWED_HOSTS e CSRF. Essa etapa depende do domínio escolhido e deve preservar
+a configuração do proxy compartilhado com o SIED.

@@ -50,6 +50,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+      - run: docker compose --env-file deploy/pwa/.env.example -f deploy/pwa/compose.yaml config --quiet
+        env:
+          PWA_SECRET_KEY: ci-placeholder-not-for-deployment
+          PWA_DB_PASSWORD: ci-placeholder-not-for-deployment
       - run: node --check apps/driverops/pwa/app.js
       - run: node --check apps/driverops/pwa/sw.js
       - run: node --test apps/driverops/pwa/rules.test.mjs

@@ -13,3 +13,7 @@ staticfiles/*
 .idea
 node_modules
 *.log
+**/.env
+**/.env.*
+**/node_modules
+**/__pycache__
