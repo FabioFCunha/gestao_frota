@@ -1,3 +1,6 @@
+> Para testar primeiro pelo navegador/instalar como PWA, veja [pwa-motorista.md](pwa-motorista.md).
+> O app nativo abaixo permanece disponível para a etapa Android.
+
 # Transfrota Motorista — homologação
 
 Esta branch inicia o aplicativo nativo Android/iOS e um módulo Django separado.

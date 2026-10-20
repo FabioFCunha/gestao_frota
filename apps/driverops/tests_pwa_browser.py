@@ -31,8 +31,23 @@ class PWABrowserTests(LiveServerTestCase):
             page.goto(self.live_server_url+"/api/driver/app/")
             expect(page.locator("#identity")).to_contain_text("Empresa navegador")
             page.locator("#destinations").fill("Destino A\nRetorno à base")
+            dropped = [False]
+            def lose_first_response(route):
+                if route.request.method == "POST" and not dropped[0]:
+                    response = route.fetch()
+                    self.assertEqual(response.status, 200)
+                    dropped[0] = True
+                    response.dispose()
+                    route.abort()
+                else:
+                    route.continue_()
+            page.route("**/api/driver/trips/", lose_first_response)
             page.get_by_role("button",name="Abrir BDT",exact=True).click()
-            expect(page.locator("#message")).to_contain_text("BDT aberto")
+            expect(page.locator("#pending")).to_be_visible()
+            page.get_by_role("button",name="Sincronizar",exact=True).click()
+            expect(page.locator("#message")).to_contain_text("Sincronização concluída")
+            self.assertEqual(Trip.objects.filter(member=member).count(),1)
+            page.unroute("**/api/driver/trips/", lose_first_response)
             for index,(initial,final) in enumerate(((100,120),(120,150))):
                 expect(page.locator("#transition-submit")).to_have_text("Iniciar trecho")
                 page.locator("#km").fill(str(initial))

@@ -3,6 +3,12 @@ const $=id=>document.getElementById(id), API='/api/driver/';
 let boot=null,trip=null,busy=false,watch=null,trackingConsent=false,formKey='',lastFix=0,installPrompt=null;
 const date=v=>v?new Date(v).toLocaleString('pt-BR'):'—';
 function message(text){$('message').textContent=text;}
+function lockScreen(){
+ stopGPS();trip=null;boot=null;
+ $('identity').textContent='Confirme sua sessão para continuar.';
+ for(const id of ['create','trip','transition','extra'])$(id).hidden=true;
+ $('history').replaceChildren();$('history-detail').replaceChildren();
+}
 const database=new Promise((resolve,reject)=>{
  const open=indexedDB.open('transfrota-pwa',1);
  open.onupgradeneeded=()=>open.result.createObjectStore('outbox',{keyPath:'id'});
@@ -29,7 +35,10 @@ async function api(path,body,id,form=false){
 async function pending(){return (await records()).find(r=>r.kind==='command');}
 async function sameOwner(){
  const rows=await records();
- if(rows.some(r=>!canSend(r.owner,boot.member_id)))throw Error('Há dados pendentes de outra conta neste navegador. Saia e entre com o motorista anterior para sincronizar.');
+ if(rows.some(r=>!canSend(r.owner,boot.member_id))){
+   lockScreen();
+   throw Error('Há dados pendentes de outra conta neste navegador. Saia e entre com o motorista anterior para sincronizar.');
+ }
 }
 async function retry(){
  const row=await pending();if(!row)return;
@@ -77,7 +86,7 @@ async function run(work,silent=false){
  catch(e){
  if(!silent)message(e.name==='AbortError'?'A conexão não respondeu. Use Sincronizar para conferir se a operação foi salva.':e.message);
  if(e.status===401||e.status===403){
-   stopGPS();boot=null;
+   lockScreen();
    $('connection').textContent='Sessão indisponível. Entre novamente para recuperar os dados pendentes.';
    const a=document.createElement('a');a.href='/entrar/?next='+encodeURIComponent('/api/driver/app/');a.textContent='Entrar novamente';$('connection').append(' ',a);
  }
