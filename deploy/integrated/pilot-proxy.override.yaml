@@ -7,7 +7,11 @@ services:
       - main_fleet_static:/staticfiles:ro
     networks:
       main_fleet: {}
+      pilot_public_proxy: {}
 networks:
+  pilot_public_proxy:
+    external: true
+    name: ${PUBLIC_PROXY_NETWORK:-agenda-educacao_default}
   main_fleet:
     external: true
     name: ${MAIN_FLEET_NETWORK:-gestao-frotas_default}

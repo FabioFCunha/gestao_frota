@@ -35,6 +35,10 @@ class CompanyVehicle(models.Model):
     active = models.BooleanField(default=True)
 
 
+    def __str__(self):
+        return self.label
+
+
     @transaction.atomic
     def save(self, *args, **kwargs):
         return super().save(*args, **kwargs)

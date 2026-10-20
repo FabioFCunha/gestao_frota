@@ -16,8 +16,9 @@ mesmo backend. Não é uma segunda administração e não usa uma cópia dos usu
   do cadastro principal. No primeiro acesso, trocar a senha inicial em uma tela
   operacional sem o menu desktop. O aplicativo continua com BDT, destinos, KM,
   checklist e fotos.
-- Inativação, redefinição de senha ou alteração de autorizações em Usuários vale
-  imediatamente nas próximas requisições do aplicativo. Tokens antigos são revogados.
+- Inativação e redefinição de senha em Usuários revogam os tokens antigos. As
+  autorizações atualizam a lista de veículos e as próximas aberturas de BDT; viagens
+  já iniciadas mantêm seu histórico e não são apagadas.
 - Sessões web são separadas por host; não há compartilhamento de cookies de
   domínio amplo nem transferência de senha entre domínios. É a mesma credencial,
   com login em cada superfície, sem promessa de SSO automático.
@@ -101,7 +102,7 @@ docker compose --env-file deploy/pwa/.env \
 Conferir que o proxy continua na rede pública usada pelo `sied_proxy` e também
 na rede `gestao-frotas_default`; que o volume estático é o principal; e que seu
 nome/porta continuam os já publicados. Os nomes podem ser configurados por
-`MAIN_FLEET_NETWORK` e `MAIN_FLEET_STATIC_VOLUME`. Não recriar o SIED.
+`MAIN_FLEET_NETWORK`, `MAIN_FLEET_STATIC_VOLUME` e `PUBLIC_PROXY_NETWORK`. Não recriar o SIED.
 
 Guardar dump/imagem do piloto. Trocar somente seu proxy, com `--no-deps`, usando
 OS DOIS arquivos compose acima. Isso mantém a identidade de rede que o proxy
