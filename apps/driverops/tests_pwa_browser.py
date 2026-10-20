@@ -46,7 +46,6 @@ class PWABrowserTests(LiveServerTestCase):
             expect(page.locator("#pending")).to_be_visible()
             page.get_by_role("button",name="Sincronizar",exact=True).click()
             expect(page.locator("#message")).to_contain_text("Sincronização concluída")
-            self.assertEqual(Trip.objects.filter(member=member).count(),1)
             page.unroute("**/api/driver/trips/", lose_first_response)
             for index,(initial,final) in enumerate(((100,120),(120,150))):
                 expect(page.locator("#transition-submit")).to_have_text("Iniciar trecho")
@@ -62,7 +61,8 @@ class PWABrowserTests(LiveServerTestCase):
                 page.locator("#transition-submit").click()
                 expect(page.locator("#message")).to_contain_text("BDT encerrado" if index else "Chegada salva")
             expect(page.locator("#create")).to_be_visible()
-            self.assertIsNotNone(Trip.objects.get(member=member).closed_at)
-            self.assertEqual(Trip.objects.get(member=member).legs.count(),2)
             self.assertEqual(errors,[])
             browser.close()
+        self.assertEqual(Trip.objects.filter(member=member).count(),1)
+        self.assertIsNotNone(Trip.objects.get(member=member).closed_at)
+        self.assertEqual(Trip.objects.get(member=member).legs.count(),2)
