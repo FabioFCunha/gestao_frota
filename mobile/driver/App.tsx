@@ -56,10 +56,17 @@ function Screen() {
   useEffect(()=>{
     void run(async()=>{if(await token()) await refresh();});
     const sub = AppState.addEventListener('change', state=> {
-      if(state==='active') void run(async()=>{ if(await token()) {await flush(); await refresh();} });
+      if(state==='active') void run(async()=>{ if(await token()) {await flush(10); await refresh();} });
     });
     return ()=>sub.remove();
   },[]);
+  useEffect(()=>{
+    if (!ready) return;
+    const timer = setInterval(()=>{
+      if (AppState.currentState === 'active') void run(async()=>{await flush(10); await refresh();});
+    },30000);
+    return ()=>clearInterval(timer);
+  },[ready]);
   useEffect(()=>{
     if (!next) return;
     const previous = trip?.legs.filter(l=>l.ended_at).slice(-1)[0];

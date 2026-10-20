@@ -27,7 +27,7 @@ class VehicleForm(forms.ModelForm):
         drivers = data.get("drivers")
         if company and drivers is not None and drivers.exclude(company=company, role=Member.DRIVER).exists():
             raise ValidationError("Selecione somente motoristas desta empresa.")
-        if self.instance.pk and self.instance.trip_set.exists():
+        if company and self.instance.pk and self.instance.trip_set.exists():
             if CompanyVehicle.objects.get(pk=self.instance.pk).company_id != company.pk:
                 raise ValidationError("Não é permitido transferir veículo com histórico de BDT.")
         return data

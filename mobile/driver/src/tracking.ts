@@ -53,28 +53,35 @@ export async function startGPS(trip: string, leg: string, startedAt: string) {
   const old = await context();
   if (old && old.leg !== leg) await stopGPS();
   await SecureStore.setItemAsync('driver-tracking', JSON.stringify({trip, leg, since: Date.parse(startedAt)}));
-  if (!await Location.hasStartedLocationUpdatesAsync(TASK)) {
-    await Location.startLocationUpdatesAsync(TASK, {
+  try {
+    if (!await Location.hasStartedLocationUpdatesAsync(TASK)) {
+      await Location.startLocationUpdatesAsync(TASK, {
       accuracy: Location.Accuracy.High, distanceInterval: 30, timeInterval: 15000,
       pausesUpdatesAutomatically: false, showsBackgroundLocationIndicator: true,
       foregroundService: { notificationTitle: 'BDT em deslocamento', notificationBody: 'Registrando o percurso do trecho ativo.' },
-    });
+      });
+    }
+    await SecureStore.deleteItemAsync('driver-gps-error');
+  } catch (error) {
+    await SecureStore.setItemAsync('driver-gps-error', 'Trecho ativo sem coleta: use Retomar GPS e confira as permissões.');
+    throw error;
   }
-  await SecureStore.deleteItemAsync('driver-gps-error');
 }
 
 export async function stopGPS() {
   // Disable collection before stopping native task to reject late callbacks.
   await SecureStore.deleteItemAsync('driver-tracking');
+  await SecureStore.deleteItemAsync('driver-gps-error');
   if (await Location.hasStartedLocationUpdatesAsync(TASK)) await Location.stopLocationUpdatesAsync(TASK);
 }
 
 let flushing = false;
-export async function flush() {
+export async function flush(maxBatches = 1) {
   if (flushing) return;
   flushing = true;
   try {
     const conn = await db();
+    for (let batch = 0; batch < maxBatches; batch++) {
     const rows = await conn.getAllAsync<{id:string;trip:string;leg:string;payload:string}>('SELECT * FROM positions ORDER BY rowid LIMIT 200');
     if (!rows.length) return;
     const group = rows.filter(r => r.trip === rows[0].trip && r.leg === rows[0].leg);
@@ -87,6 +94,7 @@ export async function flush() {
         await conn.runAsync('INSERT OR IGNORE INTO rejected_positions VALUES (?, ?, ?)', row.id, row.payload, rejected.reason);
         await conn.runAsync('DELETE FROM positions WHERE id=?', row.id);
       });
+    }
     }
   } finally { flushing = false; }
 }

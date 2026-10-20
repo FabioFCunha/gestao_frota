@@ -67,7 +67,7 @@ Senha obrigatória deve ser atualizada em `/minha-senha/` antes do login no app.
 cd mobile/driver
 cp .env.example .env
 # Ajuste EXPO_PUBLIC_API_URL para sua URL HTTPS de homologação.
-npm install
+npm ci
 npx expo install --check
 npm run typecheck
 npx expo run:android
@@ -82,7 +82,9 @@ Identificadores de pacote são sugestões; registrar contas, assinatura e public
 ainda depende da empresa proprietária. Não há APK ou IPA assinado nesta branch.
 
 Dependências vêm das versões compatíveis publicadas no repositório oficial Expo SDK55.
-O primeiro npm install deve gerar um package-lock para ser revisado e versionado antes do release.
+O package-lock foi gerado pela instalação no CI e está versionado. Use npm ci para
+reproduzir as versões verificadas. O resultado funcional do CI não substitui revisão
+dos avisos de segurança descritos ao final deste documento.
 
 ## GPS, conexão e bateria
 
@@ -163,3 +165,11 @@ Não aplicar npm audit fix --force: a sugestão automática incluía downgrade d
 para SDK44, incompatível com esta implementação.
 O CI registra os avisos sem ocultá-los. Revisão das versões corrigidas e exposição
 do ambiente de build continua sendo bloqueador de liberação comercial.
+
+## Validação automática realizada
+
+Em 20/10/2026, o CI executou com sucesso os 12 testes do módulo em PostgreSQL16,
+check do Django, verificação de migrações sem mudanças pendentes, compatibilidade
+das dependências com Expo55, TypeScript e exportação do bundle Android.
+A geração do bundle não gera APK e não exercita permissões/GPS nativos.
+Build nativo Android/iOS e testes em dispositivo continuam pendentes.
