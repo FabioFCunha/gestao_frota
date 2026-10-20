@@ -40,7 +40,7 @@
         <i data-lucide="car" class="sb-icon"></i>
         <span>Veículos</span>
       </a>
-      <a class="sb-link {% if '/bdts/' in request.path %}active{% endif %}" href="{% if request.company %}/api/driver/panel/{% else %}/bdts/{% endif %}">
+      <a class="sb-link {% if '/bdts/' in request.path %}active{% endif %}" href="{% if request.company %}{% if request.central_user_management %}/gestao/bdts/{% else %}/api/driver/panel/{% endif %}{% else %}/bdts/{% endif %}">
         <i data-lucide="route" class="sb-icon"></i>
         <span>BDTs</span>
       </a>
@@ -65,7 +65,7 @@
         <span>Ordens de saída</span>
       </a>
       {% if request.company_manager %}
-      <a class="sb-link" href="/api/driver/management/"><i data-lucide="shield-check" class="sb-icon"></i><span>Acessos e motoristas</span></a>
+      <a class="sb-link" href="{% if request.central_user_management %}/usuarios/{% else %}/api/driver/management/{% endif %}"><i data-lucide="shield-check" class="sb-icon"></i><span>Usuários</span></a>
       {% elif request.user.is_system_creator %}
       <a class="sb-link {% if '/usuarios/' in request.path or '/perfis/' in request.path %}active{% endif %}" href="{% url 'user_list' %}">
         <i data-lucide="shield-check" class="sb-icon"></i>

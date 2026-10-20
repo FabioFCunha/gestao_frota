@@ -26,6 +26,17 @@ class FleetLoginView(LoginView):
     redirect_authenticated_user = True
 
     def get_success_url(self):
+        from django.conf import settings
+        if getattr(settings, 'CENTRAL_USER_MANAGEMENT', False):
+            from apps.driverops.surfaces import management_url, app_url
+            from apps.driverops.models import Member
+            if self.request.user.is_superuser:
+                return management_url('/empresas/')
+            member = Member.objects.filter(user=self.request.user, active=True, company__active=True).first()
+            if member and member.role == Member.DRIVER:
+                return app_url()
+            if member and member.role == Member.MANAGER:
+                return management_url('/')
         if hasattr(self.request, 'company_member'):
             if self.request.user.is_superuser:
                 return '/api/driver/management/'
@@ -44,7 +55,8 @@ class FleetLoginView(LoginView):
 @login_required
 def dashboard(request):
     if hasattr(request, 'company_member') and request.user.is_superuser:
-        return redirect('/api/driver/management/')
+        from django.conf import settings
+        return redirect('/empresas/' if getattr(settings, 'CENTRAL_USER_MANAGEMENT', False) else '/api/driver/management/')
     from datetime import timedelta
     from apps.fleet.models import Vehicle, VehiclePlate, Maintenance, VehicleFine
     from apps.fleet.services import get_dashboard_metrics, get_operational_alerts, get_crlv_alerts

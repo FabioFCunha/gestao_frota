@@ -2,6 +2,7 @@ import io
 import json
 from pathlib import Path
 from PIL import Image, ImageDraw
+from django.conf import settings
 from django.contrib.auth import logout
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse, JsonResponse
@@ -19,11 +20,17 @@ ASSETS = {"app.js": "text/javascript", "rules.mjs": "text/javascript",
 @ensure_csrf_cookie
 def app(request):
     if request.user.is_superuser:
+        if getattr(settings, "CENTRAL_USER_MANAGEMENT", False):
+            from .surfaces import management_url
+            return redirect(management_url("/empresas/"))
         return redirect("/api/driver/management/")
     member = Member.objects.filter(user=request.user, active=True, company__active=True).first()
     if not member:
         return HttpResponse("Usuário sem empresa ativa.", status=403)
     if member.role != Member.DRIVER:
+        if getattr(settings, "CENTRAL_USER_MANAGEMENT", False):
+            from .surfaces import management_url
+            return redirect(management_url())
         return redirect("/")
     response = render(request, "driverops/app.html")
     response["Cache-Control"] = "private, no-store"

@@ -1,4 +1,5 @@
 from urllib.parse import urlencode
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import SetPasswordForm
@@ -37,11 +38,13 @@ def audit(request, company, action, entity_id, values, old=None):
 
 
 def back(company):
-    return redirect(BASE+"?"+urlencode({"company":str(company.pk)}))
+    return redirect(("/empresas/" if getattr(settings, "CENTRAL_USER_MANAGEMENT", False) else BASE)+"?"+urlencode({"company":str(company.pk)}))
 
 
 @login_required
 def management(request):
+    if getattr(settings, 'CENTRAL_USER_MANAGEMENT', False) and not request.user.is_superuser:
+        return redirect('user_list') if request.method == 'GET' else HttpResponseForbidden('Use a área Usuários no sistema principal.')
     company, companies = managed_company(request)
     if not request.user.is_superuser and company is None:
         return HttpResponseForbidden("Acesso exclusivo ao administrador ou gestor da empresa.")
@@ -93,6 +96,8 @@ def management(request):
                         parts = data["name"].split(maxsplit=1)
                         user.first_name,user.last_name = parts[0],parts[1] if len(parts)>1 else ""
                         user.email=data["email"]
+                        if getattr(settings, "CENTRAL_USER_MANAGEMENT", False):
+                            user.username = user.email
                         user.is_staff=False; user.is_superuser=False
                         user.save()
                         driver = None

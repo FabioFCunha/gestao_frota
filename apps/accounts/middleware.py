@@ -47,6 +47,10 @@ class OperationalInspectionMiddleware:
     def process_view(self, request, view_func, view_args, view_kwargs):
         from django.core.exceptions import PermissionDenied
 
+        from django.conf import settings
+        if getattr(settings, 'CENTRAL_USER_MANAGEMENT', False) and getattr(request, 'company_member', None):
+            request.inspection_only = False
+            return None
         request.inspection_only = is_inspection_only(request.user)
         if not request.inspection_only:
             return None

@@ -8,6 +8,8 @@ on:
       - "apps/accounts/**"
       - "templates/**"
       - "config/driver*"
+      - "config/company*"
+      - "deploy/integrated/**"
       - "mobile/driver/**"
       - ".github/workflows/driver-app.yml"
 permissions:
@@ -40,6 +42,7 @@ jobs:
           python-version: "3.12"
       - run: pip install -r requirements.txt
       - run: python manage.py check
+      - run: python manage.py check --settings=config.company_settings
       - run: python manage.py makemigrations --check --dry-run
       - run: python manage.py test apps.driverops --verbosity 2
       - name: Legacy PDF and order regression checks
@@ -59,6 +62,10 @@ jobs:
         with:
           node-version: "22"
       - run: docker compose --env-file deploy/pwa/.env.example -f deploy/pwa/compose.yaml config --quiet
+        env:
+          PWA_SECRET_KEY: ci-placeholder-not-for-deployment
+          PWA_DB_PASSWORD: ci-placeholder-not-for-deployment
+      - run: docker compose --env-file deploy/pwa/.env.example -f deploy/pwa/compose.yaml -f deploy/integrated/pilot-proxy.override.yaml config --quiet
         env:
           PWA_SECRET_KEY: ci-placeholder-not-for-deployment
           PWA_DB_PASSWORD: ci-placeholder-not-for-deployment

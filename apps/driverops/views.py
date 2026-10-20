@@ -6,6 +6,7 @@ import secrets
 import uuid
 from datetime import timedelta
 from PIL import Image, UnidentifiedImageError
+from django.conf import settings
 from django.contrib.auth import authenticate
 from django.db import transaction
 from django.http import HttpResponse
@@ -34,6 +35,8 @@ def member_for(request):
     ).first()
     if not member:
         raise PermissionDenied("Usuário sem vínculo ativo com uma empresa.")
+    if getattr(settings, "CENTRAL_USER_MANAGEMENT", False) and getattr(request, "driver_app_surface", False) and member.role != Member.DRIVER:
+        raise PermissionDenied("Gestores devem usar o sistema principal.")
     if member.role == Member.DRIVER and (not member.driver_id or not member.driver.active):
         raise PermissionDenied("Motorista sem cadastro ativo.")
     from apps.fleet.tenant_scope import set_scope, Scope
@@ -136,10 +139,19 @@ def login(request):
     username, password = request.data.get("username", ""), request.data.get("password", "")
     if not isinstance(username, str) or not isinstance(password, str):
         raise ValidationError("Credenciais inválidas.")
+    if getattr(settings, 'CENTRAL_USER_MANAGEMENT', False):
+        from django.contrib.auth import get_user_model
+        username = username.strip().lower()
+        matches = get_user_model().objects.filter(email__iexact=username)
+        if matches.count() != 1:
+            return Response({'detail': 'E-mail ou senha inválidos.'}, status=401)
+        username = matches.get().username
     user = authenticate(request, username=username, password=password)
     if not user:
         return Response({"detail": "Usuário ou senha inválidos."}, status=401)
     member = Member.objects.filter(user=user, active=True, company__active=True).first()
+    if getattr(settings, "CENTRAL_USER_MANAGEMENT", False) and member and member.role != Member.DRIVER:
+        return Response({"detail": "Gestores usam o sistema principal."}, status=403)
     if not member or user.must_change_password:
         return Response({"detail": "Acesso indisponível. Verifique o vínculo e atualize a senha no portal."}, status=403)
     token = secrets.token_urlsafe(48)

@@ -104,3 +104,64 @@ class PWABrowserTests(LiveServerTestCase):
         member = Member.objects.get(user__username='gestor.piloto')
         self.assertEqual(member.company.name, 'Empresa Piloto')
         self.assertFalse(member.user.is_staff)
+
+    def test_main_users_create_driver_that_logs_into_operational_host(self):
+        from django.conf import settings
+        from django.test import override_settings
+        from apps.fleet.tenant_scope import Scope, set_scope, reset_scope
+        from playwright.sync_api import sync_playwright, expect
+        main_origin = self.live_server_url
+        app_origin = main_origin.replace('localhost', '127.0.0.1')
+        middleware = list(settings.MIDDLEWARE)
+        middleware.insert(middleware.index('apps.driverops.middleware.CompanyBoundaryMiddleware'), 'apps.driverops.surfaces.AppSurfaceMiddleware')
+        manager = get_user_model().objects.create_user(username='gestor.central@example.com', email='gestor.central@example.com', password='Senha-gestor-987')
+        company = Company.objects.create(name='Empresa central navegador')
+        Member.objects.create(user=manager, company=company, role=Member.MANAGER)
+        token = set_scope(Scope(company_id=company.pk, actor_id=manager.pk))
+        try:
+            driver = Driver.objects.create(name='Motorista CNH navegador')
+            vehicle = Vehicle.objects.create(status=VehicleStatus.objects.create(name='Disponível'))
+            vehicle_key = CompanyVehicle.objects.get(vehicle=vehicle).pk
+            driver_key = str(driver.pk)
+        finally:
+            reset_scope(token)
+        with override_settings(CENTRAL_USER_MANAGEMENT=True, ROOT_URLCONF='config.company_urls',
+            MANAGEMENT_ORIGIN=main_origin, DRIVER_APP_ORIGIN=app_origin,
+            MIDDLEWARE=middleware, ALLOWED_HOSTS=['localhost','127.0.0.1','testserver'],
+            CSRF_TRUSTED_ORIGINS=[main_origin, app_origin]):
+            with sync_playwright() as p:
+                browser = p.chromium.launch()
+                context = browser.new_context()
+                page = context.new_page()
+                page.goto(main_origin+'/entrar/')
+                page.locator('input[name=username]').fill(manager.email)
+                page.locator('input[name=password]').fill('Senha-gestor-987')
+                page.locator('#wwLoginForm button[type=submit]').click()
+                expect(page.locator('.sb-brand')).to_contain_text(company.name)
+                page.goto(main_origin+'/usuarios/novo/')
+                page.locator('input[name=first_name]').fill('Motorista integração')
+                page.locator('input[name=email]').fill('motorista.central@example.com')
+                page.locator('select[name=role]').select_option('driver')
+                page.locator('select[name=driver]').select_option(driver_key)
+                page.locator(f'input[name=vehicles][value="{vehicle_key}"]').check()
+                page.locator('input[name=initial_password]').fill('Inicial-segura-987')
+                page.locator('input[name=initial_password_confirmation]').fill('Inicial-segura-987')
+                page.get_by_role('button', name='Salvar usuário', exact=True).click()
+                expect(page).to_have_url(main_origin+'/usuarios/')
+                expect(page.get_by_text('motorista.central@example.com', exact=True)).to_be_visible()
+                app_page = context.new_page()
+                app_page.goto(app_origin+'/entrar/')
+                app_page.locator('input[name=username]').fill('motorista.central@example.com')
+                app_page.locator('input[name=password]').fill('Inicial-segura-987')
+                app_page.locator('#wwLoginForm button[type=submit]').click()
+                expect(app_page.get_by_role('heading', name='Alterar senha')).to_be_visible()
+                app_page.locator('input[name=old_password]').fill('Inicial-segura-987')
+                app_page.locator('input[name=new_password1]').fill('Pessoal-segura-987')
+                app_page.locator('input[name=new_password2]').fill('Pessoal-segura-987')
+                app_page.get_by_role('button', name='Salvar nova senha').click()
+                expect(app_page.locator('#identity')).to_contain_text(company.name)
+                expect(app_page.locator('.sidebar')).to_have_count(0)
+                browser.close()
+        member = Member.objects.get(user__email='motorista.central@example.com')
+        self.assertEqual(member.driver_id, driver.pk)
+        self.assertTrue(CompanyVehicle.objects.get(pk=vehicle_key).drivers.filter(pk=member.pk).exists())

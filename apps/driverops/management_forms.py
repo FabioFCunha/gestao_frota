@@ -1,5 +1,6 @@
 import re
 from django import forms
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import UserCreationForm
 from apps.fleet.models import Driver, Vehicle, VehiclePlate
@@ -26,6 +27,18 @@ class CompanyForm(UserCreationForm):
         fields = ['company_name', 'manager_name', 'username', 'email', 'password1', 'password2']
         labels = {'username': 'Login do gestor'}
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if getattr(settings, 'CENTRAL_USER_MANAGEMENT', False):
+            self.fields.pop('username', None)
+
+    def clean_email(self):
+        email = self.cleaned_data['email'].strip().lower()
+        User = get_user_model()
+        if User.objects.filter(email__iexact=email).exists() or User.objects.filter(username__iexact=email).exists():
+            raise forms.ValidationError('Este e-mail já está cadastrado.')
+        return email
+
     def clean_company_name(self):
         name = " ".join(self.cleaned_data['company_name'].split())
         if Company.objects.filter(name__iexact=name).exists():
@@ -37,6 +50,8 @@ class CompanyForm(UserCreationForm):
         parts = self.cleaned_data['manager_name'].split(maxsplit=1)
         user.first_name, user.last_name = parts[0], parts[1] if len(parts) > 1 else ''
         user.email = self.cleaned_data['email']
+        if getattr(settings, 'CENTRAL_USER_MANAGEMENT', False):
+            user.username = user.email
         user.is_staff = False
         user.is_superuser = False
         user.save()
@@ -62,6 +77,9 @@ class MemberForm(UserCreationForm):
 
     def __init__(self, *args, company, platform=False, **kwargs):
         super().__init__(*args, **kwargs)
+        if getattr(settings, 'CENTRAL_USER_MANAGEMENT', False):
+            self.fields.pop('username', None)
+            self.fields['email'].required = True
         self.fields["password1"].label = "Senha inicial"
         self.fields["password2"].label = "Confirme a senha"
         self.fields["vehicles"].queryset = CompanyVehicle.objects.filter(company=company, active=True).order_by("label")
@@ -71,6 +89,14 @@ class MemberForm(UserCreationForm):
             self.fields['vehicles'].widget = forms.HiddenInput()
             self.fields['existing_driver'].widget = forms.HiddenInput()
 
+
+    def clean_email(self):
+        email = (self.cleaned_data.get('email') or '').strip().lower()
+        if getattr(settings, 'CENTRAL_USER_MANAGEMENT', False):
+            User = get_user_model()
+            if User.objects.filter(email__iexact=email).exists() or User.objects.filter(username__iexact=email).exists():
+                raise forms.ValidationError('Este e-mail já está cadastrado.')
+        return email
 
     def clean(self):
         data = super().clean()
