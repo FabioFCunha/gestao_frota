@@ -23,7 +23,7 @@ class VehicleForm(forms.ModelForm):
 
     def clean(self):
         data = super().clean()
-        company = data.get("company")
+        company = data.get("company") or (self.instance.company if self.instance.pk else None)
         drivers = data.get("drivers")
         if company and drivers is not None and drivers.exclude(company=company, role=Member.DRIVER).exists():
             raise ValidationError("Selecione somente motoristas desta empresa.")
