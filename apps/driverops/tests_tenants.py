@@ -277,3 +277,18 @@ class TenantTests(TestCase):
             self.assertFalse(Brand.objects.filter(vehicle__pk=self.vb.pk).exists())
             # A join through our vehicle's public brand must not fan out into another fleet.
             self.assertEqual(list(Vehicle.objects.filter(pk=self.va.pk).values_list('brand__vehicle__pk', flat=True)), [self.va.pk])
+
+    @override_settings(DEBUG=True)
+    def test_company_login_accepts_username_and_requires_password_even_in_debug(self):
+        self.ua.email = "gestor-alfa@example.com"
+        self.ua.save(update_fields=["email"])
+        self.client.logout()
+        response = self.client.get('/entrar/')
+        self.assertContains(response, 'Login ou e-mail')
+        self.assertContains(response, 'type="text"')
+        response = self.client.post('/entrar/', {'username': self.ua.email, 'password': 'incorreta'})
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn('_auth_user_id', self.client.session)
+        response = self.client.post('/entrar/', {'username': self.ua.username, 'password': 'Senha-segura-123'})
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, '/')

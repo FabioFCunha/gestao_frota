@@ -106,7 +106,7 @@ Os testes de empresa cobrem UI, APIs, QuerySets lazy/cache, joins de catálogos,
 contagens, gravações, formulários, PDFs, redefinição de senha e migração de vínculos.
 O workflow executa esses testes com PostgreSQL 16 e o fluxo PWA/empresa em Chromium.
 
-Localmente: 40 testes de backend/empresa passaram (2 de navegador pendentes);
+Localmente: 41 testes de backend/empresa passaram (2 de navegador pendentes);
 83 testes de regressão de CNH/CRLV/OS passaram (3 ignorados); 4 testes JS passaram.
 Django check e verificação de migrações passaram.
 
@@ -115,8 +115,8 @@ no executor de testes, para compatibilidade com a migração antiga de CPF/CNH.
 Esse executor não modifica configurações da aplicação. A suíte antiga completa
 apresenta duas falhas preexistentes em `apps.ui.test_dashboard_licensing_cards`,
 reproduzidas também no commit base `3b13bfa`; não são falhas novas de isolamento.
-O download local do Chromium não terminou corretamente: os testes visuais reais
-ficam pendentes do workflow, sem declarar aprovação antecipada.
+O download local do Chromium não terminou corretamente; os dois testes de navegador
+são executados no workflow com PostgreSQL e Chromium. Consultar o resultado da CI na PR.
 
 As correções feitas só na VPS de produção (incluindo foto da CNH e ajustes locais
 de extração/OS) não são importadas automaticamente desta instalação. Reconciliar

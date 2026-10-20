@@ -87,12 +87,11 @@ class PWABrowserTests(LiveServerTestCase):
                 form.locator(f'input[name={field}]').fill('Senha-forte-piloto-123')
             form.get_by_role('button', name='Criar empresa e gestor').click()
             expect(page.get_by_role('status')).to_contain_text('Empresa e gestor criados')
-            member = Member.objects.get(user__username='gestor.piloto')
-            self.client.force_login(member.user)
             context.clear_cookies()
-            context.add_cookies([{"name": "sessionid", "value": self.client.cookies["sessionid"].value,
-                                 "url": self.live_server_url, "httpOnly": True, "sameSite": "Lax"}])
-            page.goto(self.live_server_url + '/')
+            page.goto(self.live_server_url + '/entrar/')
+            page.locator('input[name=username]').fill('gestor.piloto')
+            page.locator('input[name=password]').fill('Senha-forte-piloto-123')
+            page.locator('#wwLoginForm button[type=submit]').click()
             expect(page.locator('.sb-brand')).to_contain_text('Empresa Piloto')
             expect(page.locator('.sb-brand')).to_contain_text('TRANSFROTA')
             for text, path in [('Veículos', '/veiculos/'), ('Motoristas', '/motoristas/')]:
@@ -102,5 +101,6 @@ class PWABrowserTests(LiveServerTestCase):
             expect(page.get_by_role('link', name='Cadastrar motorista pela CNH')).to_be_visible()
             expect(page.get_by_role('link', name='Cadastrar veículo pelo CRLV')).to_be_visible()
             browser.close()
+        member = Member.objects.get(user__username='gestor.piloto')
         self.assertEqual(member.company.name, 'Empresa Piloto')
         self.assertFalse(member.user.is_staff)
