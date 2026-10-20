@@ -30,6 +30,9 @@ def sector_filter_q(user, requested_sector=None, lookup="sector"):
     - Both sectors: both, optionally narrowed by ?sector=adm|lei-seca.
     - No sector: no records.
     """
+    from .tenant_scope import company_id
+    if company_id():
+        return Q()
     allowed = allowed_sector_slugs(user)
 
     if allowed is None:
@@ -56,6 +59,10 @@ def user_can_access_vehicle(user, vehicle, requested_sector=None):
     if vehicle is None:
         return False
 
+    from .tenant_scope import company_id
+    if company_id():
+        from .models import Vehicle
+        return Vehicle.objects.filter(pk=vehicle.pk).exists()
     allowed = allowed_sector_slugs(user)
     if allowed is None:
         return True
@@ -83,6 +90,9 @@ def can_manage_vehicle_status(user):
     """Permissão administrativa específica para gestão da situação das viaturas da ADM."""
     if not user or not user.is_authenticated:
         return False
+    from .tenant_scope import company_id
+    if company_id():
+        return user.has_perm("fleet.manage_vehicle_status")
     if getattr(user, "is_system_creator", False) or user.is_superuser:
         return True
     return (
@@ -93,6 +103,9 @@ def can_manage_vehicle_status(user):
 
 def can_select_sector(user):
     """Mostra o seletor de setor apenas para a conta autorizada do Fabio."""
+    from .tenant_scope import company_id
+    if company_id():
+        return False
     return bool(
         user
         and user.is_authenticated

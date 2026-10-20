@@ -453,10 +453,12 @@ class DocumentViewSet(viewsets.ModelViewSet):
         allowed_vehicle_ids = apply_sector_scope(
             Vehicle.objects.all(), self.request.user, self.request.query_params.get("sector")
         ).values_list("id", flat=True)
-        qs = qs.filter(
-            relations__content_type=vehicle_ct,
-            relations__object_id__in=allowed_vehicle_ids,
-        ).distinct()
+        from .tenant_scope import company_id
+        if not company_id():
+            qs = qs.filter(
+                relations__content_type=vehicle_ct,
+                relations__object_id__in=allowed_vehicle_ids,
+            ).distinct()
         status_name = self.request.query_params.get("status_name")
         if status_name:
             qs = qs.filter(status__name=status_name)

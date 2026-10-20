@@ -25,9 +25,26 @@ class FleetLoginView(LoginView):
     authentication_form = FleetAuthenticationForm
     redirect_authenticated_user = True
 
+    def get_success_url(self):
+        if hasattr(self.request, 'company_member'):
+            if self.request.user.is_superuser:
+                return '/api/driver/management/'
+            from urllib.parse import urlsplit
+            from apps.driverops.models import Member
+            member = Member.objects.filter(user=self.request.user, active=True, company__active=True).first()
+            if member and member.role == Member.DRIVER:
+                return '/api/driver/app/'
+            if member and member.role == Member.MANAGER:
+                next_url = self.get_redirect_url()
+                if not next_url or urlsplit(next_url).path.startswith('/api/driver/'):
+                    return '/'
+        return super().get_success_url()
+
 
 @login_required
 def dashboard(request):
+    if hasattr(request, 'company_member') and request.user.is_superuser:
+        return redirect('/api/driver/management/')
     from datetime import timedelta
     from apps.fleet.models import Vehicle, VehiclePlate, Maintenance, VehicleFine
     from apps.fleet.services import get_dashboard_metrics, get_operational_alerts, get_crlv_alerts
@@ -333,7 +350,7 @@ def vehicle_set_active(request, pk):
         raise Http404
     vehicle = get_object_or_404(Vehicle.objects.select_related("sector"), pk=pk)
     validate_vehicle_scope(request.user, vehicle, request.GET.get("sector"))
-    if not request.user.is_system_creator and not request.user.is_superuser and (not vehicle.sector or vehicle.sector.slug != "adm"):
+    if not getattr(request, "company_manager", False) and not request.user.is_system_creator and not request.user.is_superuser and (not vehicle.sector or vehicle.sector.slug != "adm"):
         raise PermissionDenied("O Administrador ADM só pode administrar viaturas atualmente alocadas à ADM.")
     active = request.POST.get("active") == "true"
     try:
@@ -360,7 +377,7 @@ def vehicle_position_edit(request, pk):
         pk=pk,
     )
     validate_vehicle_scope(request.user, vehicle, request.GET.get("sector"))
-    if not request.user.is_system_creator and not request.user.is_superuser and (not vehicle.sector or vehicle.sector.slug != "adm"):
+    if not getattr(request, "company_manager", False) and not request.user.is_system_creator and not request.user.is_superuser and (not vehicle.sector or vehicle.sector.slug != "adm"):
         raise PermissionDenied("O Administrador ADM só pode administrar viaturas atualmente alocadas à ADM.")
 
     initial = {"sector": vehicle.sector, "active": "true" if vehicle.active else "false"}
@@ -370,7 +387,7 @@ def vehicle_position_edit(request, pk):
             try:
                 change_vehicle_position(
                     vehicle=vehicle,
-                    sector=form.cleaned_data["sector"],
+                    sector=form.cleaned_data.get("sector", vehicle.sector),
                     active=form.cleaned_data["active"] == "true",
                     user=request.user,
                     reason=form.cleaned_data["reason"],
@@ -1690,7 +1707,10 @@ def driver_assign_vehicle(request, pk):
     def scope_vehicle_choices(form):
         form.fields["vehicle"].queryset = apply_driver_vehicle_scope(
             form.fields["vehicle"].queryset, request.user, requested_sector,
-        ).filter(sector__in=driver.sectors.all())
+        )
+        from apps.fleet.tenant_scope import company_id
+        if not company_id():
+            form.fields["vehicle"].queryset = form.fields["vehicle"].queryset.filter(sector__in=driver.sectors.all())
         return form
 
     if request.method == 'POST':
@@ -1913,8 +1933,8 @@ def vehicle_create(request):
                     extracted_data=extracted_data,
                     **data,
                 )
-            except ValueError as exc:
-                confirm_form.add_error(None, str(exc))
+            except (ValueError, ValidationError, IntegrityError) as exc:
+                confirm_form.add_error(None, "Placa, RENAVAM ou chassi já cadastrado. Confira os dados." if isinstance(exc, IntegrityError) else str(exc))
             else:
                 messages.success(request, f"Veículo {vehicle.plate_history.filter(kind='CURRENT', ends_on__isnull=True).values_list('plate', flat=True).first()} incluído a partir do CRLV.")
                 return redirect("vehicle_list")

@@ -1,6 +1,6 @@
 import uuid
 from django.conf import settings
-from django.db import models
+from django.db import models, transaction
 from django.db.models import Q
 
 
@@ -23,6 +23,10 @@ class Member(models.Model):
     active = models.BooleanField(default=True)
 
 
+    @transaction.atomic
+    def save(self, *args, **kwargs):
+        return super().save(*args, **kwargs)
+
 class CompanyVehicle(models.Model):
     company = models.ForeignKey(Company, on_delete=models.PROTECT)
     vehicle = models.OneToOneField("fleet.Vehicle", on_delete=models.PROTECT)
@@ -30,6 +34,10 @@ class CompanyVehicle(models.Model):
     drivers = models.ManyToManyField(Member, blank=True)
     active = models.BooleanField(default=True)
 
+
+    @transaction.atomic
+    def save(self, *args, **kwargs):
+        return super().save(*args, **kwargs)
 
 class DeviceSession(models.Model):
     key_hash = models.CharField(max_length=64, unique=True)
@@ -112,3 +120,14 @@ class Event(models.Model):
     action = models.CharField(max_length=50)
     data = models.JSONField(default=dict)
     created_at = models.DateTimeField(auto_now_add=True)
+
+
+class RecordOwner(models.Model):
+    """Company ownership for UUID-based records in the existing fleet schema."""
+    company = models.ForeignKey(Company, on_delete=models.PROTECT, related_name='owned_records')
+    model_label = models.CharField(max_length=100)
+    object_id = models.UUIDField()
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['model_label','object_id'], name='driverops_record_one_company')]
+        indexes = [models.Index(fields=['company','model_label'], name='driverops_owner_company_idx')]

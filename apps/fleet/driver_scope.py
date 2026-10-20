@@ -15,18 +15,27 @@ def effective_driver_sector_slugs(user, requested_sector=None):
 
 
 def apply_driver_sector_scope(queryset, user, requested_sector=None):
+    from .tenant_scope import company_id
+    if company_id():
+        return queryset
     return queryset.filter(
         sectors__slug__in=effective_driver_sector_slugs(user, requested_sector)
     ).distinct()
 
 
 def apply_driver_vehicle_scope(queryset, user, requested_sector=None, lookup="sector__slug"):
+    from .tenant_scope import company_id
+    if company_id():
+        return queryset
     return queryset.filter(**{
         lookup + "__in": effective_driver_sector_slugs(user, requested_sector)
     })
 
 
 def can_show_driver_sector_filter(user):
+    from .tenant_scope import company_id
+    if company_id():
+        return False
     return bool(
         user and user.is_authenticated
         and (user.email or "").strip().casefold() == "fabiocunhaosp@gmail.com"

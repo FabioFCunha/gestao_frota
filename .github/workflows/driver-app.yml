@@ -3,6 +3,10 @@ on:
   pull_request:
     paths:
       - "apps/driverops/**"
+      - "apps/fleet/**"
+      - "apps/ui/**"
+      - "apps/accounts/**"
+      - "templates/**"
       - "config/driver*"
       - "mobile/driver/**"
       - ".github/workflows/driver-app.yml"
@@ -36,8 +40,12 @@ jobs:
           python-version: "3.12"
       - run: pip install -r requirements.txt
       - run: python manage.py check
-      - run: python manage.py makemigrations driverops --check --dry-run
+      - run: python manage.py makemigrations --check --dry-run
       - run: python manage.py test apps.driverops --verbosity 2
+      - name: Legacy PDF and order regression checks
+        run: python manage.py test apps.fleet.test_cnh apps.fleet.test_crlv apps.fleet.test_crlv_chassi apps.ui.test_exit_orders --verbosity 2
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings
       - run: pip install playwright
       - run: playwright install --with-deps chromium
       - run: python manage.py test apps.driverops.tests_pwa_browser --verbosity 2

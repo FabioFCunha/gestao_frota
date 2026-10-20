@@ -108,8 +108,13 @@ class DriverAppTests(TestCase):
             self.assertEqual(self.client.get(f"/api/driver/trips/{trip['id']}/{suffix}").status_code,403)
         self.assertEqual(self.client.get("/api/driver/trips/").data,[])
         self.client.force_authenticate(user=self.user)
-        self.assignment.company=self.other;self.assignment.save()
-        self.assertEqual(self.post("trips/",{"vehicle":self.assignment.pk,"destinations":["Outro"]}).status_code,403)
+        from django.core.exceptions import PermissionDenied
+        with self.assertRaises(PermissionDenied):
+            self.assignment.company=self.other;self.assignment.save()
+        self.assignment.refresh_from_db()
+        self.assertEqual(self.assignment.company, self.company)
+        foreign = CompanyVehicle.objects.create(company=self.other, vehicle=Vehicle.objects.create(status=self.vehicle.status), label='Outra frota')
+        self.assertEqual(self.post("trips/",{"vehicle":foreign.pk,"destinations":["Outro"]}).status_code,403)
 
     def test_session_expiry_deactivation_and_logout(self):
         DeviceSession.objects.update(expires_at=timezone.now()-timedelta(seconds=1))

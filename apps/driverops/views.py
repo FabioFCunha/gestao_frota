@@ -36,6 +36,8 @@ def member_for(request):
         raise PermissionDenied("Usuário sem vínculo ativo com uma empresa.")
     if member.role == Member.DRIVER and (not member.driver_id or not member.driver.active):
         raise PermissionDenied("Motorista sem cadastro ativo.")
+    from apps.fleet.tenant_scope import set_scope, Scope
+    set_scope(None if request.user.is_superuser else Scope(company_id=member.company_id,actor_id=request.user.pk))
     return member
 
 
