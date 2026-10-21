@@ -36,7 +36,7 @@ def bind_graph(model, pk, company_id, seen=None):
         child_models = {
             'vehicle': {'vehicleplate','vehiclemileage','vehicleinspection','vehiclefine','maintenance',
                         'vehiclehistory','vehicledriverassignment','vehiclecustody','vehicleexitorder','vehiclecrlv','bdt'},
-            'driver': {'drivercnhhistory'},
+            'driver': {'drivercnhhistory', 'drivercnhphoto'},
             'document': {'documentversion','documentrelation','vehiclecrlv'},
             'seiprocess': {'seiprocessrelation'},
         }.get(model._meta.model_name,set())

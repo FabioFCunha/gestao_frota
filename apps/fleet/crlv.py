@@ -128,34 +128,44 @@ def _cpf_valid(value):
 
 
 def extract_chassi(text):
-    """Extrai o VIN priorizando candidatos válidos no contexto de CHASSI."""
+    """Seleciona VIN sem converter frases do documento em identificadores."""
     upper = text.upper()
-    contextual = r"(?:CHASSI|VIN|IDENTIFICA[CÇ][AÃ]O DO VE[IÍ]CULO|N[º°O]\s*CHASSI)"
+    contextual = r"(?:CHASSI|\bVIN\b|IDENTIFICA[CÇ][AÃ]O DO VE[IÍ]CULO|N[º°O]\s*CHASSI)"
+    exact = []
+    spaced = []
+
     for match in re.finditer(contextual, upper):
-        # PDFs/OCR de CRLV-e podem linearizar as colunas: o rótulo CHASSI
-        # aparece antes de vários valores. Por isso ampliamos a janela, mas
-        # nunca aceitamos cegamente o primeiro bloco de 17 caracteres.
         window = upper[match.end():match.end() + 5000]
-        candidates = re.findall(r"\b([A-Z0-9][A-Z0-9 ._-]{15,24}[A-Z0-9])\b", window)
 
-        normalized_candidates = []
-        for candidate in candidates:
-            normalized = normalize_chassi(candidate)
-            if normalized and sum(ch.isdigit() for ch in candidate) >= 4:
-                if normalized not in normalized_candidates:
-                    normalized_candidates.append(normalized)
+        for raw in re.findall(r"\b[A-Z0-9]{17}\b", window):
+            if not any(c.isalpha() for c in raw):
+                continue
+            if sum(c.isdigit() for c in raw) < 4:
+                continue
+            normalized = normalize_chassi(raw)
+            if normalized and normalized not in exact:
+                exact.append(normalized)
 
-        # Um VIN válido pelo dígito de controle tem prioridade absoluta.
-        for candidate in normalized_candidates:
-            if _vin_is_valid(candidate):
-                return candidate
+        for raw in re.findall(
+            r"\b([A-Z0-9][A-Z0-9 ._-]{15,24}[A-Z0-9])\b", window
+        ):
+            # Conta números ANTES de corrigir letras confundidas pelo OCR.
+            if sum(c.isdigit() for c in raw) < 4:
+                continue
+            if not any(c.isalpha() for c in raw):
+                continue
+            normalized = normalize_chassi(raw)
+            if normalized and normalized not in spaced:
+                spaced.append(normalized)
 
-        # Se o documento não permitir validar o dígito de controle (por
-        # exemplo, OCR com erro), mantemos o primeiro candidato contextual
-        # como fallback. Não existe fallback global sem CHASSI/VIN.
-        if normalized_candidates:
-            return normalized_candidates[0]
-
+    for candidates in (exact, spaced):
+        if len(candidates) == 1:
+            return candidates[0]
+        valid = [candidate for candidate in candidates if _vin_is_valid(candidate)]
+        if len(valid) == 1:
+            return valid[0]
+        if candidates:
+            return ""  # Ambiguidade exige conferência; não adivinhar.
     return ""
 
 

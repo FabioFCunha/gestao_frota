@@ -1611,6 +1611,11 @@ def driver_create(request):
                         validate_cnh_identity(extracted=extracted, values=confirm_form.cleaned_data)
                         driver = confirm_form.save()
                         link_document(document=document, obj=driver, user=request.user)
+                        if request.POST.get("save_cnh_photo") == "1":
+                            from .cnh_photo import save_confirmed_cnh_photo
+                            save_confirmed_cnh_photo(
+                                driver=driver, document=document, user=request.user,
+                            )
                         AuditLog.objects.create(
                             user=request.user,
                             module="cnh",
@@ -2429,7 +2434,10 @@ def driver_cnh(request, pk):
             try:
                 driver = confirm_cnh_for_driver(
                     driver=driver, document_id=confirm_form.cleaned_data["document_id"],
-                    values=confirm_form.cleaned_data, user=request.user,
+                    values={
+                        **confirm_form.cleaned_data,
+                        "_save_cnh_photo": request.POST.get("save_cnh_photo") == "1",
+                    }, user=request.user,
                 )
             except (ValueError, ValidationError, IntegrityError, Document.DoesNotExist) as exc:
                 confirm_form.add_error(None, "CPF ou CNH já cadastrados em outro motorista." if isinstance(exc, IntegrityError) else "Documento não localizado." if isinstance(exc, Document.DoesNotExist) else str(exc))
@@ -2455,3 +2463,29 @@ def driver_cnh(request, pk):
         "document": document, "cnh_target": driver, "back_url_url": list_url,
         "requested_sector": requested_sector,
     })
+
+
+@login_required
+@module_permission("fleet.add_maintenance")
+def maintenance_type_quick_create(request):
+    from apps.fleet.models import MaintenanceType
+    from django.db import transaction
+
+    if request.method != "POST":
+        return JsonResponse({"error": "Use POST."}, status=405)
+
+    name = " ".join((request.POST.get("name") or "").split())
+    if not name or len(name) > 150:
+        return JsonResponse(
+            {"error": "Informe um nome com até 150 caracteres."}, status=400
+        )
+
+    with transaction.atomic():
+        maintenance_type = MaintenanceType.objects.filter(name__iexact=name).order_by("created_at").first()
+        if maintenance_type is None:
+            maintenance_type = MaintenanceType.objects.create(name=name, active=True)
+        elif not maintenance_type.active:
+            maintenance_type.active = True
+            maintenance_type.save(update_fields=["active", "updated_at"])
+
+    return JsonResponse({"id": str(maintenance_type.pk), "name": maintenance_type.name})

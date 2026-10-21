@@ -168,3 +168,22 @@ class CentralAccountsTests(TestCase):
         self.assertNotIn('_auth_user_id', self.client.session)
         response = self.client.post('/entrar/', {'username':self.manager.email,'password':'Senha-segura-987'}, HTTP_HOST='gestao.test')
         self.assertEqual(response.url, 'https://gestao.test/')
+
+
+    def test_vps_cnh_photo_is_adopted_with_driver_and_private_to_company(self):
+        from apps.fleet.models import Document, DocumentType, DocumentStatus, DriverCNHPhoto
+        from apps.driverops.ownership import bind_graph
+        from apps.driverops.models import RecordOwner
+        from django.contrib.auth.models import Permission
+        document = Document.objects.create(title='CNH legada',
+            document_type=DocumentType.objects.create(name='CNH'),
+            status=DocumentStatus.objects.create(name='Ativo'), created_by=self.manager)
+        photo = DriverCNHPhoto.objects.create(driver=self.foreign_driver,
+            document=document, image=b'portrait', confirmed_by=self.manager)
+        bind_graph(Driver, self.foreign_driver.pk, self.other.pk)
+        self.assertTrue(RecordOwner.objects.filter(model_label='fleet.drivercnhphoto',
+            object_id=photo.pk, company=self.other).exists())
+        self.manager.user_permissions.add(Permission.objects.get(codename='view_driver'))
+        response = self.client.get(f'/motoristas/{self.foreign_driver.pk}/foto-cnh/', HTTP_HOST='gestao.test')
+        self.assertEqual(response.status_code, 404)
+        self.assertNotIn(b'portrait', response.content)

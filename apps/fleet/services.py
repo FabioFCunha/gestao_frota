@@ -2207,6 +2207,11 @@ def confirm_cnh_for_driver(*, driver, document_id, values, user):
         reviewed[field] = current.isoformat() if hasattr(current, "isoformat") else current
     driver.save(update_fields=[*changed, "updated_at"])
     link_document(document=document, obj=driver, user=user)
+    if values.get("_save_cnh_photo"):
+        from apps.ui.cnh_photo import save_confirmed_cnh_photo
+        save_confirmed_cnh_photo(
+            driver=driver, document=document, user=user,
+        )
     if driver.cnh_expiration and (
         old_values["cnh_expiration"] != reviewed["cnh_expiration"]
         or old_values["cnh_number"] != reviewed["cnh_number"]

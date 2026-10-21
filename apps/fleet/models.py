@@ -616,3 +616,17 @@ class AuditLog(TenantModel):
     reason = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
+
+
+class DriverCNHPhoto(BaseModel):
+    driver = models.OneToOneField(
+        Driver, on_delete=models.CASCADE, related_name="cnh_photo",
+    )
+    document = models.ForeignKey(
+        Document, on_delete=models.PROTECT, related_name="driver_photos",
+    )
+    image = models.BinaryField(editable=False)
+    confirmed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL,
+        related_name="confirmed_driver_photos",
+    )

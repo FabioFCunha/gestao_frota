@@ -18,6 +18,203 @@
 .crlv-status-actions { display:flex; gap:10px; flex-wrap:wrap; margin-top:auto; padding-top:16px; }
 .crlv-status-actions > a, .crlv-status-actions > button { justify-content:center; text-align:center; }
 @media (max-width: 760px) { .crlv-overview-grid { grid-template-columns:minmax(0,1fr); } }
+
+/* DASHBOARD VISUAL FROTA V1 */
+.fd-board {
+    padding:22px;
+    border:1px solid #d7e5ef;
+    border-radius:24px;
+    background:
+        radial-gradient(ellipse at top right, #c9dfef 0, transparent 48%),
+        linear-gradient(135deg, #e3eff7, #edf3f8 55%, #dce9f3);
+}
+.fd-board-head {
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:12px;
+    margin-bottom:22px;
+}
+.fd-board-title {
+    color:#142333;
+    font-size:1.4rem;
+    font-weight:800;
+}
+.fd-board-counter {
+    padding:8px 12px;
+    border:1px solid #d5e0ea;
+    border-radius:20px;
+    background:rgba(255,255,255,.65);
+    color:#334155;
+    white-space:nowrap;
+}
+.fd-board .fd-grid {
+    display:grid;
+    grid-template-columns:repeat(6,minmax(0,1fr));
+    gap:18px;
+}
+.fd-board .vc {
+    position:relative;
+    display:flex;
+    flex-direction:column;
+    min-width:0;
+    padding:14px 12px 10px;
+    overflow:hidden;
+    border:1px solid rgba(255,255,255,.95);
+    border-radius:18px;
+    background:linear-gradient(145deg,rgba(255,255,255,.88),rgba(221,232,242,.92));
+    box-shadow:0 9px 18px rgba(43,76,105,.18),inset 0 1px 0 #fff;
+    color:#17212c;
+    text-decoration:none;
+    transition:transform .18s,box-shadow .18s;
+    isolation:isolate;
+}
+.fd-board .vc[hidden] { display:none !important; }
+.fd-board .vc:hover {
+    transform:translateY(-3px);
+    box-shadow:0 13px 24px rgba(43,76,105,.24);
+}
+.fd-board .vc:focus-visible {
+    outline:3px solid #2563eb;
+    outline-offset:3px;
+}
+.fd-board .vc::before,
+.fd-board .vc::after { content:none; }
+.fd-board .vc .vc-status {
+    position:static;
+    display:block;
+    width:100%;
+    box-sizing:border-box;
+    padding:5px 9px;
+    border:0;
+    border-radius:20px;
+    background:linear-gradient(90deg,#15803d,#65a878);
+    box-shadow:0 3px 6px #0002;
+    color:white;
+    font-size:.68rem;
+    font-weight:800;
+    line-height:1.3;
+    text-transform:uppercase;
+    letter-spacing:.02em;
+}
+.fd-board .vc--crlv-vencido .vc-status,
+.fd-board .vc--revisao-vencida .vc-status {
+    background:linear-gradient(90deg,#b91c1c,#cf993b);
+}
+.fd-board .vc--manutencao .vc-status {
+    background:linear-gradient(90deg,#b45309,#d9a64c);
+}
+.fd-board .vc--multa .vc-status,
+.fd-board .vc--contrato .vc-status,
+.fd-board .vc--revisao-proxima .vc-status {
+    background:linear-gradient(90deg,#a16207,#d9b54b);
+}
+.fd-board .vc-plate-wrap {
+    display:flex;
+    justify-content:center;
+    margin:15px 0 6px;
+    padding:0;
+}
+.fd-board .vl-plate {
+    width:132px;
+    max-width:100%;
+    overflow:hidden;
+    border:4px solid #30363b;
+    border-radius:7px;
+    background:#f5f5ee;
+    box-shadow:0 5px 8px #0004,inset 0 0 0 1px #899096;
+    transform:none;
+}
+.fd-board .vl-plate-top {
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:2px 7px;
+    background:linear-gradient(#153a8d,#2454a3);
+    color:white;
+    font:700 8px/1.3 Arial,sans-serif;
+    letter-spacing:1px;
+}
+.fd-board .vl-plate-num {
+    display:block;
+    padding:3px 2px;
+    color:#111;
+    font-family:"Arial Narrow","Liberation Sans Narrow",monospace;
+    font-size:clamp(19px,1.8vw,26px);
+    font-weight:900;
+    line-height:1.15;
+    letter-spacing:-1px;
+    text-align:center;
+    white-space:nowrap;
+}
+.fd-board .vc-model {
+    margin:0 0 10px;
+    color:#17212c;
+    font-size:.84rem;
+    font-weight:700;
+    line-height:1.35;
+    text-align:center;
+    overflow-wrap:anywhere;
+}
+.fd-board .vc-details {
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    gap:7px;
+    padding:11px 9px;
+    border:1px solid #ffffffa8;
+    border-radius:13px;
+    background:rgba(255,255,255,.48);
+}
+.fd-board .vc-detail-item {
+    display:flex;
+    align-items:flex-start;
+    gap:7px;
+    margin:0;
+    color:#263340;
+    font-size:.73rem;
+    line-height:1.4;
+    overflow-wrap:anywhere;
+}
+.fd-board .vc-detail-icon {
+    flex:0 0 15px;
+    width:15px;
+    font-size:.8rem;
+    text-align:center;
+}
+.fd-board .vc-footer {
+    display:flex;
+    align-items:center;
+    min-height:27px;
+    margin-top:12px;
+    padding-top:4px;
+    border-top:1px solid #b8cad77a;
+    background:transparent;
+}
+.fd-board .vc-arrow {
+    color:#647d91;
+    font-size:1.2rem;
+}
+.fd-board .fd-empty { grid-column:1/-1; padding:24px; }
+@media(min-width:1600px) {
+    .fd-board .vl-plate-num { font-size:26px; }
+}
+@media(max-width:1350px) {
+    .fd-board .fd-grid { grid-template-columns:repeat(4,minmax(0,1fr)); }
+}
+@media(max-width:1050px) {
+    .fd-board .fd-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
+}
+@media(max-width:760px) {
+    .fd-board { padding:15px; }
+    .fd-board .fd-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+    .fd-board .vl-plate-num { font-size:24px; }
+}
+@media(max-width:440px) {
+    .fd-board .fd-grid { grid-template-columns:minmax(0,1fr); }
+    .fd-board-title { font-size:1.1rem; }
+}
+
 </style>
 
 <div id="dashboard-informe-modal">

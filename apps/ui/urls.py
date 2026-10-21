@@ -75,3 +75,29 @@ urlpatterns += [
         name="workshop_quick_create",
     ),
 ]
+
+urlpatterns += [
+    path(
+        "manutencoes/tipos/cadastro-rapido/",
+        views.maintenance_type_quick_create,
+        name="maintenance_type_quick_create",
+    ),
+]
+
+from .exit_order_edit import exit_order_edit
+
+urlpatterns += [
+    path(
+        "ordens-saida/<uuid:pk>/editar/",
+        exit_order_edit,
+        name="exit_order_edit",
+    ),
+]
+
+
+from .cnh_photo import cnh_photo_preview, driver_cnh_photo
+
+urlpatterns += [
+    path("cnh/<uuid:pk>/foto-previa/", cnh_photo_preview, name="cnh_photo_preview"),
+    path("motoristas/<uuid:pk>/foto-cnh/", driver_cnh_photo, name="driver_cnh_photo"),
+]

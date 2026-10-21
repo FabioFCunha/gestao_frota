@@ -27,6 +27,38 @@
 .cnh-loading-spinner { width:48px; height:48px; margin:0 auto 20px; border:5px solid #dbeafe; border-top-color:#1d4e89; border-radius:50%; animation:cnh-loading-spin .85s linear infinite; }
 @keyframes cnh-loading-spin { to { transform:rotate(360deg); } }
 @media(prefers-reduced-motion:reduce) { .cnh-loading-spinner { animation:none; } }
+
+/* cnh-photo-top-right */
+.cnh-photo-top-right {
+    float:right;
+    width:190px;
+    margin:0 0 20px 24px;
+    padding:16px;
+    box-sizing:border-box;
+    border:1px solid #e2e8f0;
+    border-radius:10px;
+    background:#f8fafc;
+}
+.cnh-photo-top-right img {
+    max-width:100%;
+    margin-left:auto !important;
+    margin-right:auto !important;
+}
+.cnh-photo-top-right + .cnh-fields {
+    overflow:hidden;
+}
+.cnh-photo-top-right ~ .cnh-fields + div {
+    clear:both;
+}
+@media(max-width:760px) {
+    .cnh-photo-top-right {
+        float:none;
+        width:100%;
+        margin:0 0 20px;
+        text-align:center;
+    }
+}
+
 </style>
 
 <div class="cnh-shell">
@@ -101,11 +133,32 @@
             {% csrf_token %}
             {% if not cnh_edit_mode %}
             <input type="hidden" name="step" value="confirm">
+
+
             {{ confirm_form.document_id }}
             {% for error in confirm_form.document_id.errors %}<div role="alert" style="color:#b91c1c;">{{ error }}</div>{% endfor %}
             {% endif %}
             {% if confirm_form.non_field_errors %}
             <div role="alert" style="padding:12px;margin-bottom:16px;border-radius:8px;background:#fef2f2;color:#b91c1c;">{{ confirm_form.non_field_errors }}</div>
+            {% endif %}
+            {% if document %}
+            <div class="cnh-photo-top-right">
+                <strong>Foto extraída da CNH</strong>
+                <img src="{% url 'cnh_photo_preview' document.pk %}{% if requested_sector %}?sector={{ requested_sector|urlencode }}{% endif %}"
+                     alt="Prévia da foto extraída"
+                     style="display:block;width:140px;height:auto;margin:12px 0;border-radius:8px;"
+                     onerror="this.hidden=true;this.parentElement.querySelector('.photo-choice').hidden=true;this.parentElement.querySelector('.photo-unavailable').hidden=false;">
+                <label class="photo-choice" style="display:block;">
+                    <input type="checkbox" name="save_cnh_photo" value="1">
+                    Usar esta foto no cadastro do motorista
+                </label>
+                <small class="photo-unavailable" hidden>
+                    Foto não identificada neste documento. A foto atual será preservada.
+                </small>
+                <small style="display:block;margin-top:8px;color:#64748b;">
+                    Confira o recorte antes de selecionar.
+                </small>
+            </div>
             {% endif %}
             <div class="cnh-fields">
                 {% for field in confirm_form.visible_fields %}
