@@ -138,7 +138,7 @@ class DriverForm(forms.ModelForm):
 
         allowed = effective_driver_sector_slugs(user) if user is not None else {"adm", "lei-seca"}
         self._original_identity = {
-            field: getattr(self.instance, field) or "" for field in ("cpf", "cnh_number")
+            field: getattr(self.instance, field) or "" for field in ("cpf",)
         }
         self._requested_sector = requested_sector
         self._allowed_sector_slugs = allowed
@@ -677,6 +677,13 @@ class CNHDriverCreateForm(DriverForm):
         super().__init__(*args, user=user, requested_sector=requested_sector, **kwargs)
         # Renovação é um evento administrativo, não um dado impresso na CNH.
         self.fields.pop("renewal_date", None)
+
+    def _get_validation_exclusions(self):
+        # A unicidade do CPF/CNH é validada pelo fluxo transacional de confirmação,
+        # que distingue renovação do mesmo motorista de documento de outra pessoa.
+        exclude = super()._get_validation_exclusions()
+        exclude.extend(field for field in ("cpf", "cnh_number") if field in self.fields)
+        return exclude
 
     def save(self, commit=True):
         driver = super().save(commit=commit)
