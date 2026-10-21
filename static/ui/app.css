@@ -1131,3 +1131,26 @@ button:not(.side-logout):not(.dashboard-informe-item):not(.secondary-action):not
     min-height: 40px;
     margin: 0;
 }
+
+.dossier-operational-grid {
+    align-items: start;
+}
+.dossier-operational-summary {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 20px;
+}
+.dossier-operational-summary ul {
+    min-width: 0;
+    margin-top: 0;
+    overflow-wrap: anywhere;
+}
+.dossier-driver-photo {
+    width: 88px;
+    height: 116px;
+    object-fit: contain;
+    border-radius: 10px;
+    border: 1px solid #e2e8f0;
+    background: #f8fafc;
+}

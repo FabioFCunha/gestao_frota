@@ -134,7 +134,7 @@
 </section>
 
 <!-- KM E REVISÃO -->
-<section class="grid">
+<section class="grid dossier-operational-grid">
     <article class="panel">
         <div class="panel-title"><div><h3>📊 Quilometragem e Revisão</h3></div></div>
         <div style="display:flex;gap:30px;flex-wrap:wrap;padding:10px 0;">
@@ -167,6 +167,7 @@
     <!-- OPERACIONAL -->
     <article class="panel">
         <div class="panel-title"><div><h3>👤 Operacional</h3></div></div>
+        <div class="dossier-operational-summary">
         <ul style="list-style:none;padding:0;line-height:2;">
             <li><strong>Motorista:</strong> {% if active_driver %}{{ active_driver.name }} {% if active_driver.phone %}({{ active_driver.phone }}){% endif %}{% else %}{{ motorista|default:"-" }}{% endif %}</li>
             <li><strong>SEI / Acautelamento:</strong> {% if active_custody %}{{ active_custody.sei_number }}{% else %}{{ vehicle.custody_info|default:"-" }}{% endif %}</li>
@@ -179,6 +180,11 @@
             <li><strong>Contrato:</strong> {{ vehicle.contract.number }} (até {{ vehicle.contract.ends_on|date:"d/m/Y" }})</li>
             {% endif %}
         </ul>
+        {% if active_driver_has_photo %}
+        <img class="dossier-driver-photo" src="{% url 'driver_cnh_photo' active_driver.pk %}"
+             alt="Foto de {{ active_driver.name }}" width="88" height="116" loading="lazy">
+        {% endif %}
+        </div>
         {% if active_custody and can_change_custody %}
         <form method="post" class="dossier-custody-form">
             {% csrf_token %}<input type="hidden" name="action" value="transfer_custody">

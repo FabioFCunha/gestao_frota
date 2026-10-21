@@ -706,7 +706,7 @@ def licensing_calendar(request):
 @module_permission("fleet.view_vehicle")
 def vehicle_dossier(request, pk):
     import re
-    from apps.fleet.models import Vehicle, VehiclePlate, VehicleMileage, VehicleCustody, VehicleExitOrder, VehicleCRLV
+    from apps.fleet.models import Vehicle, VehiclePlate, VehicleMileage, VehicleCustody, VehicleExitOrder, VehicleCRLV, DriverCNHPhoto
     from django.shortcuts import get_object_or_404
 
     from apps.fleet.sector_scope import validate_vehicle_scope
@@ -863,6 +863,8 @@ def vehicle_dossier(request, pk):
         'pending_exit_order': pending_exit_order,
         'can_close_exit_order_ids': {str(order.id) for order in exit_orders if order.state == VehicleExitOrder.State.PENDING and order.opened_by_id == request.user.id},
         'active_driver': active_driver,
+        'active_driver_has_photo': bool(active_driver and request.user.has_perm('fleet.view_driver')
+                                       and DriverCNHPhoto.objects.filter(driver=active_driver, active=True).exists()),
         'active_assignment': active_assignment,
         'active_custody': active_custody,
         'all_drivers': __import__('apps.fleet.models', fromlist=['Driver']).Driver.objects.filter(active=True).order_by('name'),

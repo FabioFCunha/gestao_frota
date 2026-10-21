@@ -58,3 +58,17 @@ class CustodyDatetimeTests(TestCase):
         self.custody.refresh_from_db()
         self.assertTrue(self.assignment.is_active)
         self.assertIsNone(self.custody.ended_on)
+
+    def test_operational_photo_requires_current_driver_photo_and_permission(self):
+        from apps.fleet.models import Document, DocumentType, DocumentStatus, DriverCNHPhoto
+        photo_url = reverse('driver_cnh_photo', args=[self.driver.pk])
+        self.assertNotContains(self.client.get(self.url), photo_url)
+        doc = Document.objects.create(title='CNH teste', created_by=self.user,
+            document_type=DocumentType.objects.get_or_create(name='CNH')[0],
+            status=DocumentStatus.objects.get_or_create(name='Ativo')[0])
+        DriverCNHPhoto.objects.create(driver=self.driver, document=doc, image=b'portrait')
+        self.assertNotContains(self.client.get(self.url), photo_url)
+        self.user.user_permissions.add(Permission.objects.get(content_type__app_label='fleet', codename='view_driver'))
+        self.assertContains(self.client.get(self.url), photo_url)
+        DriverCNHPhoto.objects.filter(driver=self.driver).update(active=False)
+        self.assertNotContains(self.client.get(self.url), photo_url)
