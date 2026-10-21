@@ -1201,7 +1201,8 @@ class CNHRenewalIdentityTests(TestCase):
 
     def test_existing_driver_can_update_cnh_registration_on_renewal(self):
         self.driver.cnh_number = "22222222222"
-        self.driver.cnh_expiration = "2034-04-14"
+        from datetime import date
+        self.driver.cnh_expiration = date(2034, 4, 14)
         self.driver.save()
         self.driver.refresh_from_db()
         self.assertEqual(self.driver.cnh_number, "22222222222")
