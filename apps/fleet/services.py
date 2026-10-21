@@ -287,14 +287,24 @@ def open_vehicle_exit_order(*, vehicle_id, driver, departed_at, destination, rea
     return order
 
 
+def can_close_vehicle_exit_order(user):
+    from .tenant_scope import company_id
+    return bool(user and user.is_authenticated and (
+        user.has_perm('fleet.change_vehicleexitorder')
+        or (user.is_system_creator and not company_id())
+    ))
+
+
 @transaction.atomic
 def close_vehicle_exit_order(*, order_id, returned_at, return_notes, user):
     from django.core.exceptions import PermissionDenied
     from .models import VehicleExitOrder
 
     order = VehicleExitOrder.objects.select_for_update().get(pk=order_id)
-    if order.opened_by_id != user.id:
-        raise PermissionDenied("Somente o usuário que abriu a OS pode registrar o retorno.")
+    if not can_close_vehicle_exit_order(user):
+        raise PermissionDenied("Seu perfil não permite encerrar ordens de saída.")
+    from .sector_scope import validate_vehicle_scope
+    validate_vehicle_scope(user, order.vehicle)
     if order.state == VehicleExitOrder.State.CLOSED:
         raise ValueError("Esta OS já foi encerrada.")
     from django.conf import settings
@@ -316,7 +326,7 @@ def close_vehicle_exit_order(*, order_id, returned_at, return_notes, user):
         user=user, module="ordens de saída", action="ENCERRAMENTO OS SAÍDA",
         entity_type="vehicle_exit_order", entity_id=order.id,
         old_values={"state": VehicleExitOrder.State.PENDING},
-        new_values={"state": order.state, "returned_at": order.returned_at.isoformat()},
+        new_values={"state": order.state, "returned_at": order.returned_at.isoformat(), "closed_by_id": str(user.pk)},
         reason=f"Encerramento da {order.number}.",
     )
     return order

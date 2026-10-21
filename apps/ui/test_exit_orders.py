@@ -63,15 +63,15 @@ class VehicleExitOrderTests(TestCase):
         self.assertEqual(self.client.get(reverse('exit_order_detail', args=[order.id])).status_code, 200)
         self.assertEqual(self.client.get(reverse('exit_order_return', args=[order.id])).status_code, 200)
 
-    def test_only_one_pending_order_and_only_author_can_close(self):
+    def test_only_one_pending_order_and_another_operator_can_close(self):
         self.client.post(reverse('exit_order_create'), self.payload())
         response = self.client.post(reverse('exit_order_create'), self.payload())
         self.assertEqual(response.status_code, 200)
         self.assertEqual(VehicleExitOrder.objects.count(), 1)
         order = VehicleExitOrder.objects.get()
         self.client.force_login(self.other)
-        self.assertEqual(self.client.post(reverse('exit_order_return', args=[order.id]), {'returned_at': self.payload()['departed_at']}).status_code, 403)
-        self.client.force_login(self.user)
+        self.assertContains(self.client.get(reverse('exit_order_detail', args=[order.id])), 'Registrar retorno')
+        self.assertContains(self.client.get(reverse('vehicle_dossier', args=[self.vehicle.id])), 'Registrar retorno')
         before = order.departed_at - timedelta(minutes=1)
         response = self.client.post(reverse('exit_order_return', args=[order.id]), {'returned_at': timezone.localtime(before).strftime('%Y-%m-%dT%H:%M')})
         self.assertEqual(response.status_code, 200)
@@ -79,6 +79,10 @@ class VehicleExitOrderTests(TestCase):
         self.assertEqual(response.status_code, 302)
         order.refresh_from_db()
         self.assertEqual(order.state, VehicleExitOrder.State.CLOSED)
+        self.assertEqual(order.opened_by_id, self.user.pk)
+        self.assertEqual(order.closed_by_id, self.other.pk)
+        from apps.fleet.models import AuditLog
+        self.assertEqual(AuditLog.objects.get(action='ENCERRAMENTO OS SAÍDA', entity_id=order.pk).user_id, self.other.pk)
         self.assertEqual(self.client.post(reverse('exit_order_return', args=[order.id]), {'returned_at': timezone.localtime(timezone.now()).strftime('%Y-%m-%dT%H:%M')}).status_code, 200)
 
     def test_required_fields_and_permissions(self):
@@ -87,3 +91,18 @@ class VehicleExitOrderTests(TestCase):
         unprivileged = User.objects.create_user(username='os-reader', password='secret')
         self.client.force_login(unprivileged)
         self.assertEqual(self.client.get(reverse('exit_order_list')).status_code, 403)
+
+    def test_operator_without_close_permission_is_blocked_in_ui_and_service(self):
+        self.client.post(reverse('exit_order_create'), self.payload())
+        order = VehicleExitOrder.objects.get()
+        self.other.user_permissions.remove(Permission.objects.get(codename='change_vehicleexitorder'))
+        self.client.force_login(self.other)
+        self.assertNotContains(self.client.get(reverse('exit_order_detail', args=[order.pk])), 'Registrar retorno')
+        self.assertEqual(self.client.post(reverse('exit_order_return', args=[order.pk]),
+            {'returned_at': self.payload()['departed_at']}).status_code, 403)
+        from apps.fleet.services import close_vehicle_exit_order
+        from django.core.exceptions import PermissionDenied
+        with self.assertRaises(PermissionDenied):
+            close_vehicle_exit_order(order_id=order.pk, returned_at=timezone.now(), return_notes='', user=self.other)
+        order.refresh_from_db()
+        self.assertEqual(order.state, VehicleExitOrder.State.PENDING)

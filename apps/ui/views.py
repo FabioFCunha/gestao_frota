@@ -18,7 +18,7 @@ from apps.accounts.decorators import module_permission
 from apps.fleet.models import VehiclePlate, Renter
 from apps.fleet.sector_scope import apply_sector_scope, validate_vehicle_scope
 
-from apps.fleet.services import get_vehicle_revision_interval
+from apps.fleet.services import get_vehicle_revision_interval, can_close_vehicle_exit_order
 
 class FleetLoginView(LoginView):
     template_name = "ui/login.html"
@@ -865,7 +865,7 @@ def vehicle_dossier(request, pk):
         'fines': fines,
         'exit_orders': exit_orders,
         'pending_exit_order': pending_exit_order,
-        'can_close_exit_order_ids': {str(order.id) for order in exit_orders if order.state == VehicleExitOrder.State.PENDING and order.opened_by_id == request.user.id},
+        'can_close_exit_order_ids': {str(order.id) for order in exit_orders if order.state == VehicleExitOrder.State.PENDING and can_close_vehicle_exit_order(request.user)},
         'active_driver': active_driver,
         'active_driver_has_photo': bool(active_driver and request.user.has_perm('fleet.view_driver')
                                        and DriverCNHPhoto.objects.filter(driver=active_driver, active=True).exists()),
@@ -2397,7 +2397,7 @@ def exit_order_detail(request, pk):
         'plate': _exit_order_plate(order.vehicle),
         'audits': audits,
         'bdt_rows': exit_order_bdt_rows(order),
-        'can_close': order.state == VehicleExitOrder.State.PENDING and order.opened_by_id == request.user.id and (request.user.is_system_creator or request.user.has_perm('fleet.change_vehicleexitorder')),
+        'can_close': order.state == VehicleExitOrder.State.PENDING and can_close_vehicle_exit_order(request.user),
     })
 
 
@@ -2408,8 +2408,6 @@ def exit_order_return(request, pk):
     from apps.fleet.services import close_vehicle_exit_order
     order = get_object_or_404(VehicleExitOrder.objects.select_related('vehicle', 'opened_by'), pk=pk)
     validate_vehicle_scope(request.user, order.vehicle, request.GET.get("sector"))
-    if order.opened_by_id != request.user.id:
-        raise PermissionDenied('Somente o usuário que abriu a OS pode registrar o retorno.')
     if request.method == 'POST':
         form = VehicleExitOrderReturnForm(request.POST)
         if form.is_valid():

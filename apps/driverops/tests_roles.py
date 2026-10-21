@@ -124,5 +124,26 @@ class CompanyRolesTests(TestCase):
         order.refresh_from_db()
         self.assertEqual(order.driver_id, self.driver.pk)
         from apps.fleet.services import close_vehicle_exit_order
-        with self.assertRaisesMessage(ValueError, 'Encerre o BDT'):
-            close_vehicle_exit_order(order_id=order.pk, returned_at=timezone.now(), return_notes='', user=order.opened_by)
+        token = set_scope(Scope(company_id=self.company.pk))
+        try:
+            with self.assertRaisesMessage(ValueError, 'Encerre o BDT'):
+                close_vehicle_exit_order(order_id=order.pk, returned_at=timezone.now(), return_notes='', user=order.opened_by)
+        finally:
+            reset_scope(token)
+
+    def test_another_operator_can_close_company_order_but_foreign_operator_cannot(self):
+        order = self.open_os()
+        operator = get_user_model().objects.create_user(username='second-operator@empresa.com')
+        Member.objects.create(company=self.company, user=operator, role=Member.OPERATOR)
+        self.client.force_login(self.foreign_user)
+        url = f'/ordens-saida/{order.pk}/retorno/'
+        self.assertEqual(self.client.post(url, {}, HTTP_HOST='gestao.test').status_code, 404)
+        self.client.force_login(operator)
+        response = self.client.post(url, {
+            'returned_at': timezone.localtime().strftime('%Y-%m-%dT%H:%M'),
+            'return_notes': 'Retorno registrado por outro operador',
+        }, HTTP_HOST='gestao.test')
+        self.assertEqual(response.status_code, 302)
+        order.refresh_from_db()
+        self.assertEqual(order.closed_by_id, operator.pk)
+        self.assertNotEqual(order.opened_by_id, operator.pk)
