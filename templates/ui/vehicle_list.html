@@ -141,21 +141,23 @@
                 </td>
 
                 <!-- AÇÕES -->
-                <td class="vl-td" style="text-align:right;">
-                    <a href="{% url 'vehicle_dossier' vehicle.id %}" class="vl-action-btn">Ver Prontuário</a>
+                <td class="vl-td">
+                  <div class="vl-actions">
+                    <a href="{% url 'vehicle_dossier' vehicle.id %}" class="vl-action-btn vl-action-btn--wide">Ver Prontuário</a>
                     {% if perms.fleet.change_vehicle or request.user.is_system_creator %}
                         <a href="{% url 'vehicle_crlv' vehicle.id %}" class="vl-action-btn vl-action-btn--outline">CRLV</a>
                     {% endif %}
                     <a href="{% url 'vehicle_contract_edit' vehicle.id %}" class="vl-action-btn vl-action-btn--outline">Contrato</a>
                     {% if request.company_desktop and can_manage_vehicle_status or can_manage_vehicle_status and vehicle.sector.slug == 'adm' %}
-                        <a href="{% url 'vehicle_position_edit' vehicle.id %}" class="vl-action-btn vl-action-btn--outline">{% if request.company %}Situação do veículo{% else %}Gestão ADM{% endif %}</a>
-                        <form method="post" action="{% url 'vehicle_set_active' vehicle.id %}" style="display:inline" onsubmit="return confirm('Confirma {% if vehicle.active %}inativar{% else %}ativar{% endif %} a viatura desta placa?');">
+                        <a href="{% url 'vehicle_position_edit' vehicle.id %}" class="vl-action-btn vl-action-btn--outline vl-action-btn--wide">{% if request.company %}Situação do veículo{% else %}Gestão ADM{% endif %}</a>
+                        <form method="post" action="{% url 'vehicle_set_active' vehicle.id %}" class="vl-actions-state" onsubmit="return confirm('Confirma {% if vehicle.active %}inativar{% else %}ativar{% endif %} a viatura desta placa?');">
                             {% csrf_token %}
                             <input type="hidden" name="active" value="{% if vehicle.active %}false{% else %}true{% endif %}">
                             <input type="hidden" name="next" value="{{ request.get_full_path }}">
                             <button class="vl-action-btn vl-action-btn--outline" type="submit">{% if vehicle.active %}Inativar{% else %}Ativar{% endif %}</button>
                         </form>
                     {% endif %}
+                  </div>
                 </td>
             </tr>
             {% endfor %}

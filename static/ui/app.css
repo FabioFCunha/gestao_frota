@@ -1052,3 +1052,37 @@ button:not(.side-logout):not(.dashboard-informe-item):not(.secondary-action):not
 /* Commercial fleet identity */
 .sb-brand .tf-brand-logo{display:block;width:170px;max-width:100%;height:auto;object-fit:contain;background:transparent;padding:0;border-radius:0;filter:brightness(0) invert(1) drop-shadow(0 0 1px #0b1e35) drop-shadow(0 0 6px rgba(56,189,248,.65)) drop-shadow(0 0 14px rgba(56,189,248,.25))}
 @media(max-width:720px){.sb-brand .tf-brand-logo{width:48px;padding:0;border-radius:0}}
+
+/* Keep vehicle row actions aligned and separated when the table is narrow. */
+.vl-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    min-width: 210px;
+    max-width: 240px;
+    margin-left: auto;
+}
+.vl-actions .vl-action-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    min-height: 34px;
+    margin: 0;
+    padding: 8px 12px;
+    line-height: 1.25;
+    text-align: center;
+    white-space: nowrap;
+}
+.vl-actions .vl-action-btn--wide,
+.vl-actions-state {
+    grid-column: 1 / -1;
+}
+.vl-actions-state {
+    margin: 4px 0 0;
+    padding-top: 8px;
+    border-top: 1px solid #e2e8f0;
+}
+.vl-actions-state .vl-action-btn {
+    width: 100%;
+}
