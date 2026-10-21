@@ -813,6 +813,10 @@ def vehicle_dossier(request, pk):
     km_prox_revisao = revision["next_revision_km"]
     km_faltando = revision["km_remaining"]
     revisao_status = revision["status"]
+    revision_progress = (
+        max(0, min(100, round(km_atual * 100 / km_prox_revisao)))
+        if km_atual is not None and km_prox_revisao is not None and km_prox_revisao > 0 else None
+    )
     bdt_revision_due = bool(
         bdt_latest_operational and km_prox_revisao is not None
         and normalize_km(bdt_latest_operational.ended_km) >= km_prox_revisao
@@ -876,6 +880,8 @@ def vehicle_dossier(request, pk):
         'km_prox_revisao': km_prox_revisao,
         'km_atual': km_atual,
         'km_faltando': km_faltando,
+        'revision_distance': abs(km_faltando) if km_faltando is not None else None,
+        'revision_progress': revision_progress,
         'revisao_status': revisao_status,
         'obs_list': obs_list,
         'bdt_page': bdt_page,

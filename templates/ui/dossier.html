@@ -135,33 +135,35 @@
 
 <!-- KM E REVISÃO -->
 <section class="grid dossier-operational-grid">
-    <article class="panel">
-        <div class="panel-title"><div><h3>📊 Quilometragem e Revisão</h3></div></div>
-        <div style="display:flex;gap:30px;flex-wrap:wrap;padding:10px 0;">
-            <div style="text-align:center;">
-                <p style="font-size:2em;font-weight:bold;margin:0;">{{ km_atual|default:0 }}</p>
-                <small>KM Atual</small>
+    <article class="panel dossier-revision-card {% if revisao_status == 'DEVIDA' or revisao_status == 'VENCIDA' %}dossier-revision-card--due{% elif revisao_status == 'PROXIMA' %}dossier-revision-card--near{% endif %}">
+        <header class="dossier-revision-header">
+            <h3><i data-lucide="gauge" aria-hidden="true"></i> Quilometragem e Revisão</h3>
+            {% if revisao_status == 'DEVIDA' or revisao_status == 'VENCIDA' %}<span class="dossier-revision-badge">Revisão devida</span>
+            {% elif revisao_status == 'PROXIMA' %}<span class="dossier-revision-badge">Revisão próxima</span>
+            {% elif revisao_status == 'SEM_QUILOMETRAGEM' or revisao_status == 'SEM_HISTORICO' %}<span class="dossier-revision-badge dossier-revision-badge--unknown">Pendente</span>
+            {% else %}<span class="dossier-revision-badge">Em dia</span>{% endif %}
+        </header>
+        <div class="dossier-revision-body">
+            <div>
+                <div class="dossier-revision-distance">{% if revision_distance is not None %}{{ revision_distance|floatformat:'0g' }}<span>km</span>{% else %}—{% endif %}</div>
+                <p class="dossier-revision-description">{% if revisao_status == 'SEM_QUILOMETRAGEM' %}Informe a quilometragem para calcular a próxima revisão.
+                {% elif revisao_status == 'SEM_HISTORICO' %}Inicialize a referência da primeira revisão.
+                {% elif revisao_status == 'DEVIDA' or revisao_status == 'VENCIDA' %}{% if revision_distance %}acima da quilometragem da revisão{% else %}revisão na quilometragem atual{% endif %}
+                {% else %}restantes até a próxima revisão{% endif %}</p>
             </div>
-            {% if km_prox_revisao %}
-            <div style="text-align:center;">
-                <p style="font-size:2em;font-weight:bold;margin:0;">{{ km_prox_revisao }}</p>
-                <small>Próxima Revisão</small>
-            </div>
-            <div style="text-align:center;">
-                {% if revisao_status == 'DEVIDA' or revisao_status == 'VENCIDA' %}
-                    <p style="font-size:2em;font-weight:bold;margin:0;color:#c0392b;">{{ km_faltando }} km</p>
-                    <small><strong style="color:#c0392b">⚠ REVISÃO VENCIDA</strong></small>
-                {% elif revisao_status == 'PROXIMA' %}
-                    <p style="font-size:2em;font-weight:bold;margin:0;color:#e67e22;">{{ km_faltando }} km</p>
-                    <small><strong style="color:#e67e22">⚡ REVISÃO PRÓXIMA</strong></small>
-                {% else %}
-                    <p style="font-size:2em;font-weight:bold;margin:0;color:#27ae60;">{{ km_faltando }} km</p>
-                    <small style="color:#27ae60">✓ Em dia</small>
-                {% endif %}
+            {% if revision_progress is not None %}
+            <div>
+                <div class="dossier-revision-track" role="progressbar" aria-label="Quilometragem atual em relação à próxima revisão" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ revision_progress }}">
+                    <span class="dossier-revision-fill" style="width:{{ revision_progress }}%;"></span>
+                </div>
+                <div class="dossier-revision-scale"><span>0 km</span><strong>{{ revision_progress }}% percorrido</strong><span>{{ km_prox_revisao|floatformat:'0g' }} km</span></div>
             </div>
             {% endif %}
+            <div class="dossier-revision-stats">
+                <div><strong>{% if km_atual is not None %}{{ km_atual|floatformat:'0g' }} km{% else %}—{% endif %}</strong><span>KM atual</span></div>
+                <div><strong>{% if km_prox_revisao is not None %}{{ km_prox_revisao|floatformat:'0g' }} km{% else %}—{% endif %}</strong><span>Próxima revisão</span></div>
+            </div>
         </div>
-        {% if revisao_status == 'SEM_QUILOMETRAGEM' %}<p>Informe a quilometragem para calcular a próxima revisão.</p>{% elif revisao_status == 'SEM_HISTORICO' %}<p>Inicialize a referência da primeira revisão para iniciar o ciclo de 10.000 km.</p>{% endif %}
     </article>
 
     <!-- OPERACIONAL -->

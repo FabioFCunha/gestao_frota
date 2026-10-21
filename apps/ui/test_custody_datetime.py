@@ -72,3 +72,32 @@ class CustodyDatetimeTests(TestCase):
         self.assertContains(self.client.get(self.url), photo_url)
         DriverCNHPhoto.objects.filter(driver=self.driver).update(active=False)
         self.assertNotContains(self.client.get(self.url), photo_url)
+
+    def test_revision_reference_card_progress_and_formatted_numbers(self):
+        from unittest.mock import patch
+        with patch('apps.fleet.services.get_vehicle_revision_status', return_value={
+            'current_km': 3513, 'next_revision_km': 15177, 'km_remaining': 11664, 'status': 'EM_DIA',
+        }):
+            response = self.client.get(self.url)
+        self.assertEqual(response.context['revision_progress'], 23)
+        for text in ('11.664', '3.513 km', '15.177 km', '23% percorrido', 'restantes até a próxima revisão'):
+            self.assertContains(response, text)
+
+    def test_revision_unknown_zero_and_overdue_states(self):
+        from unittest.mock import patch
+        cases = [
+            (None, None, None, 'SEM_QUILOMETRAGEM', None),
+            (0, 10000, 10000, 'EM_DIA', 0),
+            (10500, 10000, -500, 'DEVIDA', 100),
+        ]
+        for current, following, remaining, state, percent in cases:
+            with self.subTest(state=state), patch('apps.fleet.services.get_vehicle_revision_status', return_value={
+                'current_km': current, 'next_revision_km': following, 'km_remaining': remaining, 'status': state,
+            }):
+                response = self.client.get(self.url)
+                self.assertEqual(response.context['revision_progress'], percent)
+                if state == 'SEM_QUILOMETRAGEM':
+                    self.assertNotContains(response, 'role="progressbar"')
+                elif state == 'DEVIDA':
+                    self.assertEqual(response.context['revision_distance'], 500)
+                    self.assertContains(response, 'Revisão devida')
