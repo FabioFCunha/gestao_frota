@@ -13,7 +13,7 @@ from .models import Member, Trip
 
 ROOT = Path(__file__).parent / "pwa"
 ASSETS = {"app.js": "text/javascript", "rules.mjs": "text/javascript",
-          "sw.js": "text/javascript", "style.css": "text/css"}
+          "sw.js": "text/javascript", "addresses.mjs": "text/javascript", "style.css": "text/css"}
 
 
 @login_required

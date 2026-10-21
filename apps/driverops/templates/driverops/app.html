@@ -13,7 +13,8 @@
 <section id="create" class="card" hidden><h2>Abrir BDT</h2>
 <form id="create-form"><label>Veículo<select id="vehicle" required></select></label>
 <label>Ordem de saída (opcional)<select id="order"></select></label>
-<label>Destinos na ordem da viagem<textarea id="destinations" rows="4" placeholder="Um endereço completo por linha" required></textarea></label>
+<label>Destinos na ordem da viagem<textarea id="destinations" rows="4" placeholder="Comece a digitar a rua e a cidade; um destino por linha" required></textarea></label>
+<p class="muted">Digite pelo menos 4 caracteres e selecione uma sugestão. Use uma linha para cada destino. Busca com dados <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a> via <a href="https://photon.komoot.io/" target="_blank" rel="noopener">Photon</a>.</p>
 <p class="muted">Inclua o retorno à base como último destino, se fizer parte desta viagem.</p><button type="submit">Abrir BDT</button></form></section>
 <section id="trip" class="card" hidden><h2 id="trip-title"></h2><p id="trip-opened"></p><div id="legs"></div></section>
 <section id="transition" class="card" hidden><h2 id="transition-title"></h2><p id="destination"></p>

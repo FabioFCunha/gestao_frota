@@ -164,3 +164,27 @@ RENAVAM e contratos continuam exigindo revisão antes de duplicar identidades en
 clientes. As duas falhas preexistentes de template em
 `apps.ui.test_dashboard_licensing_cards` continuam documentadas na PR anterior.
 Pagamentos seguem fora do escopo.
+
+## Sugestões de endereço no aplicativo
+
+Os campos de destinos sugerem locais ao digitar pelo menos quatro caracteres,
+com pausa de 700 ms entre digitação e consulta, resultados brasileiros, cache e
+limite de 30 consultas por minuto por usuário. A escolha guarda latitude/longitude
+no trecho; Maps e Waze passam a usar esse ponto. Um destino digitado manualmente
+continua aceito, inclusive por versões antigas do app. Sugestões não confirmam
+número de porta: o motorista deve conferir o local antes de iniciar.
+
+A busca autenticada `/api/driver/addresses/` envia apenas o texto ao geocodificador,
+sem conta, empresa, motorista ou posição atual. Sugestões não são armazenadas no
+service worker. A atribuição OpenStreetMap/Photon fica junto ao campo.
+
+`DRIVER_GEOCODER_URL` configura um endpoint compatível com Photon; por padrão usa
+`https://photon.komoot.io/api/`, demonstração pública sem chave para uso moderado.
+Ela não oferece garantia de disponibilidade; para maior volume comercial, usar
+instância dedicada ou contratar serviço compatível, em vez de presumir cota
+ilimitada. Não usar o Nominatim público para autocomplete. Se a busca falhar,
+o app permite informar o endereço completo manualmente.
+
+Publicar a migração driverops/0004 junto do backend principal. Ela acrescenta
+coordenadas opcionais aos trechos existentes, sem reescrever BDTs históricos.
+O cache da PWA passa à versão 2 para incluir o módulo de sugestões.

@@ -30,7 +30,12 @@ class PWABrowserTests(LiveServerTestCase):
             page.on("pageerror",lambda error:errors.append(str(error)))
             page.goto(self.live_server_url+"/api/driver/app/")
             expect(page.locator("#identity")).to_contain_text("Empresa navegador")
-            page.locator("#destinations").fill("Destino A\nRetorno à base")
+            page.route("**/api/driver/addresses/**", lambda route: route.fulfill(json={"results":[
+                {"label":"Praça XV, Rio de Janeiro", "latitude":-22.9, "longitude":-43.17}]}))
+            page.locator("#destinations").fill("Praça XV Rio")
+            page.get_by_role("button", name="Praça XV, Rio de Janeiro", exact=True).click()
+            expect(page.locator("#destinations")).to_have_value("Praça XV, Rio de Janeiro")
+            page.locator("#destinations").fill("Praça XV, Rio de Janeiro\nRetorno à base")
             dropped = [False]
             def lose_first_response(route):
                 if route.request.method == "POST" and not dropped[0]:
@@ -66,6 +71,7 @@ class PWABrowserTests(LiveServerTestCase):
         self.assertEqual(Trip.objects.filter(member=member).count(),1)
         self.assertIsNotNone(Trip.objects.get(member=member).closed_at)
         self.assertEqual(Trip.objects.get(member=member).legs.count(),2)
+        self.assertEqual(Trip.objects.get(member=member).legs.first().destination_latitude, -22.9)
 
     def test_platform_creates_company_and_manager_opens_full_fleet_ui(self):
         from playwright.sync_api import sync_playwright, expect

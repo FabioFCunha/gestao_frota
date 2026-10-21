@@ -69,6 +69,7 @@ jobs:
         env:
           PWA_SECRET_KEY: ci-placeholder-not-for-deployment
           PWA_DB_PASSWORD: ci-placeholder-not-for-deployment
+      - run: node --check apps/driverops/pwa/addresses.mjs
       - run: node --check apps/driverops/pwa/app.js
       - run: node --check apps/driverops/pwa/sw.js
       - run: node --test apps/driverops/pwa/rules.test.mjs

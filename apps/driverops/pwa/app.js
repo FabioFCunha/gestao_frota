@@ -1,10 +1,19 @@
+import {attachAddresses} from './addresses.mjs';
 import {activeLeg,nextLeg,parseKM,destinations,canSend,googleURL,wazeURL} from './rules.mjs';
 const $=id=>document.getElementById(id), API='/api/driver/';
 let boot=null,trip=null,busy=false,watch=null,trackingConsent=false,formKey='',lastFix=0,installPrompt=null;
 const date=v=>v?new Date(v).toLocaleString('pt-BR'):'—';
+async function searchAddresses(query,signal){
+ const response=await fetch(API+'addresses/?q='+encodeURIComponent(query),{credentials:'same-origin',cache:'no-store',signal,headers:{Accept:'application/json'}});
+ if(!response.ok)throw Error('Busca indisponível');
+ return response.json();
+}
+const addressPickers=Object.fromEntries(['destinations','append'].map(id=>[id,attachAddresses($(id),searchAddresses)]));
+
 function message(text){$('message').textContent=text;}
 function lockScreen(){
  stopGPS();trip=null;boot=null;
+ Object.values(addressPickers).forEach(p=>p.clear());
  $('identity').textContent='Confirme sua sessão para continuar.';
  for(const id of ['create','trip','transition','extra'])$(id).hidden=true;
  $('history').replaceChildren();$('history-detail').replaceChildren();
@@ -121,7 +130,7 @@ function render(){
  $('transition-title').textContent=active?'Registrar chegada':'Iniciar próximo trecho';
  $('destination').textContent=next.destination;
  $('navigation').hidden=!active;
- $('google').href=googleURL(next.destination);$('waze').href=wazeURL(next.destination);
+ $('google').href=googleURL(next.destination,next.destination_latitude,next.destination_longitude);$('waze').href=wazeURL(next.destination,next.destination_latitude,next.destination_longitude);
  $('km-label').textContent=active?'KM final do painel':'Confirme o KM inicial do painel';
  $('transition-submit').textContent=active?'Concluir trecho':'Iniciar trecho';
  $('gps-start').hidden=!active;
@@ -192,9 +201,10 @@ $('order').addEventListener('change',()=>{
  if(order&&!$('destinations').value.trim())$('destinations').value=order.destination;
 });
 $('create-form').addEventListener('submit',event=>{event.preventDefault();void run(async()=>{
- const body={vehicle:Number($('vehicle').value),destinations:destinations($('destinations').value)};
+ const labels=destinations($('destinations').value);
+ const body={vehicle:Number($('vehicle').value),destinations:labels,destination_points:addressPickers.destinations.points(labels)};
  if($('order').value)body.exit_order=$('order').value;
- await command('trips/',body);$('destinations').value='';await refresh();message('BDT aberto. Confira a vistoria e inicie o primeiro trecho.');
+ await command('trips/',body);$('destinations').value='';addressPickers.destinations.clear();await refresh();message('BDT aberto. Confira a vistoria e inicie o primeiro trecho.');
 });});
 $('transition-form').addEventListener('submit',event=>{event.preventDefault();void run(async()=>{
  const leg=nextLeg(trip),active=activeLeg(trip);if(!leg)throw Error('Nenhum trecho pendente.');
@@ -212,7 +222,8 @@ $('transition-form').addEventListener('submit',event=>{event.preventDefault();vo
  message(active?(result.closed_at?'BDT encerrado com sucesso.':'Chegada salva. Inicie o próximo trecho quando estiver pronto.'):'Trecho iniciado. Volte à PWA para registrar a chegada.');
 });});
 $('append-form').addEventListener('submit',event=>{event.preventDefault();void run(async()=>{
- await command('trips/'+trip.id+'/append/',{destinations:destinations($('append').value)});$('append').value='';await refresh();message('Destinos adicionados.');
+ const labels=destinations($('append').value);
+ await command('trips/'+trip.id+'/append/',{destinations:labels,destination_points:addressPickers.append.points(labels)});$('append').value='';addressPickers.append.clear();await refresh();message('Destinos adicionados.');
 });});
 $('close-form').addEventListener('submit',event=>{event.preventDefault();void run(async()=>{
  if(!confirm('Encerrar o BDT sem realizar os destinos restantes?'))return;

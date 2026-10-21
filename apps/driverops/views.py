@@ -54,6 +54,7 @@ def trip_data(trip):
         "exit_order": str(trip.exit_order_id) if trip.exit_order_id else None,
         "legs": [{
             "id": str(leg.pk), "position": leg.position, "destination": leg.destination,
+            "destination_latitude": leg.destination_latitude, "destination_longitude": leg.destination_longitude,
             "started_at": leg.started_at, "ended_at": leg.ended_at,
             "started_km": leg.started_km, "ended_km": leg.ended_km,
             "distance_km": leg.ended_km - leg.started_km if leg.ended_km is not None else None,
@@ -238,7 +239,8 @@ def execute(request, member, action, pk=None):
                 offset = trip.legs.count()
                 if offset + len(values) > 30:
                     raise ValidationError("Limite de 30 destinos por BDT.")
-                Leg.objects.bulk_create([Leg(trip=trip, position=offset+i+1, destination=v) for i, v in enumerate(values)])
+                from .addresses import leg_destinations
+                Leg.objects.bulk_create([Leg(trip=trip, position=offset+i+1, **v) for i, v in enumerate(leg_destinations(request, values))])
                 audit(request, trip, "destinos_adicionados", {"destinations": values})
             elif action == "close":
                 if trip.legs.filter(started_at__isnull=False, ended_at__isnull=True).exists():
@@ -276,7 +278,8 @@ def create_trip(request, member):
         if not order:
             raise ValidationError("OS incompatível com o veículo, motorista ou situação.")
     trip = Trip.objects.create(company=member.company, member=member, vehicle=vehicle, exit_order=order)
-    Leg.objects.bulk_create([Leg(trip=trip, position=i+1, destination=v) for i, v in enumerate(values)])
+    from .addresses import leg_destinations
+    Leg.objects.bulk_create([Leg(trip=trip, position=i+1, **v) for i, v in enumerate(leg_destinations(request, values))])
     audit(request, trip, "bdt_aberto", {"destinations": values})
     return trip
 

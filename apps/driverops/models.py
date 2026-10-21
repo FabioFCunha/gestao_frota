@@ -72,6 +72,8 @@ class Leg(models.Model):
     trip = models.ForeignKey(Trip, related_name="legs", on_delete=models.PROTECT)
     position = models.PositiveIntegerField()
     destination = models.CharField(max_length=300)
+    destination_latitude = models.FloatField(null=True, blank=True)
+    destination_longitude = models.FloatField(null=True, blank=True)
     started_at = models.DateTimeField(null=True, blank=True)
     ended_at = models.DateTimeField(null=True, blank=True)
     started_km = models.PositiveIntegerField(null=True, blank=True)
