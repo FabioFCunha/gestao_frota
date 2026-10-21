@@ -36,9 +36,9 @@ instalação institucional e `config.driver_settings` mantém o piloto independe
 anterior, para permitir uma transição revisada. Não basta atualizar somente o
 repositório do piloto para integrar os dados.
 
-**Antes de aplicar:** reconciliar os arquivos alterados apenas na VPS principal,
-especialmente CNH/foto, CRLV e OS. A produção contém alterações não presentes no
-Git; não usar reset, clean ou substituir esses arquivos pelo código da branch.
+As correções de CNH/foto, CRLV e OS da VPS foram reconciliadas na branch de
+integração, incluindo a migração fleet/0048 já aplicada na produção. Antes de
+publicar, conferir novas alterações locais; não usar reset ou clean.
 Confirmar também um superusuário ativo para administrar empresas antes de ativar
 o limite por empresa. Usuários institucionais sem Member não ganham uma empresa
 por inferência de e-mail/grupo/setor.
@@ -62,7 +62,41 @@ Nunca trocar esse banco pelo `transfrota_pwa` do piloto.
 Fazer dump e guardar a imagem/configuração anterior. Com gravações suspensas,
 construir a nova imagem já reconciliada, executar `check`, `makemigrations --check
 --dry-run` e `migrate` com o novo settings. As migrações de driverops já são as da
-branch anterior; esta integração não adiciona campos/tabelas novos.
+branch anterior; a migração fleet/0048 cria a foto apenas onde ainda não existe.
+
+### Instalação com registros ADM e Lei Seca no mesmo banco
+
+Não usar `--adopt-all-unowned` neste caso. O inventário de 21/10/2026 encontrou
+87 veículos ADM (19 ativos e 68 inativos), 26 motoristas ADM, dos quais dois também
+possuem BDTs da Lei Seca. Esses dois somam 29 BDTs ADM e 27 BDTs Lei Seca.
+O cadastro de motorista é mantido; a propriedade dos BDTs segue a origem e os
+vínculos do veículo. Os registros fora do conjunto adotado permanecem no banco,
+visíveis à administração da plataforma, sem associação automática à empresa.
+
+Simular o conjunto ADM sem criar empresa permanente nem alterar cadastros:
+
+```sh
+python manage.py adopt_legacy_sector --sector adm
+```
+
+O comando valida o grafo inteiro (incluindo documentos, fotos, OS e históricos).
+Referência a veículo/motorista externo, documento compartilhado com cadastro
+externo ou BDT de origem incompatível aborta a transação para revisão. Um BDT
+sem veículo só é incluído quando origem e motorista correspondem ao setor.
+Cadastros sem setor não são incluídos por suposição. O relatório separa veículos
+ativos e inativos; os vínculos do aplicativo preservam a situação de cada um.
+
+Após revisar a simulação e cadastrar explicitamente a empresa:
+
+```sh
+python manage.py adopt_legacy_sector --sector adm --company UUID-DA-EMPRESA
+python manage.py adopt_legacy_sector --sector adm --company UUID-DA-EMPRESA --apply
+```
+
+Vincular o gestor existente explicitamente por Member, sem substituir sua senha
+ou criar uma conta duplicada. A ativação dos hosts ocorre depois dessas etapas.
+Importações offline posteriores de BDT não deduzem a empresa somente pelo
+motorista compartilhado: exigem veículo vinculado e origem compatível.
 
 Os vínculos CompanyVehicle/Member existentes são respeitados. Para uma instalação
 legada sem vínculos, o proprietário pode criar a empresa e primeiro gestor; os
