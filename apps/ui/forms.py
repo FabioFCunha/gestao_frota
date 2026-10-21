@@ -678,6 +678,13 @@ class CNHDriverCreateForm(DriverForm):
         # Renovação é um evento administrativo, não um dado impresso na CNH.
         self.fields.pop("renewal_date", None)
 
+    def _get_validation_exclusions(self):
+        # A unicidade do CPF/CNH é validada pelo fluxo transacional de confirmação,
+        # que distingue renovação do mesmo motorista de documento de outra pessoa.
+        exclude = super()._get_validation_exclusions()
+        exclude.extend(field for field in ("cpf", "cnh_number") if field in self.fields)
+        return exclude
+
     def save(self, commit=True):
         driver = super().save(commit=commit)
         if commit:
