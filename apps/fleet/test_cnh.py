@@ -1188,3 +1188,47 @@ MAURICIO<<DE<JESUS<ARAUJO<<<<<
         }
         for key, value in expected.items():
             self.assertEqual(data[key], value, key)
+
+
+class CNHRenewalIdentityTests(TestCase):
+    def setUp(self):
+        self.driver = Driver.objects.create(
+            name="Motorista Teste",
+            cpf="123.456.789-01",
+            cnh_number="11111111111",
+            cnh_category="B",
+        )
+
+    def test_existing_driver_can_update_cnh_registration_on_renewal(self):
+        self.driver.cnh_number = "22222222222"
+        self.driver.cnh_expiration = "2034-04-14"
+        self.driver.save()
+        self.driver.refresh_from_db()
+        self.assertEqual(self.driver.cnh_number, "22222222222")
+        self.assertEqual(str(self.driver.cnh_expiration), "2034-04-14")
+
+    def test_cnh_validation_accepts_new_number_for_same_cpf_and_driver(self):
+        from apps.fleet.services import validate_cnh_identity
+
+        values = {"cpf": "12345678901", "cnh_number": "22222222222"}
+        validate_cnh_identity(
+            extracted=dict(values),
+            values=dict(values),
+            driver=self.driver,
+        )
+
+    def test_cnh_validation_still_rejects_number_owned_by_another_driver(self):
+        from apps.fleet.services import validate_cnh_identity
+
+        Driver.objects.create(
+            name="Outro Motorista",
+            cpf="987.654.321-00",
+            cnh_number="22222222222",
+        )
+        values = {"cpf": "12345678901", "cnh_number": "22222222222"}
+        with self.assertRaisesRegex(ValueError, "já pertence a outro motorista"):
+            validate_cnh_identity(
+                extracted=dict(values),
+                values=dict(values),
+                driver=self.driver,
+            )
