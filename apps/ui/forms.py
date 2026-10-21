@@ -138,7 +138,7 @@ class DriverForm(forms.ModelForm):
 
         allowed = effective_driver_sector_slugs(user) if user is not None else {"adm", "lei-seca"}
         self._original_identity = {
-            field: getattr(self.instance, field) or "" for field in ("cpf", "cnh_number")
+            field: getattr(self.instance, field) or "" for field in ("cpf",)
         }
         self._requested_sector = requested_sector
         self._allowed_sector_slugs = allowed
