@@ -2134,7 +2134,7 @@ def validate_cnh_identity(*, extracted, values, driver=None):
             raise ValueError("CPF e registro devem ser reconhecidos no PDF. Envie uma CNH legível.")
         if reviewed != source:
             raise ValueError(f"O {label} confirmado deve ser igual ao identificado no PDF.")
-        if driver is not None:
+        if driver is not None and field == "cpf":
             current = digits(getattr(driver, field))
             if current and current != source:
                 raise ValueError(f"O {label} do PDF não corresponde ao motorista selecionado.")

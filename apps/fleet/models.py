@@ -122,7 +122,7 @@ class Driver(NamedModel):
             if not self._state.adding:
                 previous = type(self).objects.using(using).select_for_update().get(pk=self.pk)
                 fields = kwargs.get("update_fields")
-                for field in ("cpf", "cnh_number"):
+                for field in ("cpf",):
                     if fields is not None and field not in fields:
                         continue
                     old = re.sub(r"[^0-9]", "", getattr(previous, field) or "")

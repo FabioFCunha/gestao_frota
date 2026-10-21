@@ -634,11 +634,11 @@ class CNHExistingDriverTests(TestCase):
         self.assertEqual(self.driver.cnh_history.count(), 2)
         self.assertEqual(DocumentRelation.objects.filter(object_id=self.driver.pk).count(), 2)
 
-    def test_wrong_cpf_or_registration_pdf_is_refused_before_document_storage(self):
+    def test_wrong_cpf_pdf_is_refused_before_document_storage(self):
         self.driver.cpf = self.extracted["cpf"]
         self.driver.cnh_number = self.extracted["cnh_number"]
         self.driver.save()
-        for key, wrong in (("cpf", "987.654.321-00"), ("cnh_number", "99999999999")):
+        for key, wrong in (("cpf", "987.654.321-00"),):
             with self.subTest(field=key):
                 response = self.upload({**self.extracted, key: wrong})
                 self.assertEqual(response.status_code, 200)
@@ -741,7 +741,7 @@ class CNHExistingDriverTests(TestCase):
         self.driver.cpf = "123.456.789-09"
         self.driver.cnh_number = "01234567890"
         self.driver.save()
-        for field, value in (("cpf", ""), ("cpf", "987.654.321-00"), ("cnh_number", "99999999999")):
+        for field, value in (("cpf", ""), ("cpf", "987.654.321-00")):
             with self.subTest(field=field, value=value):
                 self.driver.refresh_from_db()
                 setattr(self.driver, field, value)
@@ -761,7 +761,7 @@ class CNHExistingDriverTests(TestCase):
         self.assertTrue(response.context["confirm_form"].errors)
         self.assertFalse(DocumentRelation.objects.exists())
 
-    def test_new_driver_creation_rejects_duplicate_existing_driver(self):
+    def test_new_driver_upload_updates_existing_driver_without_duplicate(self):
         self.user.user_permissions.add(Permission.objects.get(codename="add_driver"))
         self.upload(url="/motoristas/novo/?sector=adm")
         document = self.document()
@@ -769,8 +769,39 @@ class CNHExistingDriverTests(TestCase):
         self.driver.save()
         self.url = "/motoristas/novo/?sector=adm"
         response = self.confirm(document)
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 302)
         self.assertEqual(Driver.objects.count(), 1)
+        self.assertTrue(DocumentRelation.objects.filter(object_id=self.driver.pk).exists())
+        self.driver.refresh_from_db()
+        self.assertEqual(self.driver.cnh_number, self.extracted["cnh_number"])
+        self.assertTrue(self.driver.sectors.filter(pk=self.sector.pk).exists())
+
+    def test_creation_flow_renewal_preserves_photo_confirmation(self):
+        self.user.user_permissions.add(Permission.objects.get(codename="add_driver"))
+        self.driver.cpf = self.extracted["cpf"]
+        self.driver.save()
+        self.url = "/motoristas/novo/?sector=adm"
+        self.upload()
+        document = self.document()
+        with patch("apps.ui.cnh_photo.save_confirmed_cnh_photo") as photo:
+            response = self.confirm(document, save_cnh_photo="1")
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(photo.call_count, 1)
+        self.assertEqual(photo.call_args.kwargs["driver"].pk, self.driver.pk)
+        self.assertEqual(photo.call_args.kwargs["document"].pk, document.pk)
+        self.assertEqual(Driver.objects.count(), 1)
+
+    def test_add_permission_alone_cannot_renew_existing_driver(self):
+        self.user.user_permissions.set(Permission.objects.filter(codename="add_driver", content_type__app_label="fleet"))
+        self.driver.cpf = self.extracted["cpf"]
+        self.driver.save()
+        self.url = "/motoristas/novo/?sector=adm"
+        self.upload()
+        response = self.confirm(self.document())
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "não permite atualizar")
+        self.driver.refresh_from_db()
+        self.assertEqual(self.driver.cnh_number, "")
         self.assertFalse(DocumentRelation.objects.exists())
 
     def test_manual_creation_and_edit_return_form_errors_on_identity_conflict(self):
@@ -953,7 +984,7 @@ class CNHExistingDriverTests(TestCase):
         self.upload()
         self.assertEqual(self.confirm(self.document()).status_code, 302)
         url = f"/motoristas/{self.driver.pk}/editar/?sector=adm"
-        for field, value in (("cpf", "987.654.321-00"), ("cnh_number", "99999999999")):
+        for field, value in (("cpf", "987.654.321-00"),):
             with self.subTest(field=field):
                 response = self.client.post(url, {**self.extracted, field: value, "father_name": "ALTERADO"})
                 self.assertEqual(response.status_code, 200)
@@ -1188,3 +1219,48 @@ MAURICIO<<DE<JESUS<ARAUJO<<<<<
         }
         for key, value in expected.items():
             self.assertEqual(data[key], value, key)
+
+
+class CNHRenewalIdentityTests(TestCase):
+    def setUp(self):
+        self.driver = Driver.objects.create(
+            name="Motorista Teste",
+            cpf="123.456.789-01",
+            cnh_number="11111111111",
+            cnh_category="B",
+        )
+
+    def test_existing_driver_can_update_cnh_registration_on_renewal(self):
+        self.driver.cnh_number = "22222222222"
+        from datetime import date
+        self.driver.cnh_expiration = date(2034, 4, 14)
+        self.driver.save()
+        self.driver.refresh_from_db()
+        self.assertEqual(self.driver.cnh_number, "22222222222")
+        self.assertEqual(str(self.driver.cnh_expiration), "2034-04-14")
+
+    def test_cnh_validation_accepts_new_number_for_same_cpf_and_driver(self):
+        from apps.fleet.services import validate_cnh_identity
+
+        values = {"cpf": "12345678901", "cnh_number": "22222222222"}
+        validate_cnh_identity(
+            extracted=dict(values),
+            values=dict(values),
+            driver=self.driver,
+        )
+
+    def test_cnh_validation_still_rejects_number_owned_by_another_driver(self):
+        from apps.fleet.services import validate_cnh_identity
+
+        Driver.objects.create(
+            name="Outro Motorista",
+            cpf="987.654.321-00",
+            cnh_number="22222222222",
+        )
+        values = {"cpf": "12345678901", "cnh_number": "22222222222"}
+        with self.assertRaisesRegex(ValueError, "já pertence a outro motorista"):
+            validate_cnh_identity(
+                extracted=dict(values),
+                values=dict(values),
+                driver=self.driver,
+            )
