@@ -575,3 +575,100 @@ def extract_cnh_data(file_obj):
         "text_extraction_succeeded": bool(name or _cpf(upper) or cnh_number or category or _date_field(upper, [r"DATA\s+NASCIMENTO", r"NASCIMENTO"]) or _date_field(upper, [r"VALIDADE"])),
     }
     return data
+
+
+_CNH_VALID_CATEGORIES = {
+    "ACC", "A", "B", "C", "D", "E", "AB", "AC", "AD", "AE",
+}
+_CNH_STATES = set(
+    "AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO RR SC SP SE TO".split()
+)
+
+
+def _cnh_front_identity_category(raw):
+    from pypdf import PdfReader
+    result = {}
+
+    def read_region(image, bounds):
+        box = tuple(
+            round(v * (image.width if i % 2 == 0 else image.height))
+            for i, v in enumerate(bounds)
+        )
+        crop = image.crop(box)
+        crop = crop.resize((crop.width * 3, crop.height * 3))
+        return _cnh_ocr(crop).upper()
+
+    try:
+        for page in PdfReader(io.BytesIO(raw)).pages:
+            for embedded in page.images:
+                image = embedded.image.convert("RGB")
+                if image.width < 500 or not 1.35 < image.width / image.height < 1.5:
+                    continue
+
+                header = read_region(image, (.16, .24, 1., .35))
+                if not (
+                    re.search(r"\bNOME\b", header)
+                    and re.search(r"HABILITA", header)
+                ):
+                    continue
+
+                block = read_region(image, (.45, .50, .99, .58))
+                found = re.search(
+                    r"(?m)^[ |]*(\d[\d.\- ]{4,19})\s+"
+                    r"([A-Z][A-Z./-]{1,19})\s+([A-Z]{2})[ |]*$",
+                    block,
+                )
+                if found and found.group(3) in _CNH_STATES:
+                    result.update(
+                        identity_document=_clean(found.group(1)),
+                        issuing_authority=found.group(2),
+                        issuing_state=found.group(3),
+                    )
+
+                category = _clean(
+                    read_region(image, (.85, .607, .975, .645))
+                ).strip(" |[]")
+                if category in _CNH_VALID_CATEGORIES:
+                    result["cnh_category"] = category
+
+                return result
+    except Exception:
+        return result
+    return result
+
+
+_extract_cnh_data_before_field_validation = extract_cnh_data
+
+
+def extract_cnh_data(file_obj):
+    if hasattr(file_obj, "seek"):
+        file_obj.seek(0)
+    raw = file_obj.read() if hasattr(file_obj, "read") else bytes(file_obj)
+    if hasattr(file_obj, "seek"):
+        file_obj.seek(0)
+
+    data = _extract_cnh_data_before_field_validation(io.BytesIO(raw))
+    text = str(data.get("text_extracted") or "").upper()
+
+    if not re.fullmatch(
+        r"\d[\d .-]{4,19}", str(data.get("identity_document") or "")
+    ):
+        data["identity_document"] = ""
+
+    if data.get("issuing_state") not in _CNH_STATES:
+        data["issuing_state"] = ""
+
+    if not re.fullmatch(
+        r"[A-Z][A-Z./-]{1,19}", str(data.get("issuing_authority") or "")
+    ):
+        data["issuing_authority"] = ""
+
+    # Categoria precisa estar associada ao próprio rótulo.
+    category = re.search(
+        r"(?:CAT\.?\s*HAB\.?|CATEGORIA)\s*[:|\-]?\s*"
+        r"(ACC|A[BCDE]?|[BCDE])(?=\s|$)",
+        text,
+    )
+    data["cnh_category"] = category.group(1) if category else ""
+    data.update(_cnh_front_identity_category(raw))
+    return data

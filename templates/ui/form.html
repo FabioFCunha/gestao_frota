@@ -297,4 +297,71 @@
     });
 })();
 </script>
+
+{% if form.type and form.workshop %}
+<script>
+(function () {
+    const select = document.getElementById('id_type');
+    if (!select || !select.closest('form')) return;
+
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.id = 'maintenance-type-add';
+    button.textContent = '+ Novo tipo';
+    button.style.cssText = 'display:block;margin-top:8px;padding:8px 12px;background:#2563eb;color:white;border:0;border-radius:6px;cursor:pointer;';
+
+    const message = document.createElement('span');
+    message.setAttribute('role', 'status');
+    select.insertAdjacentElement('afterend', button);
+    button.insertAdjacentElement('afterend', message);
+
+    button.addEventListener('click', async function () {
+        const name = window.prompt('Nome do novo tipo de manutenção:');
+        if (name === null || !name.trim()) return;
+
+        const csrf = select.closest('form').querySelector(
+            '[name="csrfmiddlewaretoken"]'
+        );
+        button.disabled = true;
+        message.textContent = ' Salvando...';
+
+        try {
+            const response = await fetch(
+                "{% url 'maintenance_type_quick_create' %}",
+                {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: {'X-CSRFToken': csrf.value},
+                    body: new URLSearchParams({name: name.trim()})
+                }
+            );
+            let data;
+            try {
+                data = await response.json();
+            } catch (_) {
+                throw new Error('Não foi possível cadastrar o tipo. Verifique sua sessão e permissão.');
+            }
+            if (!response.ok) {
+                throw new Error(data.error || 'Não foi possível cadastrar o tipo.');
+            }
+
+            let option = Array.from(select.options).find(
+                item => item.value === String(data.id)
+            );
+            if (!option) {
+                option = new Option(data.name, data.id);
+                select.add(option);
+            }
+            select.value = String(data.id);
+            select.dispatchEvent(new Event('change', {bubbles: true}));
+            message.textContent = ' Tipo cadastrado e selecionado.';
+        } catch (error) {
+            message.textContent = ' ' + error.message;
+        } finally {
+            button.disabled = false;
+        }
+    });
+})();
+</script>
+{% endif %}
 {% endblock %}
