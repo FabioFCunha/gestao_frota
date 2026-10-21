@@ -2,4 +2,4 @@
 
 .address-suggestions ul{list-style:none;padding:0;margin:0}.address-suggestions button{display:block;text-align:left;width:100%;white-space:normal;overflow-wrap:anywhere}.address-suggestions p:empty{display:none}
 
-.brand-logo{display:block;width:150px;max-width:100%;height:auto;object-fit:contain}
+.brand-logo{display:block;width:150px;max-width:100%;height:auto;object-fit:contain;background:transparent;filter:brightness(0) invert(1) drop-shadow(0 0 1px #0b1e35) drop-shadow(0 0 6px rgba(56,189,248,.65)) drop-shadow(0 0 14px rgba(56,189,248,.25))}

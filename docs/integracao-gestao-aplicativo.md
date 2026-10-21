@@ -221,6 +221,9 @@ A marca enviada foi preparada com transparência e salva em
 `static/images/transfrota-logo.png`. No modo comercial ela substitui o texto da
 marca no login, menu lateral, aplicativo e painéis; o nome da empresa continua
 identificando o vínculo atual. Os ícones 192/512 da PWA derivam da mesma marca,
-com área segura e base branca. A versão 4 do cache inclui a imagem para uso offline.
+com área segura e base branca. A imagem fica disponível no cache para uso offline. A versão 5 aplica branco e
+brilho suave via CSS sobre a transparência original, sem placa branca atrás da
+marca e sem redesenhar seus traços. Um contorno sutil preserva a leitura nas telas
+claras.
 A publicação executa collectstatic no backend principal; ambos os proxies já usam
 seu volume estático. A instalação institucional preserva a identidade anterior.
