@@ -1,4 +1,4 @@
-const CACHE='transfrota-pwa-v2';
+const CACHE='transfrota-pwa-v3';
 const ROOT='/api/driver/app/';
 const ASSETS=['app.js','addresses.mjs','rules.mjs','style.css','manifest.webmanifest','icon-192.png','icon-512.png'].map(p=>ROOT+p);
 self.addEventListener('install',event=>{

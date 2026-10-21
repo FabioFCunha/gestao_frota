@@ -26,7 +26,7 @@
 </tbody></table></div></section>
 {% if not platform %}<section class="card"><h2>Veículos e motoristas autorizados</h2><p class="muted">Abra o veículo, marque os motoristas que poderão usá-lo e salve.</p>
 {% for vehicle in vehicles %}<details {% if vehicle.assignment_form.errors %}open{% endif %}><summary>{{ vehicle.label }} · {% if vehicle.active %}Ativo{% else %}Inativo{% endif %}</summary>
-<form method="post">{% csrf_token %}<input type="hidden" name="action" value="assign"><input type="hidden" name="company" value="{{ company.pk }}"><input type="hidden" name="vehicle" value="{{ vehicle.pk }}">{{ vehicle.assignment_form.as_p }}<button type="submit">Salvar motoristas autorizados</button></form></details>
+{% if not request.central_user_management %}<form method="post">{% csrf_token %}<input type="hidden" name="action" value="assign"><input type="hidden" name="company" value="{{ company.pk }}"><input type="hidden" name="vehicle" value="{{ vehicle.pk }}">{{ vehicle.assignment_form.as_p }}<button type="submit">Salvar motoristas autorizados</button></form>{% else %}<p>O veículo e o motorista são definidos na OS.</p>{% endif %}</details>
 {% empty %}<p>Nenhum veículo cadastrado. Cadastre o veículo pelo CRLV na interface da frota.</p>{% endfor %}
 </section>{% endif %}
 {% else %}<section class="card"><h2>Comece pela empresa</h2><p>Cadastre uma empresa no formulário acima para liberar os próximos passos.</p></section>{% endif %}

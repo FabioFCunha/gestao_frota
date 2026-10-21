@@ -16,10 +16,13 @@ class Company(models.Model):
 class Member(models.Model):
     DRIVER = "driver"
     MANAGER = "manager"
+    OPERATOR = "operator"
+    VIEWER = "viewer"
+    DESKTOP_ROLES = (MANAGER, OPERATOR, VIEWER)
     company = models.ForeignKey(Company, on_delete=models.PROTECT)
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
     driver = models.OneToOneField("fleet.Driver", null=True, blank=True, on_delete=models.PROTECT)
-    role = models.CharField(max_length=10, choices=[(DRIVER, "Motorista"), (MANAGER, "Gestor")])
+    role = models.CharField(max_length=10, choices=[(DRIVER, "Motorista"), (MANAGER, "Gestor"), (OPERATOR, "Operador"), (VIEWER, "Consulta")])
     active = models.BooleanField(default=True)
 
 

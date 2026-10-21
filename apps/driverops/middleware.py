@@ -26,6 +26,7 @@ class CompanyBoundaryMiddleware:
         request.company_member=member
         request.company=member.company if member else None
         request.company_manager=bool(member and member.role=='manager')
+        request.company_desktop=bool(member and member.role in Member.DESKTOP_ROLES)
         token=set_scope(scope)
         try:
             common=('/entrar/','/sair/','/logout/','/minha-senha/','/static/')
@@ -36,6 +37,9 @@ class CompanyBoundaryMiddleware:
                     return HttpResponseForbidden('Usuário sem empresa ativa.')
                 if member and member.role=='driver' and not request.path.startswith(('/api/driver/',*common)):
                     return HttpResponseForbidden('Use o aplicativo do motorista.')
+            if (member and member.role == Member.VIEWER and request.method not in ('GET', 'HEAD', 'OPTIONS')
+                    and not request.path.startswith(common)):
+                return HttpResponseForbidden('Perfil Consulta permite somente leitura.')
             response=self.get_response(request)
             if member:
                 if "no-store" not in response.get("Cache-Control", ""):

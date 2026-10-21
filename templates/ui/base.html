@@ -73,6 +73,9 @@
       </a>
       {% endif %}
     {% endif %}
+      {% if request.company_desktop and request.central_user_management %}
+      <a class="sb-link" href="/gestao/bdts/"><span>Acompanhamento de BDTs</span></a>
+      {% endif %}
     </nav>
 
     <!-- Footer do usuário -->
@@ -81,7 +84,7 @@
         <div class="sb-avatar">{{ request.user.username|first|upper }}</div>
         <div class="sb-user-info">
           <span class="sb-user-email">{{ request.user.username }}</span>
-          <span class="sb-user-status"><span class="sb-online-dot"></span> Operador Conectado</span>
+          <span class="sb-user-status"><span class="sb-online-dot"></span> {% if request.company_member %}{{ request.company_member.get_role_display }} conectado{% else %}Operador conectado{% endif %}</span>
         </div>
       </div>
       <div class="sb-user-actions">

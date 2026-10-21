@@ -10,14 +10,16 @@ mesmo backend. Não é uma segunda administração e não usa uma cópia dos usu
   gestor. O login do gestor é seu e-mail; não há campo separado de username.
 - Gestor: sistema principal, `/`, com a interface completa já existente. Em
   `/usuarios/`, cadastrar/editar acessos, selecionar o motorista registrado pela
-  CNH e marcar os veículos autorizados. O gestor só vê usuários da própria empresa;
+  CNH. O veículo e o motorista são definidos na criação da OS, que libera a
+  saída no aplicativo. O gestor só vê usuários da própria empresa;
   não pode atribuir privilégios da plataforma nem editar perfis globais.
 - Motorista: host operacional, `/api/driver/app/`. Entrar com o mesmo e-mail e senha
   do cadastro principal. No primeiro acesso, trocar a senha inicial em uma tela
   operacional sem o menu desktop. O aplicativo continua com BDT, destinos, KM,
   checklist e fotos.
 - Inativação e redefinição de senha em Usuários revogam os tokens antigos. As
-  autorizações atualizam a lista de veículos e as próximas aberturas de BDT; viagens
+  OS pendentes atribuídas ao motorista definem a lista de veículos e autorizam
+  novas aberturas de BDT; viagens
   já iniciadas mantêm seu histórico e não são apagadas.
 - Sessões web são separadas por host; não há compartilhamento de cookies de
   domínio amplo nem transferência de senha entre domínios. É a mesma credencial,
@@ -188,3 +190,27 @@ o app permite informar o endereço completo manualmente.
 Publicar a migração driverops/0004 junto do backend principal. Ela acrescenta
 coordenadas opcionais aos trechos existentes, sem reescrever BDTs históricos.
 O cache da PWA passa à versão 2 para incluir o módulo de sugestões.
+
+## Perfis e autorização de veículos por OS
+
+No modo central há quatro perfis: Gestor (rotina e acessos da empresa), Operador
+(cadastro/edição na rotina da frota e OS, sem gestão de usuários nem exclusão),
+Consulta (somente leitura no desktop) e Motorista (aplicativo). Os novos perfis
+entram no desktop mesmo quando o login parte do host do app. Consulta pode trocar
+sua própria senha e sair, mas não executar gravações operacionais. Permissões
+antigas de grupos não ampliam o perfil da empresa. Só o gestor administra Usuários.
+
+O cadastro de usuário não tem seleção de veículos. No modo central, listas antigas
+CompanyVehicle.drivers permanecem para compatibilidade, mas não autorizam novas
+viagens. A autorização é consultada diretamente na OS pendente: empresa, veículo
+ativo e motorista devem corresponder ao pedido. Não há sincronização de uma lista
+paralela. Uma OS sem conta de motorista pode ser criada normalmente; o acesso
+pode ser cadastrado depois, selecionando o mesmo motorista.
+
+O aplicativo exige a OS na abertura de novos BDTs; os trechos e retornos seguintes
+continuam dentro desse BDT. As viagens antigas abertas sem OS podem ser concluídas
+para preservar o histórico. Fechar a OS ou mudar seu motorista remove a autorização
+para futuras aberturas. Uma OS com BDT aberto não aceita troca de motorista nem
+fechamento antecipado. A configuração institucional e o piloto isolado mantêm suas
+regras anteriores. Aplicar driverops/0005 ao publicar os novos perfis; ela não
+altera o perfil de usuários existentes. A PWA usa cache versão 3.

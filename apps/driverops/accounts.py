@@ -45,17 +45,11 @@ def user_form(request, pk=None):
                     member = Member(company=request.company, user=user)
                 member.role, member.driver, member.active = data['role'], data.get('driver'), data['is_active']
                 member.save()
-                # Only this company's vehicle grants can be changed here.
-                for vehicle in CompanyVehicle.objects.filter(company=request.company, drivers=member):
-                    vehicle.drivers.remove(member)
-                if member.role == Member.DRIVER:
-                    for vehicle in data['vehicles']:
-                        vehicle.drivers.add(member)
                 DeviceSession.objects.filter(member=member).delete()
                 AuditLog.objects.create(user=request.user, module='usuários', action='ACESSO DA EMPRESA ATUALIZADO',
                     entity_type='user', entity_id=user.pk, new_values={'company': str(request.company.pk), 'email': user.email,
                     'role': member.role, 'active': member.active, 'driver': str(member.driver_id) if member.driver_id else None,
-                    'vehicles': list(data['vehicles'].values_list('pk', flat=True))})
+                    'vehicle_authorization': 'exit_order'})
         except (IntegrityError, ValueError) as error:
             form.add_error(None, 'E-mail ou motorista já vinculado. Confira o cadastro.' if isinstance(error, IntegrityError) else str(error))
         else:

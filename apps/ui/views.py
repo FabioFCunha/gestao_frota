@@ -35,7 +35,7 @@ class FleetLoginView(LoginView):
             member = Member.objects.filter(user=self.request.user, active=True, company__active=True).first()
             if member and member.role == Member.DRIVER:
                 return app_url()
-            if member and member.role == Member.MANAGER:
+            if member and member.role in Member.DESKTOP_ROLES:
                 return management_url('/')
         if hasattr(self.request, 'company_member'):
             if self.request.user.is_superuser:
@@ -45,7 +45,7 @@ class FleetLoginView(LoginView):
             member = Member.objects.filter(user=self.request.user, active=True, company__active=True).first()
             if member and member.role == Member.DRIVER:
                 return '/api/driver/app/'
-            if member and member.role == Member.MANAGER:
+            if member and member.role in Member.DESKTOP_ROLES:
                 next_url = self.get_redirect_url()
                 if not next_url or urlsplit(next_url).path.startswith('/api/driver/'):
                     return '/'

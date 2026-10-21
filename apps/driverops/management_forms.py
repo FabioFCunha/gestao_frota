@@ -88,6 +88,8 @@ class MemberForm(UserCreationForm):
             self.fields['role'].choices = [(Member.MANAGER, 'Gestor')]
             self.fields['vehicles'].widget = forms.HiddenInput()
             self.fields['existing_driver'].widget = forms.HiddenInput()
+        if getattr(settings, 'CENTRAL_USER_MANAGEMENT', False):
+            self.fields.pop('vehicles', None)
 
 
     def clean_email(self):
@@ -125,6 +127,8 @@ class VehicleForm(forms.Form):
     def __init__(self, *args, company, platform=False, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["drivers"].queryset = Member.objects.filter(company=company,role="driver",active=True).select_related("driver","user")
+        if getattr(settings, 'CENTRAL_USER_MANAGEMENT', False):
+            self.fields.pop('drivers', None)
         if platform:
             self.fields["existing_vehicle"].queryset = Vehicle.objects.filter(active=True,companyvehicle__isnull=True)
         else:

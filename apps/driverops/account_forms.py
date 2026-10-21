@@ -4,13 +4,12 @@ from django.db.models import Q
 from apps.accounts.forms import UserForm
 from apps.accounts.models import User
 from apps.fleet.models import Driver
-from .models import Member, CompanyVehicle
+from .models import Member
 
 
 class CompanyUserForm(UserForm):
     role = forms.ChoiceField(label='Perfil de acesso', choices=Member._meta.get_field('role').choices)
     driver = forms.ModelChoiceField(label='Motorista cadastrado pela CNH', queryset=Driver.objects.none(), required=False)
-    vehicles = forms.ModelMultipleChoiceField(label='Veículos autorizados no aplicativo', queryset=CompanyVehicle.objects.none(), required=False, widget=forms.CheckboxSelectMultiple)
 
     class Meta(UserForm.Meta):
         pass
@@ -26,10 +25,8 @@ class CompanyUserForm(UserForm):
         if member and member.driver_id:
             eligible |= Q(pk=member.driver_id)
         self.fields['driver'].queryset = Driver.objects.filter((eligible & Q(active=True)) | (Q(pk=member.driver_id) if member and member.driver_id else Q(pk__in=[]))).order_by('name')
-        self.fields['vehicles'].queryset = CompanyVehicle.objects.filter(company=company, active=True).order_by('label')
         if member:
-            self.initial.update(role=member.role, driver=member.driver_id, is_active=member.active and member.user.is_active,
-                vehicles=list(member.companyvehicle_set.filter(company=company).values_list('pk', flat=True)))
+            self.initial.update(role=member.role, driver=member.driver_id, is_active=member.active and member.user.is_active)
             if member.driver_id:
                 self.fields['driver'].disabled = True
                 self.fields['role'].disabled = True
@@ -50,8 +47,8 @@ class CompanyUserForm(UserForm):
         data = super().clean()
         if data.get('role') == Member.DRIVER and not data.get('driver'):
             self.add_error('driver', 'Cadastre o motorista pela CNH e selecione-o para liberar o aplicativo.')
-        if data.get('role') == Member.MANAGER and (data.get('driver') or data.get('vehicles')):
-            raise forms.ValidationError('Gestores usam o desktop. Motorista e veículos são exclusivos do acesso operacional.')
+        if data.get('role') in Member.DESKTOP_ROLES and data.get('driver'):
+            raise forms.ValidationError('Perfis do desktop não devem ter um motorista vinculado. O veículo é definido na OS.')
         if data.get('initial_password'):
             validate_password(data['initial_password'], self.instance)
         return data

@@ -85,6 +85,12 @@ def exit_order_edit(request, pk):
                     key for key in before if before[key] != after[key]
                 ]
                 if changed:
+                    from django.conf import settings
+                    if getattr(settings, 'CENTRAL_USER_MANAGEMENT', False) and 'driver_id' in changed:
+                        from apps.driverops.models import Trip
+                        if Trip.objects.filter(exit_order=order, closed_at=None).exists():
+                            form.add_error('driver', 'Encerre o BDT vinculado antes de trocar o motorista da OS.')
+                            return render(request, 'ui/exit_order_edit.html', {'form': form, 'order': order})
                     order.save(update_fields=[
                         "driver", "departed_at", "destination",
                         "reason", "notes", "updated_at",

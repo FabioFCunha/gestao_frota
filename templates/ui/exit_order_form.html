@@ -3,6 +3,7 @@
 {% block content %}
 <div class="page-header"><div><h1>Nova OS de saída</h1><p class="subtitle">Registre a saída efetiva da viatura.</p></div></div>
 <div class="card form-card">
+  {% if request.central_user_management %}<p>Escolha o veículo e o motorista desta saída. Esta OS libera o veículo para o motorista no aplicativo enquanto estiver pendente.</p>{% endif %}
   {% if linked_vehicle %}<div class="alert alert-info"><strong>Viatura vinculada:</strong> {{ linked_vehicle_plate }}{% if linked_vehicle.brand or linked_vehicle.model %} — {{ linked_vehicle.brand }} {{ linked_vehicle.model }}{% endif %}. A viatura é definida pelo prontuário e não pode ser alterada.</div>{% endif %}
   <form method="post">{% csrf_token %}
     {{ form.non_field_errors }}

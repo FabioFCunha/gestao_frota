@@ -114,7 +114,10 @@ function showLegs(target,legs){
 }
 function orders(){
  const current=$('order').value;
- $('order').replaceChildren(new Option('Sem OS',''));
+ $('order').replaceChildren(new Option(boot.requires_exit_order?'Selecione a OS':'Sem OS',''));
+ $('order').required=!!boot.requires_exit_order;
+ $('order-label').textContent=boot.requires_exit_order?'Ordem de saída atribuída a você':'Ordem de saída (opcional)';
+ $('os-help').textContent=boot.requires_exit_order&&!boot.exit_orders.length?'Nenhuma OS pendente atribuída a você. Solicite a saída ao gestor ou operador.':'';
  for(const o of boot.exit_orders.filter(o=>String(o.vehicle)===$('vehicle').value))$('order').add(new Option(o.number+' · '+o.destination,o.id));
  if([...$('order').options].some(o=>o.value===current))$('order').value=current;
 }
@@ -203,6 +206,7 @@ $('order').addEventListener('change',()=>{
 $('create-form').addEventListener('submit',event=>{event.preventDefault();void run(async()=>{
  const labels=destinations($('destinations').value);
  const body={vehicle:Number($('vehicle').value),destinations:labels,destination_points:addressPickers.destinations.points(labels)};
+ if(boot.requires_exit_order&&!$('order').value)throw Error('Selecione a OS atribuída a você.');
  if($('order').value)body.exit_order=$('order').value;
  await command('trips/',body);$('destinations').value='';addressPickers.destinations.clear();await refresh();message('BDT aberto. Confira a vistoria e inicie o primeiro trecho.');
 });});

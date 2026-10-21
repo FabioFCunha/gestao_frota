@@ -67,7 +67,7 @@ def trip_data(trip):
 
 def owned_trip(member, pk, lock=False):
     query = Trip.objects.filter(company=member.company)
-    if member.role != Member.MANAGER:
+    if member.role not in Member.DESKTOP_ROLES:
         query = query.filter(member=member)
     if lock:
         query = query.select_for_update()
@@ -175,12 +175,17 @@ def logout(request):
 def bootstrap(request):
     member = member_for(request)
     vehicles = CompanyVehicle.objects.filter(company=member.company, active=True, vehicle__active=True)
-    if member.role != Member.MANAGER:
-        vehicles = vehicles.filter(drivers=member)
+    if member.role == Member.DRIVER:
+        if getattr(settings, 'CENTRAL_USER_MANAGEMENT', False):
+            vehicles = vehicles.filter(vehicle_id__in=VehicleExitOrder.objects.filter(
+                driver_id=member.driver_id, state='PENDING').values('vehicle_id'))
+        else:
+            vehicles = vehicles.filter(drivers=member)
     return Response({
         "member_id": member.pk,
         "name": request.user.get_full_name() or request.user.username,
         "company": member.company.name, "role": member.role,
+        "requires_exit_order": getattr(settings, "CENTRAL_USER_MANAGEMENT", False),
         "checklist_items": CHECKS,
         "vehicles": [{"id": v.pk, "label": v.label,
                       "suggested_km": VehicleMileage.objects.filter(vehicle=v.vehicle).order_by("-date", "-created_at").values_list("mileage", flat=True).first()}
@@ -203,7 +208,7 @@ def trips(request):
     member = member_for(request)
     if request.method == "GET":
         query = Trip.objects.filter(company=member.company).select_related("vehicle").prefetch_related("legs")
-        if member.role != Member.MANAGER:
+        if member.role not in Member.DESKTOP_ROLES:
             query = query.filter(member=member)
         return Response([trip_data(t) for t in query.order_by("-opened_at")[:100]])
     return execute(request, member, "create")
@@ -261,10 +266,13 @@ def execute(request, member, action, pk=None):
 
 
 def create_trip(request, member):
-    vehicle = CompanyVehicle.objects.select_for_update().filter(
+    vehicle_query = CompanyVehicle.objects.select_for_update().filter(
         pk=positive_id(request.data.get("vehicle")), company=member.company, active=True,
-        vehicle__active=True, drivers=member
-    ).first()
+        vehicle__active=True)
+    central = getattr(settings, 'CENTRAL_USER_MANAGEMENT', False)
+    if not central:
+        vehicle_query = vehicle_query.filter(drivers=member)
+    vehicle = vehicle_query.first()
     if not vehicle:
         raise PermissionDenied("Veículo não atribuído a este motorista.")
     Vehicle.objects.select_for_update().get(pk=vehicle.vehicle_id)
@@ -272,8 +280,10 @@ def create_trip(request, member):
         raise ValidationError("Já existe BDT aberto para este motorista ou veículo.")
     values = destinations(request.data.get("destinations"))
     order = None
+    if central and not request.data.get('exit_order'):
+        raise ValidationError('Selecione a OS pendente atribuída a você para abrir o BDT.')
     if request.data.get("exit_order"):
-        order = VehicleExitOrder.objects.filter(pk=identifier(request.data["exit_order"]), vehicle=vehicle.vehicle,
+        order = VehicleExitOrder.objects.select_for_update().filter(pk=identifier(request.data["exit_order"]), vehicle=vehicle.vehicle,
                                                driver=member.driver, state="PENDING").first()
         if not order:
             raise ValidationError("OS incompatível com o veículo, motorista ou situação.")
@@ -458,7 +468,7 @@ def upload_photo(request, pk, leg_id):
 def photo(request, photo_id):
     member = member_for(request)
     obj = InspectionPhoto.objects.select_related("leg__trip").filter(pk=photo_id, leg__trip__company=member.company).first()
-    if not obj or (member.role != Member.MANAGER and obj.leg.trip.member_id != member.pk):
+    if not obj or (member.role not in Member.DESKTOP_ROLES and obj.leg.trip.member_id != member.pk):
         raise PermissionDenied()
     response = HttpResponse(bytes(obj.image), content_type=obj.content_type)
     response["Cache-Control"] = "private, no-store"

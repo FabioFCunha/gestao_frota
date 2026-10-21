@@ -38,7 +38,7 @@ class CentralAccountsTests(TestCase):
 
     def values(self, **extra):
         return {'first_name': 'Motorista central', 'email': 'motorista@empresa.com', 'is_active': 'True',
-                'role': 'driver', 'driver': str(self.driver.pk), 'vehicles': [self.vehicle.pk],
+                'role': 'driver', 'driver': str(self.driver.pk),
                 'initial_password': 'Senha-nova-987', 'initial_password_confirmation': 'Senha-nova-987', **extra}
 
     def test_original_users_page_is_scoped_to_company(self):
@@ -50,7 +50,7 @@ class CentralAccountsTests(TestCase):
         self.assertEqual(self.client.get(f'/usuarios/{self.foreign_user.pk}/editar/', HTTP_HOST='gestao.test').status_code, 404)
         self.assertEqual(self.client.get('/perfis/', HTTP_HOST='gestao.test').status_code, 403)
 
-    def test_single_registration_creates_email_login_driver_grants_and_audit(self):
+    def test_single_registration_creates_access_and_vehicle_comes_from_os(self):
         response = self.client.post('/usuarios/novo/', self.values(), HTTP_HOST='gestao.test')
         self.assertEqual(response.status_code, 302, getattr(response.context, 'flatten', lambda: response.context)())
         user = get_user_model().objects.get(email='motorista@empresa.com')
@@ -61,7 +61,16 @@ class CentralAccountsTests(TestCase):
         member = Member.objects.get(user=user)
         self.assertEqual(member.company, self.company)
         self.assertEqual(member.driver, self.driver)
-        self.assertTrue(self.vehicle.drivers.filter(pk=member.pk).exists())
+        self.assertFalse(self.vehicle.drivers.filter(pk=member.pk).exists())
+        self.assertNotContains(self.client.get('/usuarios/novo/', HTTP_HOST='gestao.test'), 'name="vehicles"')
+        from apps.fleet.models import VehicleExitOrder
+        from django.utils import timezone
+        token = set_scope(Scope(company_id=self.company.pk))
+        try:
+            VehicleExitOrder.objects.create(number='OS-INTEGRACAO', vehicle=self.vehicle.vehicle, driver=self.driver,
+                opened_by=self.manager, departed_at=timezone.now(), destination='Destino', reason='Serviço')
+        finally:
+            reset_scope(token)
         self.assertNotIn('Senha-nova-987', str(list(AuditLog.objects.values())))
         # Completing first-password change makes this same database account usable by the app.
         user.must_change_password = False

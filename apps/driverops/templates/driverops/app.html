@@ -12,7 +12,7 @@
 <p id="queue"></p><button id="sync">Sincronizar</button><button id="reload">Atualizar BDT</button><p id="pending" class="warning" hidden>Há uma operação aguardando confirmação. Sincronize antes de continuar.</p></section>
 <section id="create" class="card" hidden><h2>Abrir BDT</h2>
 <form id="create-form"><label>Veículo<select id="vehicle" required></select></label>
-<label>Ordem de saída (opcional)<select id="order"></select></label>
+<label><span id="order-label">Ordem de saída</span><select id="order"></select></label><p id="os-help" class="muted"></p>
 <label>Destinos na ordem da viagem<textarea id="destinations" rows="4" placeholder="Comece a digitar a rua e a cidade; um destino por linha" required></textarea></label>
 <p class="muted">Digite pelo menos 4 caracteres e selecione uma sugestão. Use uma linha para cada destino. Busca com dados <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a> via <a href="https://photon.komoot.io/" target="_blank" rel="noopener">Photon</a>.</p>
 <p class="muted">Inclua o retorno à base como último destino, se fizer parte desta viagem.</p><button type="submit">Abrir BDT</button></form></section>

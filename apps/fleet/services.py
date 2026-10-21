@@ -297,6 +297,11 @@ def close_vehicle_exit_order(*, order_id, returned_at, return_notes, user):
         raise PermissionDenied("Somente o usuário que abriu a OS pode registrar o retorno.")
     if order.state == VehicleExitOrder.State.CLOSED:
         raise ValueError("Esta OS já foi encerrada.")
+    from django.conf import settings
+    if getattr(settings, 'CENTRAL_USER_MANAGEMENT', False):
+        from apps.driverops.models import Trip
+        if Trip.objects.filter(exit_order=order, closed_at=None).exists():
+            raise ValueError('Encerre o BDT vinculado antes de registrar o retorno da OS.')
     if returned_at < order.departed_at:
         raise ValueError("O retorno não pode ser anterior à saída.")
 

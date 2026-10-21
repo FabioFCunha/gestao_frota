@@ -22,7 +22,8 @@ def module_permission(permission):
         def wrapped(request, *args, **kwargs):
             if not request.user.is_authenticated:
                 return redirect(f"{reverse('login')}?next={request.path}")
-            if request.user.is_system_creator or request.user.has_perm(permission):
+            from apps.fleet.tenant_scope import company_id
+            if request.user.has_perm(permission) or (not company_id() and request.user.is_system_creator):
                 return view_func(request, *args, **kwargs)
             raise PermissionDenied
         return wrapped
