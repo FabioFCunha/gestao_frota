@@ -1086,3 +1086,48 @@ button:not(.side-logout):not(.dashboard-informe-item):not(.secondary-action):not
 .vl-actions-state .vl-action-btn {
     width: 100%;
 }
+
+/* Dossier custody actions: separate operations and keep fields within the card. */
+.dossier-custody-form {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin: 20px 0 0;
+    padding-top: 20px;
+    border-top: 1px solid #e2e8f0;
+}
+.dossier-custody-form h4 {
+    margin: 0;
+    font-size: 14px;
+}
+.dossier-custody-fields {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+    gap: 16px;
+}
+.dossier-custody-fields label {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+    font-size: 12px;
+    font-weight: 600;
+}
+.dossier-custody-fields input,
+.dossier-custody-fields select {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    min-height: 42px;
+    margin: 0;
+}
+.dossier-custody-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+}
+.dossier-custody-actions button {
+    min-height: 40px;
+    margin: 0;
+}
