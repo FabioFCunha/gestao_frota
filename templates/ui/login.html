@@ -105,7 +105,7 @@
         <div class="flex flex-col items-center text-center mb-8">
           <div class="relative mb-5 group cursor-pointer w-full flex justify-center">
             <!-- Logo Operação Lei Seca - Grande, ocupando o topo -->
-            {% if request.company_mode %}<span class="text-3xl font-extrabold tracking-tight text-white">TRANSFROTA</span>{% else %}
+            {% if request.company_mode %}<img src="{% static 'images/transfrota-logo.png' %}" alt="Transfrota" width="240" height="132" style="width:240px;max-width:100%;height:auto;object-fit:contain;background:#fff;border-radius:14px;padding:12px">{% else %}
             <img
               src="{% static 'images/operacao-lei-seca-logo.png' %}" 
               alt="Operação Lei Seca" 

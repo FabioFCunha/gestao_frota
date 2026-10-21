@@ -160,7 +160,7 @@ class CentralAccountsTests(TestCase):
         self.client.force_login(user)
         response = self.client.get('/minha-senha/', HTTP_HOST='app.test')
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'TRANSFROTA · MOTORISTA')
+        self.assertContains(response, 'images/transfrota-logo.png')
         self.assertNotContains(response, 'Usuários do sistema')
         response = self.client.post('/minha-senha/', {'old_password': 'Inicial-987', 'new_password1': 'Pessoal-987-segura', 'new_password2': 'Pessoal-987-segura'}, HTTP_HOST='app.test')
         self.assertEqual(response.url, 'https://app.test/api/driver/app/')

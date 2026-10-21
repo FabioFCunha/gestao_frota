@@ -214,3 +214,13 @@ para futuras aberturas. Uma OS com BDT aberto não aceita troca de motorista nem
 fechamento antecipado. A configuração institucional e o piloto isolado mantêm suas
 regras anteriores. Aplicar driverops/0005 ao publicar os novos perfis; ela não
 altera o perfil de usuários existentes. A PWA usa cache versão 3.
+
+## Identidade visual
+
+A marca enviada foi preparada com transparência e salva em
+`static/images/transfrota-logo.png`. No modo comercial ela substitui o texto da
+marca no login, menu lateral, aplicativo e painéis; o nome da empresa continua
+identificando o vínculo atual. Os ícones 192/512 da PWA derivam da mesma marca,
+com área segura e base branca. A versão 4 do cache inclui a imagem para uso offline.
+A publicação executa collectstatic no backend principal; ambos os proxies já usam
+seu volume estático. A instalação institucional preserva a identidade anterior.

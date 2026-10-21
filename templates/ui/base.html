@@ -9,17 +9,21 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
-  <link rel="stylesheet" href="{% static 'ui/app.css' %}?v=36">
+  <link rel="stylesheet" href="{% static 'ui/app.css' %}?v=37">
 </head>
 <body>
   <aside class="sidebar">
 
     <!-- Brand -->
     <div class="sb-brand">
+      {% if request.company_mode %}
+      <img src="{% static 'images/transfrota-logo.png' %}" alt="Transfrota" class="tf-brand-logo">
+      {% else %}
       <div class="sb-brand-icon">
         {% if request.company %}<i data-lucide="truck" style="width:44px;height:44px;color:#fff"></i>{% else %}<img src="{% static 'images/operacao-lei-seca-logo.png' %}" alt="Logo" style="width:56px; height:56px; object-fit:contain; filter: drop-shadow(0 0 12px rgba(37, 99, 235, 0.5)) drop-shadow(0 0 4px rgba(255,255,255,0.2));">
       {% endif %}</div>
       <span class="brand-name" style="font-size: 13px !important; color: #94a3b8 !important; letter-spacing: 0.15em; margin-top: 8px;">{% if request.company %}TRANSFROTA{% else %}GESTÃO DE FROTAS{% endif %}</span>
+      {% endif %}
       {% if request.company %}<span style="color:#fff;text-align:center;margin-top:8px">{{ request.company.name }}</span>{% endif %}
     </div>
 

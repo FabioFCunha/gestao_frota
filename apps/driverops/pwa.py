@@ -1,7 +1,7 @@
 import io
 import json
 from pathlib import Path
-from PIL import Image, ImageDraw
+from PIL import Image
 from django.conf import settings
 from django.contrib.auth import logout
 from django.contrib.auth.decorators import login_required
@@ -53,7 +53,7 @@ def manifest(request):
         "short_name": "Transfrota", "lang": "pt-BR",
         "start_url": "/api/driver/app/", "scope": "/api/driver/app/",
         "display": "standalone", "background_color": "#f1f5f9", "theme_color": "#0f766e",
-        "icons": [{"src": f"/api/driver/app/icon-{size}.png", "sizes": f"{size}x{size}",
+        "icons": [{"src": f"/api/driver/app/icon-{size}.png?v=brand1", "sizes": f"{size}x{size}",
                    "type": "image/png", "purpose": "any maskable"} for size in (192, 512)],
     }, content_type="application/manifest+json")
     response["Cache-Control"] = "no-cache"
@@ -63,13 +63,11 @@ def manifest(request):
 def icon(request, size):
     if size not in (192, 512):
         return HttpResponse(status=404)
-    image = Image.new("RGB", (size, size), "#0f766e")
-    draw = ImageDraw.Draw(image)
-    # Simple geometric fleet mark inside the maskable icon safe zone.
-    draw.rounded_rectangle((size*.22, size*.35, size*.78, size*.64), radius=int(size*.06), fill="white")
-    draw.rectangle((size*.36, size*.24, size*.64, size*.46), fill="white")
-    for x in (.34, .66):
-        draw.ellipse((size*(x-.07), size*.58, size*(x+.07), size*.72), fill="#0f172a")
+    image = Image.new("RGB", (size, size), "white")
+    with Image.open(settings.BASE_DIR / "static/images/transfrota-logo.png") as source:
+        logo = source.convert("RGBA")
+        logo.thumbnail((round(size * .76), round(size * .76)), Image.Resampling.LANCZOS)
+        image.paste(logo, ((size-logo.width)//2, (size-logo.height)//2), logo)
     output = io.BytesIO()
     image.save(output, "PNG")
     response = HttpResponse(output.getvalue(), content_type="image/png")

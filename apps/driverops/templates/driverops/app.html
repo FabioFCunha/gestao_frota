@@ -1,10 +1,11 @@
+{% load static %}
 <!doctype html>
 <html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0f766e"><meta name="apple-mobile-web-app-capable" content="yes">
 <title>Transfrota Motorista</title><link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-192.png"><link rel="stylesheet" href="style.css">
 <script type="module" src="app.js"></script></head>
-<body><main><header><div><small>TRANSFROTA</small><h1>Motorista</h1></div><button id="install" hidden>Instalar</button></header>
+<body><main><header><div><img class="brand-logo" src="{% static 'images/transfrota-logo.png' %}" alt="Transfrota" width="150" height="82"><h1>Motorista</h1></div><button id="install" hidden>Instalar</button></header>
 <p id="identity">Conectando à empresa…</p>
 <aside class="notice"><strong>Teste pelo navegador</strong><p>O GPS funciona enquanto esta página estiver ativa. Ao abrir Maps/Waze, trocar de aplicativo ou bloquear a tela, a coleta pode parar. Volte aqui para registrar a chegada.</p></aside>
 <p id="message" role="status" aria-live="polite"></p>

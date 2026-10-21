@@ -1,13 +1,13 @@
 import os
 import unittest
-from django.test import LiveServerTestCase
+from django.contrib.staticfiles.testing import StaticLiveServerTestCase
 from django.contrib.auth import get_user_model
 from apps.fleet.models import Driver, Vehicle, VehicleStatus
 from .models import Company, Member, CompanyVehicle, Trip, Location
 
 
 @unittest.skipUnless(os.getenv("PWA_BROWSER_TESTS") == "1", "Ative PWA_BROWSER_TESTS com Chromium instalado.")
-class PWABrowserTests(LiveServerTestCase):
+class PWABrowserTests(StaticLiveServerTestCase):
     def test_open_two_legs_and_close_using_session_cookie(self):
         from playwright.sync_api import sync_playwright, expect
         user = get_user_model().objects.create_user(username="pwa-browser", password="Teste-123-seguro")
@@ -30,6 +30,7 @@ class PWABrowserTests(LiveServerTestCase):
             page.on("pageerror",lambda error:errors.append(str(error)))
             page.goto(self.live_server_url+"/api/driver/app/")
             expect(page.locator("#identity")).to_contain_text("Empresa navegador")
+            page.wait_for_function("document.querySelector('img[alt=Transfrota]').naturalWidth > 0")
             page.route("**/api/driver/addresses/**", lambda route: route.fulfill(json={"results":[
                 {"label":"Praça XV, Rio de Janeiro", "latitude":-22.9, "longitude":-43.17}]}))
             page.locator("#destinations").fill("Praça XV Rio")
@@ -99,7 +100,8 @@ class PWABrowserTests(LiveServerTestCase):
             page.locator('input[name=password]').fill('Senha-forte-piloto-123')
             page.locator('#wwLoginForm button[type=submit]').click()
             expect(page.locator('.sb-brand')).to_contain_text('Empresa Piloto')
-            expect(page.locator('.sb-brand')).to_contain_text('TRANSFROTA')
+            expect(page.locator('.sb-brand img[alt=Transfrota]')).to_be_visible()
+            page.wait_for_function("document.querySelector('.sb-brand img[alt=Transfrota]').naturalWidth > 0")
             for text, path in [('Veículos', '/veiculos/'), ('Motoristas', '/motoristas/')]:
                 page.locator('.sb-nav').get_by_text(text, exact=True).click()
                 expect(page).to_have_url(self.live_server_url + path)
