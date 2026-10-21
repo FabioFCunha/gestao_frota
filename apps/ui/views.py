@@ -760,7 +760,6 @@ def vehicle_dossier(request, pk):
     km_history = VehicleMileage.objects.filter(vehicle=vehicle).order_by('-date')[:10]
     maintenances = vehicle.maintenances.select_related('status', 'type', 'workshop').order_by('-entered_at')[:10]
     fines = vehicle.fines.select_related('status').order_by('-date')[:10]
-    inspections = vehicle.inspections.select_related('type', 'status').order_by('-date')[:10]
     exit_orders = vehicle.exit_orders.select_related('driver', 'opened_by', 'closed_by').order_by('-departed_at')[:10]
     pending_exit_order = next((order for order in exit_orders if order.state == VehicleExitOrder.State.PENDING), None)
     active_assignment = (
@@ -859,7 +858,6 @@ def vehicle_dossier(request, pk):
         'km_history': km_history,
         'maintenances': maintenances,
         'fines': fines,
-        'inspections': inspections,
         'exit_orders': exit_orders,
         'pending_exit_order': pending_exit_order,
         'can_close_exit_order_ids': {str(order.id) for order in exit_orders if order.state == VehicleExitOrder.State.PENDING and order.opened_by_id == request.user.id},

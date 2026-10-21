@@ -296,7 +296,7 @@
     </article>
 </section>
 
-<!-- MULTAS E VISTORIAS -->
+<!-- MULTAS -->
 <section class="grid">
     <article class="panel">
         <div class="panel-title"><div><h3>⚑ Multas</h3></div>{% if vehicle.active %}{% if perms.fleet.add_vehiclefine or request.user.is_system_creator %}
@@ -316,31 +316,5 @@
         {% endif %}
     </article>
 
-    <article class="panel">
-        <div class="panel-title"><div><h3>🔍 Vistorias</h3></div>
-{% if vehicle.active %}{% if perms.fleet.add_vehicleinspection or request.user.is_system_creator %}
-<a class="primary-action" href="{% url 'inspection_create' vehicle.id %}">Nova vistoria</a>
-{% endif %}{% endif %}</div>
-        {% if inspections %}
-        <table>
-            <thead><tr><th>TIPO</th><th>SITUAÇÃO</th><th>KM</th><th>DATA</th></tr></thead>
-            <tbody>
-                {% for i in inspections %}
-                <tr>
-  <td>
-    {{ i.type.name }}
-    {% include "ui/inspection_checklist.html" with inspection=i only %}
-  </td>
-  <td><span class="tag">{{ i.status.name }}</span></td>
-  <td>{{ i.mileage|default:"-" }}</td>
-  <td>{{ i.date|date:"d/m/Y" }}</td>
-</tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        {% else %}
-        <div class="empty">Nenhuma vistoria registrada.</div>
-        {% endif %}
-    </article>
 </section>
 {% endblock %}

@@ -67,12 +67,14 @@ class TenantTests(TestCase):
         self.assertIsNone(current_scope())
 
     def test_original_ui_all_modules_open_and_foreign_details_are_hidden(self):
-        for path in ('/', '/veiculos/', '/motoristas/', '/manutencoes/', '/multas/', '/vistorias/', '/contratos/', '/ordens-saida/'):
+        for path in ('/', '/veiculos/', '/motoristas/', '/manutencoes/', '/multas/', '/contratos/', '/ordens-saida/'):
             with self.subTest(path=path):
                 response = self.client.get(path)
                 self.assertEqual(response.status_code, 200)
                 self.assertNotContains(response, 'XYZ9Z99')
                 self.assertContains(response, 'Transportes Alfa')
+        self.assertEqual(self.client.get('/vistorias/').status_code, 404)
+        self.assertEqual(self.client.post('/api/vehicle-inspections/', {}).status_code, 404)
         response = self.client.get(reverse('vehicle_dossier', kwargs={'pk': self.va.pk}))
         self.assertEqual(response.status_code, 200)
         vehicle_list = self.client.get('/veiculos/')

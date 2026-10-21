@@ -1906,13 +1906,6 @@ def get_operational_alerts(filters: dict) -> dict:
         status__name__in=["Aberto", "Em andamento"]
     ).values("id", "sei_number", "status__name", "opening_date")
     
-    # 5. Pending Inspections (Reprovadas ou Com ressalvas)
-    pending_inspections = VehicleInspection.objects.filter(
-        status__name__in=["Reprovada", "Com ressalvas"]
-    )
-    if vehicle_ids is not None:
-        pending_inspections = pending_inspections.filter(vehicle_id__in=vehicle_ids).select_related('vehicle').values("id", "vehicle__plate_history__plate", "status__name", "date")
-
     # 6. Revisoes preventivas
     # Regra oficial WW Trans:
     # - intervalo de 10.000 km;
@@ -1967,7 +1960,6 @@ def get_operational_alerts(filters: dict) -> dict:
         "open_maintenances": list(open_maintenances),
         "pending_fines": list(pending_fines),
         "open_sei": list(open_sei),
-        "pending_inspections": list(pending_inspections),
         "revisoes_vencidas": revisoes_vencidas,
         "expired_cnh": list(expired_cnh),
     }
