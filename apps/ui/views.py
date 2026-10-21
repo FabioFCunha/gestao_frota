@@ -1,7 +1,7 @@
 from .exit_order_bdt import exit_order_bdt_rows
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import LoginView
-from django.db import transaction, IntegrityError
+from django.db import transaction, IntegrityError, models
 from django.db.models import Count, Q, Prefetch
 from django.core.paginator import Paginator
 from django.core.exceptions import PermissionDenied, ValidationError
@@ -1457,8 +1457,8 @@ def fine_list(request):
 @module_permission("fleet.add_driver")
 def driver_create(request):
     from urllib.parse import urlencode
-    from apps.fleet.models import Document, AuditLog
-    from apps.fleet.services import stage_cnh_document_for_creation, link_document, cnh_confirmation_source, validate_cnh_identity
+    from apps.fleet.models import Document, AuditLog, Driver
+    from apps.fleet.services import stage_cnh_document_for_creation, link_document, cnh_confirmation_source, validate_cnh_identity, update_driver_document_data
 
     requested_sector = request.GET.get("sector")
     list_url = reverse("driver_list")
@@ -1579,28 +1579,75 @@ def driver_create(request):
                         document, extracted = cnh_confirmation_source(
                             document_id=document.pk, user=request.user,
                         )
-                        validate_cnh_identity(extracted=extracted, values=confirm_form.cleaned_data)
-                        driver = confirm_form.save()
-                        link_document(document=document, obj=driver, user=request.user)
-                        AuditLog.objects.create(
-                            user=request.user,
-                            module="cnh",
-                            action="CNH CADASTRADA A PARTIR DE PDF",
-                            entity_type="document",
-                            entity_id=document.id,
-                            new_values={
-                                "driver_id": str(driver.id),
-                                "driver_name": driver.name,
-                                "reviewed": True,
-                                "source": "CNH PDF",
-                                "extracted_data": extracted,
-                                "form_values": reviewed_values,
-                            },
+                        cpf_digits = "".join(
+                            ch for ch in str(extracted.get("cpf") or "") if ch.isdigit()
                         )
+                        existing_driver = None
+                        if len(cpf_digits) == 11:
+                            cpf_key = models.Func(
+                                models.F("cpf"), models.Value(r"[^0-9]"), models.Value(""),
+                                models.Value("g"), function="REGEXP_REPLACE",
+                                output_field=models.CharField(),
+                            )
+                            existing_driver = Driver.objects.annotate(
+                                cpf_identity_key=cpf_key,
+                            ).filter(cpf_identity_key=cpf_digits).first()
+
+                        validate_cnh_identity(
+                            extracted=extracted,
+                            values=confirm_form.cleaned_data,
+                            driver=existing_driver,
+                        )
+                        if existing_driver is not None:
+                            # CPF identifica o cadastro existente: renovar em vez de criar
+                            # um segundo motorista, preservando setor, unidade e vínculos.
+                            driver = update_driver_document_data(
+                                driver=existing_driver,
+                                values=confirm_form.cleaned_data,
+                                user=request.user,
+                            )
+                            link_document(document=document, obj=driver, user=request.user)
+                            AuditLog.objects.create(
+                                user=request.user,
+                                module="cnh",
+                                action="CNH ATUALIZADA A PARTIR DE PDF",
+                                entity_type="document",
+                                entity_id=document.id,
+                                old_values={},
+                                new_values={
+                                    "driver_id": str(driver.id),
+                                    "driver_name": driver.name,
+                                    "reviewed": True,
+                                    "source": "CNH PDF",
+                                    "extracted_data": extracted,
+                                    "form_values": reviewed_values,
+                                },
+                            )
+                        else:
+                            driver = confirm_form.save()
+                            link_document(document=document, obj=driver, user=request.user)
+                            AuditLog.objects.create(
+                                user=request.user,
+                                module="cnh",
+                                action="CNH CADASTRADA A PARTIR DE PDF",
+                                entity_type="document",
+                                entity_id=document.id,
+                                new_values={
+                                    "driver_id": str(driver.id),
+                                    "driver_name": driver.name,
+                                    "reviewed": True,
+                                    "source": "CNH PDF",
+                                    "extracted_data": extracted,
+                                    "form_values": reviewed_values,
+                                },
+                            )
                 except (ValueError, ValidationError, IntegrityError) as exc:
                     confirm_form.add_error(None, "CPF, CNH ou matrícula já cadastrados." if isinstance(exc, IntegrityError) else str(exc))
                 else:
-                    messages.success(request, f"Motorista {driver.name} cadastrado após conferência da CNH.")
+                    if existing_driver is not None:
+                        messages.success(request, f"CNH de {driver.name} atualizada no cadastro existente.")
+                    else:
+                        messages.success(request, f"Motorista {driver.name} cadastrado após conferência da CNH.")
                     return redirect(list_url)
 
         if confirm_form and confirm_form.is_bound and confirm_form.data.get("document_id"):
