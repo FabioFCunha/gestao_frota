@@ -46,7 +46,7 @@ async function refresh(){
    const card=document.createElement('article'),title=document.createElement('h2'),text=document.createElement('p'),button=document.createElement('button');
    title.textContent=trip.vehicle+' · '+(trip.closed_at?'Encerrado':'Aberto');
    text.textContent=trip.driver+' · '+dt(trip.opened_at)+' · '+trip.legs.length+' destino(s)';
-   button.textContent='Ver percurso e vistorias';button.onclick=()=>show(trip.id).catch(fail);
+   button.textContent='Ver percurso e checklist';button.onclick=()=>show(trip.id).catch(fail);
    card.append(title,text,button);el.append(card);
  }
  document.getElementById('status').textContent='Atualizado em '+new Date().toLocaleTimeString('pt-BR')+'. Exibindo os 100 BDTs mais recentes.';
