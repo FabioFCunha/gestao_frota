@@ -1227,3 +1227,42 @@ button:not(.side-logout):not(.dashboard-informe-item):not(.secondary-action):not
 .dossier-info-note p { margin:6px 0 0; font-size:14px; line-height:1.5; overflow-wrap:anywhere; }
 @media (max-width:1100px) { .dossier-identification-grid { grid-template-columns:minmax(0,1fr); } }
 @media (max-width:480px) { .dossier-info-card { padding:20px; } .dossier-info-grid { column-gap:16px; } }
+
+/* One common column rhythm for the four dossier summary cards. */
+.dossier-identification-grid,
+.grid.dossier-operational-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+    align-items: stretch;
+}
+.dossier-identification-grid > .panel,
+.dossier-operational-grid > .panel { margin:0; min-width:0; }
+.dossier-info-card,
+.dossier-operational-card,
+.dossier-revision-card { padding:26px; }
+.dossier-card-heading,
+.dossier-revision-header { min-height:40px; }
+.dossier-info-field { min-height:72px; }
+.dossier-revision-body { justify-content:space-between; gap:24px; }
+.dossier-operational-summary ul { margin-bottom:12px; }
+.dossier-document-details,
+.dossier-custody-operation { border-top:1px solid #e2e8f0; margin-top:12px; }
+.dossier-document-details > summary,
+.dossier-custody-operation > summary {
+    cursor:pointer;
+    padding:16px 0;
+    color:#0b1e35;
+    font-size:13px;
+    font-weight:600;
+}
+.dossier-custody-operation .dossier-custody-form { border-top:0; padding:0 0 16px; margin:0; }
+@media (max-width:1100px) {
+    .dossier-identification-grid,
+    .grid.dossier-operational-grid { grid-template-columns:minmax(0,1fr); }
+}
+@media (max-width:480px) {
+    .dossier-info-card,
+    .dossier-operational-card,
+    .dossier-revision-card { padding:20px; }
+}

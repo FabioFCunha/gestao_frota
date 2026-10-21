@@ -102,14 +102,19 @@
             <div class="dossier-info-field"><dt>Espécie / tipo</dt><dd>{{ latest_crlv.extracted_data.vehicle_type|default:"—" }}</dd></div>
             <div class="dossier-info-field"><dt>Motor</dt><dd>{{ vehicle.motor|default:"—" }}</dd></div>
             <div class="dossier-info-field"><dt>Potência / cilindrada</dt><dd>{{ vehicle.power_cylinder|default:"—" }}</dd></div>
+        </dl>
+        <details class="dossier-document-details">
+            <summary>Mais dados do CRLV</summary>
+            <dl class="dossier-info-grid">
             <div class="dossier-info-field"><dt>PBT</dt><dd>{{ vehicle.gross_weight|default:"—" }}</dd></div>
             <div class="dossier-info-field"><dt>CMT</dt><dd>{{ vehicle.cmt|default:"—" }}</dd></div>
             <div class="dossier-info-field"><dt>Eixos</dt><dd>{{ vehicle.axles|default:"—" }}</dd></div>
             <div class="dossier-info-field"><dt>Lotação</dt><dd>{{ vehicle.seating|default:"—" }}</dd></div>
             <div class="dossier-info-field"><dt>Carroceria</dt><dd>{{ vehicle.bodywork|default:"—" }}</dd></div>
-        </dl>
+            </dl>
         <div class="dossier-info-note"><span>Proprietário</span><p>{{ latest_crlv.extracted_data.owner_name|default:"—" }} — {{ latest_crlv.extracted_data.owner_document|default:"—" }}</p></div>
         <div class="dossier-info-note"><span>Observações</span><p>{{ latest_crlv.extracted_data.observation|default:"—" }}</p></div>
+        </details>
         {% else %}<p>Nenhum CRLV confirmado.</p>{% endif %}
     </article>
 </section>
@@ -148,8 +153,8 @@
     </article>
 
     <!-- OPERACIONAL -->
-    <article class="panel">
-        <div class="panel-title"><div><h3>👤 Operacional</h3></div></div>
+    <article class="panel dossier-operational-card">
+        <div class="dossier-card-heading"><h3><i data-lucide="user-round" aria-hidden="true"></i> Operacional</h3></div>
         <div class="dossier-operational-summary">
         <ul style="list-style:none;padding:0;line-height:2;">
             <li><strong>Motorista:</strong> {% if active_driver %}{{ active_driver.name }} {% if active_driver.phone %}({{ active_driver.phone }}){% endif %}{% else %}{{ motorista|default:"-" }}{% endif %}</li>
@@ -169,9 +174,10 @@
         {% endif %}
         </div>
         {% if active_custody and can_change_custody %}
+        <details class="dossier-custody-operation">
+            <summary>Transferir responsabilidade</summary>
         <form method="post" class="dossier-custody-form">
             {% csrf_token %}<input type="hidden" name="action" value="transfer_custody">
-            <h4>Transferir responsabilidade</h4>
             <div class="dossier-custody-fields">
                 <label>Novo motorista
                     <select name="new_driver" required>{% for d in all_drivers %}<option value="{{ d.id }}">{{ d.name }}</option>{% endfor %}</select>
@@ -182,9 +188,11 @@
             </div>
             <div class="dossier-custody-actions"><button type="submit">Transferir</button></div>
         </form>
+        </details>
+        <details class="dossier-custody-operation">
+            <summary>Encerrar acautelamento</summary>
         <form method="post" class="dossier-custody-form">
             {% csrf_token %}<input type="hidden" name="action" value="end_custody">
-            <h4>Encerrar acautelamento</h4>
             <div class="dossier-custody-fields">
                 <label>Data do encerramento<input type="date" name="ended_on" required></label>
                 <label>Data e hora do fim da responsabilidade
@@ -193,10 +201,12 @@
             </div>
             <div class="dossier-custody-actions"><button type="submit">Encerrar</button></div>
         </form>
+        </details>
         {% elif can_start_custody %}
+        <details class="dossier-custody-operation">
+            <summary>Iniciar acautelamento</summary>
         <form method="post" class="dossier-custody-form">
             {% csrf_token %}<input type="hidden" name="action" value="start_custody">
-            <h4>Iniciar acautelamento</h4>
             <div class="dossier-custody-fields">
                 <label>Processo SEI<input name="sei_number" required placeholder="SEI"></label>
                 <label>Data de início<input type="date" name="started_on" required></label>
@@ -204,6 +214,7 @@
             </div>
             <div class="dossier-custody-actions"><button type="submit">Iniciar acautelamento</button></div>
         </form>
+        </details>
         {% endif %}
         {% if obs_list %}
         <div style="margin-top:15px;padding:10px;background:#f9f9f9;border-radius:4px;">
