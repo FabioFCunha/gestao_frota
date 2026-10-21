@@ -820,6 +820,7 @@ def vehicle_dossier(request, pk):
 
     if request.method == 'POST':
         from datetime import datetime
+        from django.forms import DateTimeField
         from apps.fleet.models import Driver
         from apps.fleet.services import start_vehicle_custody, transfer_vehicle_custody, end_vehicle_custody
         action = request.POST.get('action')
@@ -836,16 +837,16 @@ def vehicle_dossier(request, pk):
                 elif action == 'transfer_custody':
                     transfer_vehicle_custody(custody=active_custody,
                         new_driver=Driver.objects.get(pk=request.POST.get('new_driver')), user=request.user,
-                        transferred_at=datetime.fromisoformat(request.POST.get('transferred_at')),
+                        transferred_at=DateTimeField().clean(request.POST.get('transferred_at')),
                         notes=request.POST.get('notes', ''))
                 else:
                     end_vehicle_custody(custody=active_custody, user=request.user,
                         ended_on=datetime.fromisoformat(request.POST.get('ended_on')).date(),
-                        assignment_ended_at=datetime.fromisoformat(request.POST.get('assignment_ended_at')),
+                        assignment_ended_at=DateTimeField().clean(request.POST.get('assignment_ended_at')),
                         notes=request.POST.get('notes', ''))
                 messages.success(request, 'Acautelamento atualizado com sucesso.')
-            except (Driver.DoesNotExist, TypeError, ValueError) as exc:
-                messages.error(request, str(exc))
+            except (Driver.DoesNotExist, TypeError, ValueError, ValidationError) as exc:
+                messages.error(request, ' '.join(exc.messages) if isinstance(exc, ValidationError) else str(exc))
             return redirect('vehicle_dossier', pk=vehicle.pk)
 
     context = {

@@ -188,7 +188,7 @@
                     <select name="new_driver" required>{% for d in all_drivers %}<option value="{{ d.id }}">{{ d.name }}</option>{% endfor %}</select>
                 </label>
                 <label>Data e hora da transferência
-                    <input type="text" name="transferred_at" required placeholder="2026-10-06T14:30:00-03:00">
+                    <input type="datetime-local" name="transferred_at" required step="60">
                 </label>
             </div>
             <div class="dossier-custody-actions"><button type="submit">Transferir</button></div>
@@ -199,7 +199,7 @@
             <div class="dossier-custody-fields">
                 <label>Data do encerramento<input type="date" name="ended_on" required></label>
                 <label>Data e hora do fim da responsabilidade
-                    <input type="text" name="assignment_ended_at" required placeholder="2026-10-06T14:30:00-03:00">
+                    <input type="datetime-local" name="assignment_ended_at" required step="60">
                 </label>
             </div>
             <div class="dossier-custody-actions"><button type="submit">Encerrar</button></div>
