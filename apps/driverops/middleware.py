@@ -27,6 +27,7 @@ class CompanyBoundaryMiddleware:
         request.company=member.company if member else None
         request.company_manager=bool(member and member.role=='manager')
         request.company_desktop=bool(member and member.role in Member.DESKTOP_ROLES)
+        request.company_horus = bool(member and str(member.company_id) in getattr(settings, 'HORUS_COMPANY_IDS', ()))
         token=set_scope(scope)
         try:
             common=('/entrar/','/sair/','/logout/','/minha-senha/','/static/')

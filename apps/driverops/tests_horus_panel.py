@@ -82,3 +82,15 @@ class HorusPanelTests(TestCase):
         response = self.page()
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, 'driverops/dashboard.html')
+
+    def test_segov_keeps_original_bdt_list_and_has_no_monitor_menu(self):
+        with self.settings(HORUS_COMPANY_IDS=(str(self.company.pk),)):
+            response = self.page()
+            self.assertRedirects(response, '/bdts/', fetch_redirect_response=False)
+            response = self.client.get('/bdts/', HTTP_HOST='gestao.test')
+            self.assertEqual(response.status_code, 200)
+            self.assertTemplateUsed(response, 'ui/bdt_list.html')
+            self.assertContains(response, 'href="/bdts/"')
+            self.assertNotContains(response, 'Acompanhamento de BDTs')
+            self.assertNotContains(response, 'href="/gestao/bdts/"')
+            self.assertRedirects(self.page(source='app'), '/bdts/', fetch_redirect_response=False)

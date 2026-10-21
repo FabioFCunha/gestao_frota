@@ -37,7 +37,7 @@
         <i data-lucide="car" class="sb-icon"></i>
         <span>Veículos</span>
       </a>
-      <a class="sb-link {% if '/bdts/' in request.path %}active{% endif %}" href="{% if request.company %}{% if request.central_user_management %}/gestao/bdts/{% else %}/api/driver/panel/{% endif %}{% else %}/bdts/{% endif %}">
+      <a class="sb-link {% if '/bdts/' in request.path %}active{% endif %}" href="{% if request.company_horus %}/bdts/{% elif request.company %}{% if request.central_user_management %}/gestao/bdts/{% else %}/api/driver/panel/{% endif %}{% else %}/bdts/{% endif %}">
         <i data-lucide="route" class="sb-icon"></i>
         <span>BDTs</span>
       </a>
@@ -69,7 +69,7 @@
         <span>Usuários e permissões</span>
       </a>
       {% endif %}
-      {% if request.company_desktop and request.central_user_management %}
+      {% if request.company_desktop and request.central_user_management and not request.company_horus %}
       <a class="sb-link" href="/gestao/bdts/"><span>Acompanhamento de BDTs</span></a>
       {% endif %}
     </nav>

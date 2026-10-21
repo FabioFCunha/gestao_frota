@@ -25,3 +25,8 @@ if MANAGEMENT_ORIGIN == DRIVER_APP_ORIGIN:
     raise ImproperlyConfigured('A gestão e o aplicativo devem usar hosts distintos.')
 ALLOWED_HOSTS = list(dict.fromkeys([*ALLOWED_HOSTS, urlsplit(MANAGEMENT_ORIGIN).hostname, urlsplit(DRIVER_APP_ORIGIN).hostname]))
 CSRF_TRUSTED_ORIGINS = list(dict.fromkeys([*CSRF_TRUSTED_ORIGINS, MANAGEMENT_ORIGIN, DRIVER_APP_ORIGIN]))
+
+# Companies using the existing Hórus BDT list rather than the app monitor.
+HORUS_COMPANY_IDS = tuple(value.strip() for value in os.getenv(
+    'HORUS_COMPANY_IDS', '5257b218-6ffe-4e70-a979-86a44a2626d8',
+).split(',') if value.strip())
