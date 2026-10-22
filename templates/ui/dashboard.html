@@ -20,202 +20,36 @@
 .crlv-status-actions > a, .crlv-status-actions > button { justify-content:center; text-align:center; }
 @media (max-width: 760px) { .crlv-overview-grid { grid-template-columns:minmax(0,1fr); } }
 
-/* DASHBOARD VISUAL FROTA V1 */
-.fd-board {
-    padding:22px;
-    border:1px solid #d7e5ef;
-    border-radius:24px;
-    background:
-        radial-gradient(ellipse at top right, #c9dfef 0, transparent 48%),
-        linear-gradient(135deg, #e3eff7, #edf3f8 55%, #dce9f3);
-}
-.fd-board-head {
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-    gap:12px;
-    margin-bottom:22px;
-}
-.fd-board-title {
-    color:#142333;
-    font-size:1.4rem;
-    font-weight:800;
-}
-.fd-board-counter {
-    padding:8px 12px;
-    border:1px solid #d5e0ea;
-    border-radius:20px;
-    background:rgba(255,255,255,.65);
-    color:#334155;
-    white-space:nowrap;
-}
-.fd-board .fd-grid {
-    display:grid;
-    grid-template-columns:repeat(6,minmax(0,1fr));
-    gap:18px;
-}
-.fd-board .vc {
-    position:relative;
-    display:flex;
-    flex-direction:column;
-    min-width:0;
-    padding:14px 12px 10px;
-    overflow:hidden;
-    border:1px solid rgba(255,255,255,.95);
-    border-radius:18px;
-    background:linear-gradient(145deg,rgba(255,255,255,.88),rgba(221,232,242,.92));
-    box-shadow:0 9px 18px rgba(43,76,105,.18),inset 0 1px 0 #fff;
-    color:#17212c;
-    text-decoration:none;
-    transition:transform .18s,box-shadow .18s;
-    isolation:isolate;
-}
-.fd-board .vc[hidden] { display:none !important; }
-.fd-board .vc:hover {
-    transform:translateY(-3px);
-    box-shadow:0 13px 24px rgba(43,76,105,.24);
-}
-.fd-board .vc:focus-visible {
-    outline:3px solid #2563eb;
-    outline-offset:3px;
-}
-.fd-board .vc::before,
-.fd-board .vc::after { content:none; }
-.fd-board .vc .vc-status {
-    position:static;
-    display:block;
-    width:100%;
-    box-sizing:border-box;
-    padding:5px 9px;
-    border:0;
-    border-radius:20px;
-    background:linear-gradient(90deg,#15803d,#65a878);
-    box-shadow:0 3px 6px #0002;
-    color:white;
-    font-size:.68rem;
-    font-weight:800;
-    line-height:1.3;
-    text-transform:uppercase;
-    letter-spacing:.02em;
-}
-.fd-board .vc--crlv-vencido .vc-status,
-.fd-board .vc--revisao-vencida .vc-status {
-    background:linear-gradient(90deg,#b91c1c,#cf993b);
-}
-.fd-board .vc--manutencao .vc-status {
-    background:linear-gradient(90deg,#b45309,#d9a64c);
-}
-.fd-board .vc--multa .vc-status,
-.fd-board .vc--contrato .vc-status,
-.fd-board .vc--revisao-proxima .vc-status {
-    background:linear-gradient(90deg,#a16207,#d9b54b);
-}
-.fd-board .vc-plate-wrap {
-    display:flex;
-    justify-content:center;
-    margin:15px 0 6px;
-    padding:0;
-}
-.fd-board .vl-plate {
-    width:132px;
-    max-width:100%;
-    overflow:hidden;
-    border:4px solid #30363b;
-    border-radius:7px;
-    background:#f5f5ee;
-    box-shadow:0 5px 8px #0004,inset 0 0 0 1px #899096;
-    transform:none;
-}
-.fd-board .vl-plate-top {
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-    padding:2px 7px;
-    background:linear-gradient(#153a8d,#2454a3);
-    color:white;
-    font:700 8px/1.3 Arial,sans-serif;
-    letter-spacing:1px;
-}
-.fd-board .vl-plate-num {
-    display:block;
-    padding:3px 2px;
-    color:#111;
-    font-family:"Arial Narrow","Liberation Sans Narrow",monospace;
-    font-size:clamp(19px,1.8vw,26px);
-    font-weight:900;
-    line-height:1.15;
-    letter-spacing:-1px;
-    text-align:center;
-    white-space:nowrap;
-}
-.fd-board .vc-model {
-    margin:0 0 10px;
-    color:#17212c;
-    font-size:.84rem;
-    font-weight:700;
-    line-height:1.35;
-    text-align:center;
-    overflow-wrap:anywhere;
-}
-.fd-board .vc-details {
-    flex:1;
-    display:flex;
-    flex-direction:column;
-    gap:7px;
-    padding:11px 9px;
-    border:1px solid #ffffffa8;
-    border-radius:13px;
-    background:rgba(255,255,255,.48);
-}
-.fd-board .vc-detail-item {
-    display:flex;
-    align-items:flex-start;
-    gap:7px;
-    margin:0;
-    color:#263340;
-    font-size:.73rem;
-    line-height:1.4;
-    overflow-wrap:anywhere;
-}
-.fd-board .vc-detail-icon {
-    flex:0 0 15px;
-    width:15px;
-    font-size:.8rem;
-    text-align:center;
-}
-.fd-board .vc-footer {
-    display:flex;
-    align-items:center;
-    min-height:27px;
-    margin-top:12px;
-    padding-top:4px;
-    border-top:1px solid #b8cad77a;
-    background:transparent;
-}
-.fd-board .vc-arrow {
-    color:#647d91;
-    font-size:1.2rem;
-}
-.fd-board .fd-empty { grid-column:1/-1; padding:24px; }
-@media(min-width:1600px) {
-    .fd-board .vl-plate-num { font-size:26px; }
-}
-@media(max-width:1350px) {
-    .fd-board .fd-grid { grid-template-columns:repeat(4,minmax(0,1fr)); }
-}
-@media(max-width:1050px) {
-    .fd-board .fd-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
-}
-@media(max-width:760px) {
-    .fd-board { padding:15px; }
-    .fd-board .fd-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
-    .fd-board .vl-plate-num { font-size:24px; }
-}
-@media(max-width:440px) {
-    .fd-board .fd-grid { grid-template-columns:minmax(0,1fr); }
-    .fd-board-title { font-size:1.1rem; }
-}
-
+/* Compact operational vehicle cards. */
+.fd-board {padding:22px;border:1px solid #e2e8f0;border-radius:20px;background:#f8fafc;}
+.fd-board-head {display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:20px;}
+.fd-board-title {color:#142333;font-size:1.25rem;font-weight:800;}
+.fd-board-counter {padding:7px 12px;border-radius:20px;background:#eef2f7;color:#475569;white-space:nowrap;}
+.fd-board .fd-grid {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;}
+.fd-board .vc {box-sizing:border-box;display:flex;flex-direction:column;min-width:0;padding:16px;border:1px solid #e2e8f0;border-radius:15px;background:#fff;box-shadow:0 2px 5px #0f172a08;color:#17212c;text-decoration:none;transition:box-shadow .18s,border-color .18s;}
+.fd-board .vc[hidden] {display:none!important;}
+.fd-board .vc:before,.fd-board .vc:after {content:none;}
+.fd-board .vc:hover {border-color:#b7c9df;box-shadow:0 4px 12px #0f172a0c;transform:none;}
+.fd-board .vc:focus-visible {outline:3px solid #2563eb;outline-offset:3px;}
+.vc-heading {display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:20px;}
+.vc-identity {min-width:0;}
+.fd-board .vc-plate-text {display:block;color:#1e293b;font-size:1.08rem;line-height:1.3;font-weight:750;letter-spacing:.02em;}
+.fd-board .vc-model {display:block;margin:3px 0 0;color:#64748b;font-size:.74rem;line-height:1.35;overflow-wrap:anywhere;white-space:normal;text-align:left;}
+.fd-board .vc .vc-status {position:static;display:inline-block;width:auto;max-width:48%;flex-shrink:0;margin:0;padding:4px 8px;border:0;border-radius:20px;background:#e5f5ed;box-shadow:none;color:#15803d;font-size:.65rem;font-weight:650;line-height:1.25;text-transform:none;letter-spacing:0;white-space:normal;text-align:center;}
+.fd-board .vc--crlv-vencido .vc-status,.fd-board .vc--revisao-vencida .vc-status {background:#fef2f2;color:#b91c1c;}
+.fd-board .vc--manutencao .vc-status,.fd-board .vc--multa .vc-status,.fd-board .vc--contrato .vc-status,.fd-board .vc--revisao-proxima .vc-status {background:#fff4de;color:#b45309;}
+.vc-facts {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;flex:1;margin-bottom:12px;}
+.vc-label {display:block;margin-bottom:3px;color:#64748b;font-size:.7rem;line-height:1.4;}
+.vc-value {display:block;font-size:.9rem;line-height:1.4;font-weight:700;}
+.vc-facts small {display:block;margin-top:2px;font-size:.68rem;line-height:1.4;}
+.vc-documents {display:flex;flex-wrap:wrap;gap:6px 14px;padding:10px 0;border-top:1px solid #e2e8f0;color:#64748b;font-size:.7rem;line-height:1.5;}
+.vc-documents strong {font-weight:600;}
+.vc-muted {color:#94a3b8;}.vc-good {color:#15803d;}.vc-danger {color:#dc2626;}.vc-warning {color:#b45309;}
+.vc-open {display:block;margin-top:2px;padding:8px;border:1px solid #e2e8f0;border-radius:8px;color:#173358;text-align:center;font-size:.73rem;font-weight:600;}
+.fd-board .fd-empty {grid-column:1/-1;padding:24px;}
+@media(max-width:1200px){.fd-board .fd-grid {grid-template-columns:repeat(3,minmax(0,1fr));}}
+@media(max-width:900px){.fd-board .fd-grid {grid-template-columns:repeat(2,minmax(0,1fr));}}
+@media(max-width:560px){.fd-board {padding:14px;}.fd-board .fd-grid {grid-template-columns:minmax(0,1fr);}}
 </style>
 
 <div id="dashboard-informe-modal">
@@ -300,98 +134,34 @@
     <div class="fd-board-head">
         <div>
             <span class="fd-board-title">Frota em Operação</span>
-            <a href="{% url 'vehicle_image_credits' %}" target="_blank" rel="noopener" style="font-size:12px;color:#475569;">Créditos das fotos</a>
         </div>
         <span class="fd-board-counter"><b id="visibleCount">{{ plate_rows|length }}</b> exibidos</span>
     </div>
 
     <div class="fd-grid" id="fdGrid">
         {% for v in plate_rows %}
-        <a class="vc vc--{{ v.priority }}"
-           data-alerts="{{ v.alerts }}"
-           data-plate="{{ v.plate }}"
-           href="{% url 'vehicle_dossier' v.id %}">
-
-            <span class="vc-status">{{ v.priority_label }}</span>
-
-            <div class="vc-plate-wrap">
-                <div class="vl-plate">
-                    <div class="vl-plate-top">
-                        <span>BRASIL</span>
-                        <span>BR</span>
-                    </div>
-                    <div class="vl-plate-num">
-                        {{ v.plate }}
-                    </div>
-                </div>
+        <a class="vc vc--{{ v.priority }}" data-alerts="{{ v.alerts }}" data-plate="{{ v.plate }}" href="{% url 'vehicle_dossier' v.id %}">
+            <div class="vc-heading">
+                <div class="vc-identity"><strong class="vc-plate-text">{{ v.plate }}</strong><span class="vc-model">{{ v.brand }} {% if v.model %}{{ v.model }}{% else %}Modelo não informado{% endif %}</span></div>
+                <span class="vc-status">{{ v.priority_label }}</span>
             </div>
-
-            <div class="vc-model">
-                {% if v.model %}{{ v.model }}{% else %}Modelo não informado{% endif %}
-            </div>
-
-            <div class="vc-image" data-vehicle-image-url="{{ v.image_url|default:'' }}" data-image-state="{% if v.image_url %}pending{% else %}missing_catalog_or_data{% endif %}" style="position:relative;height:110px;display:flex;align-items:center;justify-content:center;margin-bottom:10px;">
-                {% if v.image_url %}<img alt="{{ v.image_alt }}" loading="lazy" decoding="async" width="220" height="110" style="position:absolute;inset:0;opacity:0;width:100%;height:110px;object-fit:contain;">{% endif %}
-                <svg role="img" aria-label="Imagem indisponível: {{ v.image_alt }}" viewBox="0 0 100 60" style="width:100%;height:52px;color:#94a3b8;max-width:84px;" fill="none" stroke="currentColor" stroke-width="3"><path d="M15 34l8-17h49l12 17 6 4v12H10V38z"/><path d="M23 33h53M48 18v15"/><circle cx="27" cy="49" r="6" fill="currentColor"/><circle cx="74" cy="49" r="6" fill="currentColor"/></svg>
-            </div>
-            {% if v.image_info %}<small style="display:block;text-align:center;font-size:9px;color:#64748b;line-height:1.4;margin:-5px 0 8px;overflow-wrap:anywhere;" title="{{ v.image_info.note }}">Foto: {{ v.image_info.author }} · {{ v.image_info.license }}</small>{% endif %}
-            <div class="vc-details">
-                {% if "crlv_vencido" in v.alerts %}
-                <div class="vc-detail-item" title="Licenciamento anual vencido">
-                    <span class="vc-detail-icon">🚨</span>
-                    <strong style="color:#dc2626;">CRLV VENCIDO — regularização necessária</strong>
-                </div>
-                {% endif %}
-                <div class="vc-detail-item" title="Quilometragem Atual">
-                    <span class="vc-detail-icon">⏱</span>
-                    <span>{% if v.mileage is not None %}{{ v.mileage }} km{% else %}Sem quilometragem registrada{% endif %}</span>
-                </div>
-                {% if v.revision_info %}
-                    <div class="vc-detail-item" title="Intervalo da revisão preventiva">
-                        <span class="vc-detail-icon">🔧</span>
-                        <span>Revisão a cada {{ v.revision_info.interval_km }} km</span>
-                    </div>
-                    {% if v.revision_info.status == "SEM_HISTORICO" %}
-                    <div class="vc-detail-item" title="Nenhuma revisão concluída e referência inicial ainda não definida">
-                        <span class="vc-detail-icon">⚠️</span>
-                        <span style="color: #b45309;">Sem histórico de revisão</span>
-                    </div>
-                    {% else %}
-                    {% if v.revision_info.km_prox_revisao is not None %}
-                    <div class="vc-detail-item" title="Próxima Revisão">
-                        <span class="vc-detail-icon">🔧</span>
-                        <span>Rev. {{ v.revision_info.km_prox_revisao }} km</span>
-                    </div>
-                    {% endif %}
+            <div class="vc-facts">
+                <div><span class="vc-label">Quilometragem</span><strong class="vc-value">{% if v.mileage is not None %}{{ v.mileage|floatformat:"0g" }} km{% else %}Não informada{% endif %}</strong></div>
+                <div><span class="vc-label">Próxima revisão</span>
+                    {% if v.revision_info.status == 'SEM_HISTORICO' %}<strong class="vc-value vc-warning">Sem histórico</strong>
+                    {% elif v.revision_info.km_prox_revisao is not None %}<strong class="vc-value">{{ v.revision_info.km_prox_revisao|floatformat:"0g" }} km</strong>
+                    {% else %}<strong class="vc-value vc-muted">Não definida</strong>{% endif %}
                     {% if v.revision_info.km_faltando is not None %}
-                    <div class="vc-detail-item">
-                        <span class="vc-detail-icon">
-                            {% if v.revision_info.status == "DEVIDA" %}🚨{% else %}⏳{% endif %}
-                        </span>
-                        <span>
-                            {% if v.revision_info.status == "DEVIDA" %}
-                                <strong style="color: #dc2626;">Vencida {{ v.revision_info.ultrapassado }} km</strong>
-                            {% else %}
-                                Faltam {{ v.revision_info.km_faltando }} km
-                            {% endif %}
-                        </span>
-                    </div>
-                    {% else %}
-                    <div class="vc-detail-item">Faltam: sem quilometragem registrada</div>
+                    <small class="{% if v.revision_info.status == 'DEVIDA' %}vc-danger{% elif v.revision_info.status == 'PROXIMA' %}vc-warning{% else %}vc-muted{% endif %}">{% if v.revision_info.status == 'DEVIDA' %}Vencida {{ v.revision_info.ultrapassado|floatformat:"0g" }} km{% else %}faltam {{ v.revision_info.km_faltando|floatformat:"0g" }} km{% endif %}</small>
                     {% endif %}
-                    {% endif %}
-                {% endif %}
-                {% if v.driver_name %}
-                <div class="vc-detail-item" title="Motorista: {{ v.driver_name }}">
-                    <span class="vc-detail-icon">👤</span>
-                    <span>CNH {% if v.cnh_expiration %}{{ v.cnh_expiration|date:"d/m/Y" }}{% else %}?{% endif %}</span>
+                    {% if v.revision_info.interval_km %}<small class="vc-muted">Intervalo: {{ v.revision_info.interval_km|floatformat:"0g" }} km</small>{% endif %}
                 </div>
-                {% endif %}
             </div>
-
-            <div class="vc-footer" style="justify-content: flex-end;">
-                <span class="vc-arrow">→</span>
+            <div class="vc-documents">
+                <span>CRLV <strong class="{{ v.crlv_tone }}">{{ v.crlv_label }}</strong></span>
+                <span title="{% if v.driver_name %}Motorista: {{ v.driver_name }}{% if v.cnh_expiration %} · Validade: {{ v.cnh_expiration|date:'d/m/Y' }}{% endif %}{% else %}Nenhum motorista vinculado{% endif %}">CNH <strong class="{{ v.cnh_tone }}">{{ v.cnh_label }}</strong></span>
             </div>
+            <span class="vc-open">Ver prontuário</span>
         </a>
         {% empty %}
         <div class="fd-empty">Nenhum veículo com placa atual cadastrada.</div>
@@ -484,7 +254,6 @@
     });
 })();
 </script>
-<script src="{% static 'ui/vehicle_images.js' %}?v=2" defer></script>
 {% endblock %}
 
 

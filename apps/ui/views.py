@@ -216,16 +216,12 @@ def dashboard(request):
         else:
             rev_dict = None
 
-        from apps.fleet.vehicle_images import imagem_veiculo
-        image_make = vehicle.brand.name if vehicle.brand else ''
-        image_model = vehicle.model.name if vehicle.model else ''
-        image_info = imagem_veiculo(image_make, image_model, vehicle.model_year)
-        image_url = image_info["url"] if image_info else None
+        cnh_days = (active_driver.cnh_expiration - today).days if active_driver and active_driver.cnh_expiration else None
         plate_rows.append({
-            "image_url": image_url,
-            "image_info": image_info,
-            "image_alt": f"{image_make} {image_model}".strip() or "Veículo sem marca ou modelo",
-
+            "brand": vehicle.brand.name if vehicle.brand else "",
+            "crlv_exercise": vehicle.crlv_exercise,
+            "cnh_label": "Sem motorista" if not active_driver else "Não informada" if cnh_days is None else "Vencida" if cnh_days < 0 else f"Vence em {cnh_days} dias" if cnh_days <= 30 else "Regular",
+            "cnh_tone": "vc-muted" if cnh_days is None else "vc-danger" if cnh_days < 0 else "vc-warning" if cnh_days <= 30 else "vc-good",
             "id": vehicle.id,
             "plate": current_plate,
             "model": vehicle.model.name if vehicle.model else "",
@@ -277,6 +273,19 @@ def dashboard(request):
     licensing_calendar_missing_count = len({
         item["vehicle_id"] for item in crlv_alerts.get("calendar_missing", [])
     })
+
+    for row in plate_rows:
+        pending = licensing_by_vehicle.get(str(row['id']))
+        if 'crlv_vencido' in row['alerts']:
+            row.update(crlv_label='Vencido', crlv_tone='vc-danger')
+        elif pending:
+            row.update(crlv_label=pending['status_label'], crlv_tone='vc-warning')
+        elif not row['crlv_exercise']:
+            row.update(crlv_label='Não informado', crlv_tone='vc-muted')
+        elif row['crlv_exercise'] >= today.year:
+            row.update(crlv_label='Regular', crlv_tone='vc-good')
+        else:
+            row.update(crlv_label='Verificar calendário', crlv_tone='vc-muted')
 
     context = {
         "show_sector_filter": can_select_sector(request.user),

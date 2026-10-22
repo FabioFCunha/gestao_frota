@@ -59,23 +59,25 @@ class DashboardImageTests(TestCase):
         VehiclePlate.objects.create(vehicle=self.vehicle,plate='ABC1D23',kind='CURRENT')
         self.client.force_login(self.user)
 
-    def test_dashboard_only_generates_urls_and_keeps_card_information(self):
+    def test_dashboard_compact_cards_keep_information_without_vehicle_images(self):
         with patch('requests.get',side_effect=AssertionError('No server external requests')):
             response=self.client.get('/')
         self.assertEqual(response.status_code,200)
-        self.assertContains(response,'vehicle_models/chevrolet-onix.jpg')
-        self.assertContains(response,'Créditos das fotos')
-        self.assertContains(response,'loading="lazy"')
-        self.assertContains(response,'object-fit:contain')
+        self.assertContains(response,'vc-plate-text')
+        self.assertContains(response,'Ver prontuário')
         self.assertContains(response,'ABC1D23')
-        self.assertContains(response,'Sem quilometragem registrada')
+        self.assertContains(response,'Quilometragem')
+        self.assertContains(response,'Não informada')
+        self.assertNotContains(response,'data-vehicle-image-url')
+        self.assertNotContains(response,'vl-plate-top')
 
-    def test_unknown_model_keeps_dashboard_and_svg(self):
+    def test_unknown_model_keeps_dashboard_and_does_not_invent_a_model(self):
         self.vehicle.model = None
         self.vehicle.save(update_fields=['model'])
         response=self.client.get('/')
         self.assertEqual(response.status_code,200)
-        self.assertContains(response,'Imagem indisponível: CHEV')
+        self.assertContains(response,'Modelo não informado')
+        self.assertNotContains(response,'vc-image')
         self.assertNotContains(response,'cdn.imagin.studio/getImage')
 
     def test_photo_credits_show_authors_sources_and_licenses(self):
