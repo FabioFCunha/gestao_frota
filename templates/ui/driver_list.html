@@ -20,7 +20,7 @@
                 <option value="inactive" {% if status == "inactive" %}selected{% endif %}>Motoristas inativos</option>
                 <option value="cnh_vencida" {% if status == "cnh_vencida" %}selected{% endif %}>CNHs Vencidas</option>
             </select>
-            <button type="submit" class="primary-action">Buscar</button>
+            <button type="submit" class="secondary-action">Buscar</button>
             <a class="secondary-action" href="{% url 'driver_list' %}">Limpar filtros</a>
         </form>
     </div>
