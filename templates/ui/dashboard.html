@@ -681,7 +681,7 @@
             <div class="vc-stats-grid">
                 <div class="vc-stat-col">
                     <span class="vc-stat-label">Quilometragem</span>
-                    <span class="vc-stat-val">{% if v.mileage is not None %}{{ v.mileage|floatformat:"0g" }} km{% else %}—{% endif %}</span>
+                    <span class="vc-stat-val">{% if v.mileage is not None %}{{ v.mileage|floatformat:"0g" }} km{% else %}Não informada{% endif %}</span>
                 </div>
                 <div class="vc-stat-col">
                     <span class="vc-stat-label">Próxima revisão</span>
