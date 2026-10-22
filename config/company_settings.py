@@ -30,3 +30,6 @@ CSRF_TRUSTED_ORIGINS = list(dict.fromkeys([*CSRF_TRUSTED_ORIGINS, MANAGEMENT_ORI
 HORUS_COMPANY_IDS = tuple(value.strip() for value in os.getenv(
     'HORUS_COMPANY_IDS', '5257b218-6ffe-4e70-a979-86a44a2626d8',
 ).split(',') if value.strip())
+
+CNH_REQUIRE_REVIEW_CONFIRMATION = True
+CNH_BACKGROUND_IMPORTS = os.getenv('CNH_BACKGROUND_IMPORTS', '1') == '1'

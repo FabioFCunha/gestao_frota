@@ -46,7 +46,7 @@ def legacy_cnh_images(raw):
 
 
 def _cpf_digits(text):
-    digits = re.sub(r"\D", "", text)
+    digits = re.sub(r"[^0-9]", "", text)
     if len(digits) != 11 or len(set(digits)) == 1:
         return ""
     for length in (9, 10):

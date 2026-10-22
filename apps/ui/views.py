@@ -1,3 +1,6 @@
+from django.conf import settings
+from .cnh_imports import enqueue_response, imported_document
+from .cnh_safety import review_context, audit_context
 from .exit_order_bdt import exit_order_bdt_rows
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import LoginView
@@ -1508,7 +1511,12 @@ def driver_create(request):
             if form.is_valid():
                 try:
                     with transaction.atomic():
-                        form.save()
+                        saved_driver = form.save()
+                        AuditLog.objects.create(user=request.user, module='cnh',
+                            action='MOTORISTA CADASTRADO MANUALMENTE', entity_type='driver',
+                            entity_id=saved_driver.pk, new_values={'driver_id':str(saved_driver.pk),
+                                'cpf':saved_driver.cpf, 'cnh_number':saved_driver.cnh_number},
+                            reason='Cadastro manual, sem leitura automática de documento.')
                 except (ValidationError, IntegrityError) as exc:
                     form.add_error(None, "CPF, CNH ou matrícula já cadastrados." if isinstance(exc, IntegrityError) else str(exc))
                 else:
@@ -1532,6 +1540,8 @@ def driver_create(request):
         upload_form = CNHUploadForm(request.POST, request.FILES)
         if upload_form.is_valid():
             try:
+                if getattr(settings, 'CNH_BACKGROUND_IMPORTS', False):
+                    return enqueue_response(request, upload_form.cleaned_data['file'])
                 document, preview = stage_cnh_document_for_creation(
                     file_obj=upload_form.cleaned_data["file"],
                     user=request.user,
@@ -1715,11 +1725,19 @@ def driver_create(request):
                 ).order_by("-created_at").first()
                 preview = dict(staged_preview.new_values or {}) if staged_preview else None
 
+    if request.method == 'GET' and request.GET.get('import'):
+        document, preview = imported_document(request)
+        confirm_form = CNHDriverCreateForm(initial={
+            **{field:preview.get(field, '') for field in CNHDriverCreateForm.Meta.fields},
+            'document_id':document.pk,
+        }, user=request.user, requested_sector=requested_sector)
+
     return render(request, "ui/driver_create_cnh.html", {
         "upload_form": upload_form,
         "confirm_form": confirm_form,
         "preview": preview,
         "document": document,
+        **review_context(request, preview),
         "title": "Cadastrar motorista pela CNH",
         "back_url_url": list_url,
         "requested_sector": requested_sector,
@@ -1756,7 +1774,7 @@ def driver_edit(request, pk):
             if "phone" not in request.POST:
                 values.pop("phone", None)
             driver = update_driver_document_data(driver=driver, values=values, user=request.user)
-        except (ValidationError, IntegrityError) as exc:
+        except (ValueError, ValidationError, IntegrityError) as exc:
             form.add_error(None, "CPF ou CNH já cadastrados em outro motorista." if isinstance(exc, IntegrityError) else str(exc))
         else:
             messages.success(request, "Dados documentais do motorista atualizados com sucesso!")
@@ -2479,6 +2497,8 @@ def driver_cnh(request, pk):
         upload_form = CNHUploadForm(request.POST, request.FILES)
         if upload_form.is_valid():
             try:
+                if getattr(settings, 'CNH_BACKGROUND_IMPORTS', False):
+                    return enqueue_response(request, upload_form.cleaned_data['file'], driver)
                 document, preview = stage_cnh_document_for_creation(
                     file_obj=upload_form.cleaned_data["file"], user=request.user, driver=driver,
                 )
@@ -2523,9 +2543,19 @@ def driver_cnh(request, pk):
                 document = Document.objects.filter(pk=document_id).first()
                 preview = dict(staged.new_values or {})
         driver.refresh_from_db()
+    if request.method == 'GET' and request.GET.get('import'):
+        document, preview = imported_document(request, driver)
+        previous_values = current_cnh_document_values(driver)
+        initial = {'document_id':document.pk}
+        for field in CNHDriverUpdateForm.Meta.fields:
+            initial[field] = preview.get(field) or getattr(driver, field, '') or previous_values.get(field, '')
+        confirm_form = CNHDriverUpdateForm(initial=initial, instance=driver, user=request.user, requested_sector=requested_sector)
+
     return render(request, "ui/driver_create_cnh.html", {
         "upload_form": upload_form, "confirm_form": confirm_form, "preview": preview,
         "document": document, "cnh_target": driver, "back_url_url": list_url,
+        **review_context(request, preview, driver),
+        **audit_context(driver),
         "requested_sector": requested_sector,
     })
 

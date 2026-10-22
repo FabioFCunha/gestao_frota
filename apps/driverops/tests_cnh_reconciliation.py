@@ -15,7 +15,7 @@ class CNHReconciliationTests(TestCase):
     def setUp(self):
         self.actor = get_user_model().objects.create_superuser(username='owner', email='owner@example.com', password='test-only')
         self.company = Company.objects.create(name='SEGOV teste')
-        self.source = Driver.objects.create(name='Motorista Teste', cpf='123.456.789-01',
+        self.source = Driver.objects.create(name='Motorista Teste', cpf='123.456.789-09',
             cnh_number='11111111111', cnh_category='D', cnh_expiration=date(2034, 4, 14))
         self.target = Driver.objects.create(name='MOTORISTA TESTE', horus_user_id=uuid.uuid4())
         RecordOwner.objects.create(company=self.company, model_label='fleet.driver', object_id=self.target.pk)
@@ -54,13 +54,13 @@ class CNHReconciliationTests(TestCase):
         self.link.refresh_from_db()
         self.assertFalse(self.source.active)
         self.assertEqual(self.source.cpf, '')
-        self.assertEqual(self.target.cpf, '123.456.789-01')
+        self.assertEqual(self.target.cpf, '123.456.789-09')
         self.assertEqual(self.target.cnh_expiration, date(2034, 4, 14))
         self.assertEqual(self.link.object_id, self.target.pk)
         self.assertEqual(BDT.objects.get(pk=self.bdt.pk).driver_id, self.target.pk)
         self.assertEqual(VehicleDriverAssignment.objects.get(pk=self.assignment.pk).driver_id, self.target.pk)
         audit = AuditLog.objects.get(action='RECONCILIAÇÃO CNH')
-        self.assertEqual(audit.old_values['source']['cpf'], '123.456.789-01')
+        self.assertEqual(audit.old_values['source']['cpf'], '123.456.789-09')
         from apps.fleet.services import current_cnh_document_values
         self.assertEqual(current_cnh_document_values(self.target)['father_name'], 'Pai teste')
         self.assertTrue(RecordOwner.objects.filter(company=self.company, model_label='fleet.document', object_id=self.document.pk).exists())

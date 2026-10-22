@@ -83,3 +83,15 @@ urlpatterns += [
     path("cnh/<uuid:pk>/foto-previa/", cnh_photo_preview, name="cnh_photo_preview"),
     path("motoristas/<uuid:pk>/foto-cnh/", driver_cnh_photo, name="driver_cnh_photo"),
 ]
+
+from .cnh_safety import cnh_original, identity_correction
+urlpatterns += [
+    path("cnh/<uuid:pk>/original/", cnh_original, name="cnh_original"),
+    path("motoristas/<uuid:pk>/corrigir-cpf/", identity_correction, name="driver_identity_correction"),
+]
+
+from .cnh_imports import import_status, import_monitor
+urlpatterns += [
+    path("cnh/importacoes/", import_monitor, name="cnh_import_monitor"),
+    path("cnh/importacoes/<uuid:pk>/", import_status, name="cnh_import_status"),
+]

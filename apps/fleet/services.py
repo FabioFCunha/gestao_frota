@@ -1251,6 +1251,8 @@ def link_document(*, document, obj, user):
             reason=f"Documento vinculado a {ct.model} ID {obj.id}"
         )
         
+    from .models import CNHImportJob
+    CNHImportJob.objects.filter(document=document, state='ready').update(state='confirmed')
     return relation
 
 @transaction.atomic
@@ -2098,10 +2100,21 @@ def stage_cnh_document_for_creation(*, file_obj, user, driver=None):
     if file_obj.size > getattr(settings, "DOCUMENT_MAX_UPLOAD_SIZE", 10 * 1024 * 1024):
         raise ValueError("O arquivo excede o limite permitido.")
 
+    import time
+    import logging
+    from .cnh_review import quality_issues
+    started = time.monotonic()
+    import hashlib
     file_obj.seek(0)
-    extracted = extract_cnh_data(file_obj)
+    source_hash = hashlib.sha256(file_obj.read()).hexdigest()
+    file_obj.seek(0)
+    extracted = dict(extract_cnh_data(file_obj))
+    extracted['_read_issues'] = quality_issues(extracted)
+    extracted['_duration_ms'] = round((time.monotonic() - started) * 1000)
+    logging.getLogger(__name__).info('cnh_read duration_ms=%s issue_count=%s',
+        extracted['_duration_ms'], len(extracted['_read_issues']))
     if driver is not None:
-        validate_cnh_identity(extracted=extracted, values=extracted, driver=driver)
+        validate_cnh_identity(extracted=extracted, values=extracted, driver=driver, check_values=False)
     file_obj.seek(0)
 
     document_type, _ = DocumentType.objects.get_or_create(
@@ -2116,7 +2129,7 @@ def stage_cnh_document_for_creation(*, file_obj, user, driver=None):
         status=status,
         created_by=user,
     )
-    DocumentVersion.objects.create(
+    version = DocumentVersion.objects.create(
         document=document,
         file=file_obj,
         original_filename=file_obj.name,
@@ -2125,6 +2138,8 @@ def stage_cnh_document_for_creation(*, file_obj, user, driver=None):
         file_size=file_obj.size,
         uploaded_by=user,
     )
+    extracted['_source_version_id'] = str(version.pk)
+    extracted['_source_sha256'] = source_hash
     AuditLog.objects.create(
         user=user,
         module="cnh",
@@ -2135,8 +2150,11 @@ def stage_cnh_document_for_creation(*, file_obj, user, driver=None):
     )
     return document, extracted
 
-def validate_cnh_identity(*, extracted, values, driver=None):
+def validate_cnh_identity(*, extracted, values, driver=None, check_values=True):
     """Confere a identidade do PDF, do formulário e dos cadastros de todos os setores."""
+    from .cnh_review import validate_review_values
+    if check_values:
+        validate_review_values(values)
     def digits(value):
         return re.sub(r"[^0-9]", "", str(value or ""))
     for field, label in (("cpf", "CPF"), ("cnh_number", "registro da CNH")):
@@ -2174,6 +2192,21 @@ def cnh_confirmation_source(*, document_id, user, driver=None):
     if staged is None:
         raise ValueError("O documento não está disponível nesta sessão. Envie a CNH novamente.")
     extracted = dict(staged.new_values or {})
+    if not document.active or document.status.name.casefold() == 'arquivado':
+        raise ValueError('Documento inativo ou arquivado. Envie a CNH novamente.')
+    version = document.versions.order_by('-created_at').first()
+    if not version or str(version.pk) != extracted.get('_source_version_id'):
+        raise ValueError('A versão do PDF mudou ou precisa ser conferida novamente. Envie a CNH novamente.')
+    import hashlib
+    try:
+        with version.file.open('rb') as source:
+            digest = hashlib.sha256()
+            for chunk in source.chunks():
+                digest.update(chunk)
+    except OSError as exc:
+        raise ValueError('Não foi possível ler o PDF original. Envie o documento novamente.') from exc
+    if digest.hexdigest() != extracted.get('_source_sha256'):
+        raise ValueError('O PDF foi alterado após a leitura. Envie a CNH novamente.')
     if driver is not None and extracted.get("driver_id") != str(driver.pk):
         raise ValueError("A CNH foi enviada para outro motorista.")
     if DocumentRelation.objects.filter(document=document).exists() or AuditLog.objects.filter(
@@ -2251,6 +2284,8 @@ def current_cnh_document_values(driver):
 @transaction.atomic
 def update_driver_document_data(*, driver, values, user, preserve_blank=False):
     """Salva campos da CNH e auditoria sem modificar vínculo, setor ou arquivos."""
+    from .cnh_review import validate_review_values
+    validate_review_values(values)
     from .models import DriverCNHHistory
     from django.utils.dateparse import parse_date
     driver = Driver.objects.select_for_update().get(pk=driver.pk)

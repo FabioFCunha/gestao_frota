@@ -101,6 +101,7 @@ class Driver(NamedModel):
     cnh_expiration = models.DateField("Validade CNH", null=True, blank=True)
 
     class Meta(NamedModel.Meta):
+        permissions = [("correct_driver_identity", "Pode corrigir CPF com documento e auditoria")]
         constraints = [
             models.UniqueConstraint(
                 models.Func(models.F("cpf"), models.Value(r"[^0-9]"), models.Value(""), models.Value("g"), function="REGEXP_REPLACE", output_field=models.CharField()),
@@ -630,3 +631,31 @@ class DriverCNHPhoto(BaseModel):
         settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL,
         related_name="confirmed_driver_photos",
     )
+
+
+class CNHImportJob(BaseModel):
+    class State(models.TextChoices):
+        PENDING = "pending", "Na fila"
+        RUNNING = "running", "Lendo documento"
+        READY = "ready", "Pronto para conferir"
+        CONFIRMED = "confirmed", "Conferência concluída"
+        FAILED = "failed", "Falha na leitura"
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    driver = models.ForeignKey(Driver, null=True, blank=True, on_delete=models.PROTECT)
+    document = models.ForeignKey(Document, null=True, blank=True, on_delete=models.PROTECT)
+    company_uuid = models.UUIDField(null=True, blank=True)
+    sector = models.CharField(max_length=40, blank=True)
+    file = models.FileField(upload_to="cnh_imports/%Y/%m/")
+    sha256 = models.CharField(max_length=64)
+    original_filename = models.CharField(max_length=255, blank=True)
+    photo = models.BinaryField(null=True, blank=True, editable=False)
+    state = models.CharField(max_length=12, choices=State.choices, default=State.PENDING, db_index=True)
+    attempts = models.PositiveSmallIntegerField(default=0)
+    error = models.CharField(max_length=500, blank=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+    duration_ms = models.PositiveIntegerField(null=True, blank=True)
+
+    @property
+    def duration_seconds(self):
+        return round(self.duration_ms / 1000, 1) if self.duration_ms is not None else None

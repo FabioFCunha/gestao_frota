@@ -59,6 +59,10 @@ def extract_cnh_photo(raw):
 
 
 def document_photo(document):
+    from apps.fleet.models import CNHImportJob
+    cached = CNHImportJob.objects.filter(document=document, state__in=['ready','confirmed'], photo__isnull=False).values_list('photo', flat=True).first()
+    if cached is not None:
+        return bytes(cached) or None
     version = document.versions.order_by("-created_at").first()
     if not version:
         return None

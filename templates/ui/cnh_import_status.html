@@ -1,0 +1,39 @@
+{% extends 'ui/base.html' %}
+{% block heading %}Leitura da CNH{% endblock %}
+{% block content %}
+<section class="panel" style="padding:28px;max-width:700px;margin:auto;" id="cnh-job" data-state="{{ job.state }}">
+<p>{{ job.original_filename }}</p>
+<h2 id="job-label">{{ job.get_state_display }}</h2>
+<p>O PDF está salvo para processamento. Você pode sair desta página e voltar a este endereço; os dados do motorista só serão alterados após a conferência.</p>
+<p id="job-error" role="status">{{ job.error }}</p>
+<p id="job-connection" role="status"></p>
+<p>Etapas: envio recebido → leitura → conferência → confirmação.</p>
+<div id="job-retry" {% if job.state != 'failed' %}hidden{% endif %}>
+<p>{{ retry_error }}</p><form method="post">{% csrf_token %}<button class="primary-action">Tentar novamente</button></form>
+<p>Se a falha persistir, envie outra cópia do documento pela tela do motorista.</p></div>
+{% if job.driver_id %}<p><a href="{% url 'driver_cnh' job.driver_id %}">Voltar à CNH deste motorista</a></p>
+{% if perms.fleet.correct_driver_identity %}<p><a href="{% url 'driver_identity_correction' job.driver_id %}">Corrigir CPF cadastrado com documento e auditoria</a></p>{% endif %}{% endif %}
+<p><a href="{% url 'driver_list' %}">Voltar aos motoristas</a></p>
+</section>
+<script>
+(() => {
+ const root=document.getElementById('cnh-job'); let stopped=root.dataset.state==='failed'; let elapsed=0;
+ async function poll(){
+  if(stopped)return;
+  try{
+   const r=await fetch('?format=json',{credentials:'same-origin',cache:'no-store'});
+   if(!r.ok)throw new Error('request');
+   const data=await r.json();
+   document.getElementById('job-label').textContent=data.label;
+   document.getElementById('job-error').textContent=data.error||'';
+   if(data.review_url){location.assign(data.review_url);return;}
+   if(data.state==='failed'){stopped=true;document.getElementById('job-retry').hidden=false;return;}
+   elapsed+=3;
+   document.getElementById('job-connection').textContent=elapsed>90?'A leitura está demorando. Você pode voltar mais tarde a este endereço.':'';
+  }catch(e){document.getElementById('job-connection').textContent='Não foi possível consultar agora. Tentaremos novamente; seu envio continua salvo.';}
+  setTimeout(poll,3000);
+ }
+ setTimeout(poll,1000);
+})();
+</script>
+{% endblock %}

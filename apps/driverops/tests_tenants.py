@@ -153,7 +153,9 @@ class TenantTests(TestCase):
         extracted = {'name': 'Motorista Alfa', 'cpf': '12345678901', 'cnh_number': '12345678902', 'raw_text': 'CNH teste'}
         with scope(self.a, self.ua), patch('apps.fleet.cnh.extract_cnh_data', return_value=extracted):
             document, values = stage_cnh_document_for_creation(file_obj=SimpleUploadedFile('cnh.pdf', b'%PDF-1.4 teste'), user=self.ua)
-            self.assertEqual(values, extracted)
+            self.assertEqual({key:values[key] for key in extracted}, extracted)
+            self.assertIsInstance(values['_duration_ms'], int)
+            self.assertIn('_read_issues', values)
             self.assertEqual(document.versions.count(), 1)
             self.assertTrue(AuditLog.objects.filter(entity_id=document.pk).exists())
         with scope(self.b, self.ub):

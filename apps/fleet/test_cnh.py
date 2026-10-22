@@ -640,10 +640,10 @@ class CNHExistingDriverTests(TestCase):
         self.upload()
         first = self.document()
         self.assertEqual(self.confirm(first).status_code, 302)
-        second_values = {**self.extracted, "cnh_expiration": "2035-12-31", "cnh_issue_date": "2030-06-05"}
+        second_values = {**self.extracted, "cnh_expiration": "2035-12-31", "cnh_issue_date": "2026-06-05"}
         self.assertEqual(self.upload(second_values).status_code, 200)
         second = Document.objects.exclude(pk=first.pk).get()
-        response = self.confirm(second, cnh_expiration="2035-12-31", cnh_issue_date="2030-06-05")
+        response = self.confirm(second, cnh_expiration="2035-12-31", cnh_issue_date="2026-06-05")
         self.assertEqual(response.status_code, 302)
         self.driver.refresh_from_db()
         self.assertEqual(self.driver.cnh_expiration, date(2035, 12, 31))
@@ -1028,7 +1028,7 @@ class CNHExistingDriverTests(TestCase):
             **self.extracted, "name": "NOME ADULTERADO", "father_name": "JOSE DA SILVA CORRIGIDO",
             "mother_name": "ANA PEREIRA CORRIGIDA", "issuing_authority": "COMAER", "issuing_state": "RJ",
             "nationality": "BRASILEIRA", "identity_document": "123456789", "location": "RIO DE JANEIRO RJ",
-            "cnh_issue_date": "05/06/2030", "cnh_expiration": "31/12/2035",
+            "cnh_issue_date": "05/06/2026", "cnh_expiration": "31/12/2035",
             "registration": "MATRICULA ADULTERADA", "phone": "(21) 98888-7777", "email": "outra@example.com",
             "active": "False", "sectors": [],
         })
@@ -1051,7 +1051,7 @@ class CNHExistingDriverTests(TestCase):
         self.assertEqual(values["father_name"], "JOSE DA SILVA CORRIGIDO")
         self.assertEqual(values["mother_name"], "ANA PEREIRA CORRIGIDA")
         self.assertEqual(values["identity_document"], "123456789")
-        self.assertEqual(values["cnh_issue_date"], "2030-06-05")
+        self.assertEqual(values["cnh_issue_date"], "2026-06-05")
         original_audit = AuditLog.objects.get(action="CNH ATUALIZADA A PARTIR DE PDF", entity_id=document.pk)
         self.assertEqual(original_audit.new_values["form_values"]["father_name"], "JOSE DA SILVA")
         response = self.client.get(f"/motoristas/{self.driver.pk}/editar/?sector=adm")
@@ -1325,7 +1325,7 @@ class CNHRenewalIdentityTests(TestCase):
     def setUp(self):
         self.driver = Driver.objects.create(
             name="Motorista Teste",
-            cpf="123.456.789-01",
+            cpf="123.456.789-09",
             cnh_number="11111111111",
             cnh_category="B",
         )
@@ -1342,7 +1342,7 @@ class CNHRenewalIdentityTests(TestCase):
     def test_cnh_validation_accepts_new_number_for_same_cpf_and_driver(self):
         from apps.fleet.services import validate_cnh_identity
 
-        values = {"cpf": "12345678901", "cnh_number": "22222222222"}
+        values = {"cpf": "12345678909", "cnh_number": "22222222222"}
         validate_cnh_identity(
             extracted=dict(values),
             values=dict(values),
@@ -1357,7 +1357,7 @@ class CNHRenewalIdentityTests(TestCase):
             cpf="987.654.321-00",
             cnh_number="22222222222",
         )
-        values = {"cpf": "12345678901", "cnh_number": "22222222222"}
+        values = {"cpf": "12345678909", "cnh_number": "22222222222"}
         with self.assertRaisesRegex(ValueError, "já pertence a outro motorista"):
             validate_cnh_identity(
                 extracted=dict(values),
