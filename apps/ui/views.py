@@ -216,7 +216,14 @@ def dashboard(request):
         else:
             rev_dict = None
 
+        from apps.fleet.vehicle_images import url_imagem_veiculo
+        image_make = vehicle.brand.name if vehicle.brand else ''
+        image_model = vehicle.model.name if vehicle.model else ''
+        image_url = url_imagem_veiculo(image_make, image_model, vehicle.model_year)
         plate_rows.append({
+            "image_url": image_url,
+            "image_alt": f"{image_make} {image_model}".strip() or "Veículo sem marca ou modelo",
+
             "id": vehicle.id,
             "plate": current_plate,
             "model": vehicle.model.name if vehicle.model else "",

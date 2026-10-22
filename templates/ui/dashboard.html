@@ -1,4 +1,5 @@
 {% extends 'ui/base.html' %}
+{% load static %}
 {% block title %}Dashboard | Gestão de Frotas{% endblock %}
 
 {% block heading %}Gestão da Frota{% endblock %}
@@ -328,6 +329,10 @@
                 {% if v.model %}{{ v.model }}{% else %}Modelo não informado{% endif %}
             </div>
 
+            <div class="vc-image" data-vehicle-image-url="{{ v.image_url|default:'' }}" data-image-state="{% if v.image_url %}pending{% else %}missing_configuration_or_data{% endif %}" style="position:relative;height:110px;display:flex;align-items:center;justify-content:center;margin-bottom:10px;">
+                {% if v.image_url %}<img alt="{{ v.image_alt }}" loading="lazy" decoding="async" width="220" height="110" style="position:absolute;inset:0;opacity:0;width:100%;height:110px;object-fit:contain;">{% endif %}
+                <svg role="img" aria-label="Imagem indisponível: {{ v.image_alt }}" viewBox="0 0 100 60" style="width:100%;height:110px;color:#64748b;" fill="none" stroke="currentColor" stroke-width="3"><path d="M15 34l8-17h49l12 17 6 4v12H10V38z"/><path d="M23 33h53M48 18v15"/><circle cx="27" cy="49" r="6" fill="currentColor"/><circle cx="74" cy="49" r="6" fill="currentColor"/></svg>
+            </div>
             <div class="vc-details">
                 {% if "crlv_vencido" in v.alerts %}
                 <div class="vc-detail-item" title="Licenciamento anual vencido">
@@ -477,6 +482,7 @@
     });
 })();
 </script>
+<script src="{% static 'ui/vehicle_images.js' %}?v=1" defer></script>
 {% endblock %}
 
 
