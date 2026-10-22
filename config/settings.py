@@ -78,6 +78,3 @@ LOGIN_REDIRECT_URL = "/"
 
 # Photon-compatible address lookup; configure a dedicated instance for larger fleets.
 DRIVER_GEOCODER_URL = os.getenv("DRIVER_GEOCODER_URL", "https://photon.komoot.io/api/")
-
-# IMAGIN customer key is provided at runtime; never commit a real value.
-IMAGIN_CUSTOMER_KEY = os.getenv("IMAGIN_CUSTOMER_KEY", "")

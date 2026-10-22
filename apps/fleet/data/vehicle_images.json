@@ -1,0 +1,32 @@
+{
+  "toyota/corolla": {
+    "image": "ui/vehicle_models/toyota-corolla.jpg",
+    "title": "2024 Toyota Corolla LE in Classic Silver Metallic, front right.jpg",
+    "author": "Mr.choppers",
+    "source": "https://commons.wikimedia.org/wiki/File:2024_Toyota_Corolla_LE_in_Classic_Silver_Metallic,_front_right.jpg",
+    "license": "CC BY-SA 3.0",
+    "license_url": "https://creativecommons.org/licenses/by-sa/3.0",
+    "changes": "Miniatura redimensionada pelo Wikimedia Commons; sem recorte ou outras alterações.",
+    "note": "Imagem ilustrativa do modelo; ano, cor e versão podem diferir."
+  },
+  "chevrolet/onix": {
+    "image": "ui/vehicle_models/chevrolet-onix.jpg",
+    "title": "Chevrolet Onix II front Brazil.jpg",
+    "author": "Heduardo55",
+    "source": "https://commons.wikimedia.org/wiki/File:Chevrolet_Onix_II_front_Brazil.jpg",
+    "license": "CC0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/deed.en",
+    "changes": "Miniatura redimensionada pelo Wikimedia Commons; sem recorte ou outras alterações.",
+    "note": "Imagem ilustrativa do modelo; ano, cor e versão podem diferir."
+  },
+  "byd/king": {
+    "image": "ui/vehicle_models/byd-king.jpg",
+    "title": "2022 BYD Destroyer 05.jpg",
+    "author": "User3204",
+    "source": "https://commons.wikimedia.org/wiki/File:2022_BYD_Destroyer_05.jpg",
+    "license": "CC BY-SA 4.0",
+    "license_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "changes": "Miniatura redimensionada pelo Wikimedia Commons; sem recorte ou outras alterações.",
+    "note": "Imagem ilustrativa do modelo; ano, cor e versão podem diferir."
+  }
+}

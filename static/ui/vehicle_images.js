@@ -1,4 +1,4 @@
-/* Direct IMAGIN CDN delivery; only the browser holds image bytes. */
+/* Curated Commons photos served locally; no external API or customer key. */
 (() => {
   const pending = new Map();
   async function load(url) {
@@ -8,10 +8,6 @@
       const response = await fetch(url, {signal: controller.signal, credentials: 'omit', cache: 'default', redirect: 'error'});
       if (!response.ok) throw new Error('http_' + response.status);
       if (!(response.headers.get('content-type') || '').startsWith('image/')) throw new Error('invalid_content_type');
-      const found = (response.headers.get('x-imaginstudio-request-found') || '').toLowerCase();
-      const resolved = (response.headers.get('x-imaginstudio-request-resolved') || '').toLowerCase();
-      if (found === 'false' || resolved === 'false') throw new Error('placeholder');
-      if (found !== 'true' || resolved !== 'true') throw new Error('unverified');
       const blob = await response.blob();
       if (!blob.size || blob.size > 8 * 1024 * 1024) throw new Error('invalid_image_size');
       return URL.createObjectURL(blob);

@@ -1,11 +1,8 @@
-"""IMAGIN URLs and metadata only; vehicle/document data is never changed."""
+"""Curated Wikimedia Commons model photos; no keys or runtime external requests."""
 import re
 import unicodedata
 from functools import lru_cache
-from urllib.parse import urlencode
 
-import requests
-from django.conf import settings
 
 # Edit these aliases as new CRLV abbreviations are encountered.
 BRAND_ALIASES = {
@@ -50,49 +47,48 @@ def normalize_vehicle(marca, modelo, ano=None):
     return make, family, year
 
 
-@lru_cache(maxsize=2048)
-def _cached_url(customer, make, family, year):
-    params = {'customer': customer, 'make': make, 'modelFamily': family,
-              'angle': '23', 'zoomtype': 'fullscreen'}
-    if year:
-        params['modelYear'] = year
-    return 'https://cdn.imagin.studio/getImage?' + urlencode(params)
+@lru_cache(maxsize=1)
+def image_catalog():
+    import json
+    from pathlib import Path
+    path = Path(__file__).with_name('data') / 'vehicle_images.json'
+    try:
+        data = json.loads(path.read_text())
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def imagem_veiculo(marca, modelo, ano=None):
+    from django.templatetags.static import static
+    make, family, _ = normalize_vehicle(marca, modelo, ano)
+    if not make or not family:
+        return None
+    item = image_catalog().get(f'{make}/{family}')
+    if not isinstance(item, dict):
+        return None
+    # Only curated local assets and fully credited, reusable Commons files.
+    path = item.get('image', '')
+    if not path.startswith('ui/vehicle_models/') or '..' in path:
+        return None
+    if not all(item.get(field) for field in ('author', 'source', 'license', 'license_url')):
+        return None
+    if item['license'] not in {'CC0', 'CC BY 4.0', 'CC BY-SA 3.0', 'CC BY-SA 4.0'}:
+        return None
+    return {**item, 'url': static(path)}
 
 
 def url_imagem_veiculo(marca, modelo, ano=None):
-    make, family, year = normalize_vehicle(marca, modelo, ano)
-    customer = getattr(settings, 'IMAGIN_CUSTOMER_KEY', '').strip()
-    if not customer or not make or not family:
-        return None
-    return _cached_url(customer, make, family, year)
-
-
-def classify_headers(headers):
-    headers = {k.lower(): str(v).lower() for k,v in headers.items()}
-    if not headers.get('content-type', '').startswith('image/'):
-        return 'invalid_content_type'
-    found = headers.get('x-imaginstudio-request-found')
-    resolved = headers.get('x-imaginstudio-request-resolved')
-    if found == 'false' or resolved == 'false':
-        return 'placeholder'
-    # Unknown responses are not presented as verified model photographs.
-    if found != 'true' or resolved != 'true':
-        return 'unverified'
-    return 'image'
+    item = imagem_veiculo(marca, modelo, ano)
+    return item['url'] if item else None
 
 
 def probe_image(marca, modelo, ano=None):
-    make, family, year = normalize_vehicle(marca, modelo, ano)
+    from django.contrib.staticfiles import finders
+    make, family, _ = normalize_vehicle(marca, modelo, ano)
     if not make or not family:
         return 'missing_data'
-    url = url_imagem_veiculo(marca, modelo, ano)
-    if not url:
-        return 'missing_customer_key'
-    try:
-        # Inspect metadata without downloading/storing licensed image files.
-        response = requests.head(url, timeout=5, allow_redirects=False)
-        if response.status_code != 200:
-            return 'http_' + str(response.status_code)
-        return classify_headers(response.headers)
-    except requests.RequestException:
-        return 'network_error'
+    item = imagem_veiculo(marca, modelo, ano)
+    if not item:
+        return 'missing_catalog'
+    return 'image' if finders.find(item['image']) else 'missing_file'

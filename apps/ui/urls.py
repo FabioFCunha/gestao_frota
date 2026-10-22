@@ -98,3 +98,6 @@ urlpatterns += [
 
 from .driver_delete import driver_delete
 urlpatterns += [path("motoristas/<uuid:pk>/excluir/", driver_delete, name="driver_delete")]
+
+from .vehicle_images import vehicle_image_credits
+urlpatterns += [path('creditos-imagens-veiculos/', vehicle_image_credits, name='vehicle_image_credits')]

@@ -300,6 +300,7 @@
     <div class="fd-board-head">
         <div>
             <span class="fd-board-title">Frota em Operação</span>
+            <a href="{% url 'vehicle_image_credits' %}" target="_blank" rel="noopener" style="font-size:12px;color:#475569;">Créditos das fotos</a>
         </div>
         <span class="fd-board-counter"><b id="visibleCount">{{ plate_rows|length }}</b> exibidos</span>
     </div>
@@ -329,10 +330,11 @@
                 {% if v.model %}{{ v.model }}{% else %}Modelo não informado{% endif %}
             </div>
 
-            <div class="vc-image" data-vehicle-image-url="{{ v.image_url|default:'' }}" data-image-state="{% if v.image_url %}pending{% else %}missing_configuration_or_data{% endif %}" style="position:relative;height:110px;display:flex;align-items:center;justify-content:center;margin-bottom:10px;">
+            <div class="vc-image" data-vehicle-image-url="{{ v.image_url|default:'' }}" data-image-state="{% if v.image_url %}pending{% else %}missing_catalog_or_data{% endif %}" style="position:relative;height:110px;display:flex;align-items:center;justify-content:center;margin-bottom:10px;">
                 {% if v.image_url %}<img alt="{{ v.image_alt }}" loading="lazy" decoding="async" width="220" height="110" style="position:absolute;inset:0;opacity:0;width:100%;height:110px;object-fit:contain;">{% endif %}
-                <svg role="img" aria-label="Imagem indisponível: {{ v.image_alt }}" viewBox="0 0 100 60" style="width:100%;height:110px;color:#64748b;" fill="none" stroke="currentColor" stroke-width="3"><path d="M15 34l8-17h49l12 17 6 4v12H10V38z"/><path d="M23 33h53M48 18v15"/><circle cx="27" cy="49" r="6" fill="currentColor"/><circle cx="74" cy="49" r="6" fill="currentColor"/></svg>
+                <svg role="img" aria-label="Imagem indisponível: {{ v.image_alt }}" viewBox="0 0 100 60" style="width:100%;height:52px;color:#94a3b8;max-width:84px;" fill="none" stroke="currentColor" stroke-width="3"><path d="M15 34l8-17h49l12 17 6 4v12H10V38z"/><path d="M23 33h53M48 18v15"/><circle cx="27" cy="49" r="6" fill="currentColor"/><circle cx="74" cy="49" r="6" fill="currentColor"/></svg>
             </div>
+            {% if v.image_info %}<small style="display:block;text-align:center;font-size:9px;color:#64748b;line-height:1.4;margin:-5px 0 8px;overflow-wrap:anywhere;" title="{{ v.image_info.note }}">Foto: {{ v.image_info.author }} · {{ v.image_info.license }}</small>{% endif %}
             <div class="vc-details">
                 {% if "crlv_vencido" in v.alerts %}
                 <div class="vc-detail-item" title="Licenciamento anual vencido">
@@ -482,7 +484,7 @@
     });
 })();
 </script>
-<script src="{% static 'ui/vehicle_images.js' %}?v=1" defer></script>
+<script src="{% static 'ui/vehicle_images.js' %}?v=2" defer></script>
 {% endblock %}
 
 

@@ -5,7 +5,7 @@ from apps.fleet.vehicle_images import normalize_vehicle, probe_image
 
 
 class Command(BaseCommand):
-    help = 'Consulta metadados IMAGIN e lista fallbacks; não altera veículos nem baixa imagens.'
+    help = 'Confere catálogo local Wikimedia Commons e lista fallbacks; não altera veículos.'
 
     def add_arguments(self, parser):
         parser.add_argument('--samples', action='store_true', help='Testa Corolla, Onix e BYD King sem consultar o banco.')
