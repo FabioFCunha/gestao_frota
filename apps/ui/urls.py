@@ -95,3 +95,6 @@ urlpatterns += [
     path("cnh/importacoes/", import_monitor, name="cnh_import_monitor"),
     path("cnh/importacoes/<uuid:pk>/", import_status, name="cnh_import_status"),
 ]
+
+from .driver_delete import driver_delete
+urlpatterns += [path("motoristas/<uuid:pk>/excluir/", driver_delete, name="driver_delete")]

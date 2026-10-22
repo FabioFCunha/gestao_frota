@@ -1,0 +1,20 @@
+{% extends 'ui/base.html' %}
+{% block title %}Excluir motorista | Gestão de Frotas{% endblock %}
+{% block heading %}Excluir motorista{% endblock %}
+{% block content %}
+<article class="panel" style="max-width:720px;margin:0 auto;">
+  <h2>{{ driver.name }}</h2>
+  <p>O motorista será retirado da lista de ativos e seus vínculos ativos com veículos serão encerrados. CNHs, documentos, BDTs e ordens de saída permanecerão no histórico.</p>
+  <p>O cadastro poderá ser consultado pelo filtro <strong>Motoristas inativos</strong>.</p>
+  {% if driver.active %}
+  <form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:20px;">
+      <button type="submit" class="primary-action" style="background:#b91c1c;">Confirmar exclusão</button>
+      <a class="secondary-action" href="{{ back_url_url }}">Cancelar</a>
+    </div>
+  </form>
+  {% else %}<p>Este motorista já está inativo.</p><a href="{{ back_url_url }}">Voltar</a>{% endif %}
+</article>
+{% endblock %}
