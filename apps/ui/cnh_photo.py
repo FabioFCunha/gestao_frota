@@ -53,15 +53,18 @@ def document_photo(document):
     version = document.versions.order_by("-created_at").first()
     if not version:
         return None
-    with version.file.open("rb") as file:
-        return extract_cnh_photo(file.read())
+    try:
+        with version.file.open("rb") as file:
+            return extract_cnh_photo(file.read())
+    except OSError as exc:
+        raise ValueError("Não foi possível ler o PDF da CNH para salvar a foto. Envie o documento novamente.") from exc
 
 
 def save_confirmed_cnh_photo(*, driver, document, user):
     # Chamado somente após a validação da identidade e do documento.
     image = document_photo(document)
     if not image:
-        return False
+        raise ValueError("Não foi possível extrair a foto desta CNH. Desmarque a opção de salvar a foto para confirmar somente os dados.")
 
     previous = DriverCNHPhoto.objects.filter(driver=driver).first()
     old_document = str(previous.document_id) if previous else None
@@ -72,6 +75,7 @@ def save_confirmed_cnh_photo(*, driver, document, user):
             "document": document,
             "image": image,
             "confirmed_by": user,
+            "active": True,
         },
     )
     AuditLog.objects.create(
@@ -126,7 +130,10 @@ def cnh_photo_preview(request, pk):
     ):
         raise Http404
 
-    image = document_photo(document)
+    try:
+        image = document_photo(document)
+    except ValueError as exc:
+        raise Http404 from exc
     if not image:
         raise Http404
     return image_response(image)

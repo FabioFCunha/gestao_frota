@@ -46,7 +46,7 @@ jobs:
       - run: python manage.py makemigrations --check --dry-run
       - run: python manage.py test apps.driverops --verbosity 2
       - name: Legacy PDF and order regression checks
-        run: python manage.py test apps.fleet.test_cnh apps.fleet.test_crlv apps.fleet.test_crlv_chassi apps.ui.test_exit_orders apps.ui.test_dossier_actions apps.ui.test_custody_datetime apps.fleet.tests.VehicleInspectionTests --verbosity 2
+        run: python manage.py test apps.fleet.test_cnh apps.fleet.test_crlv apps.fleet.test_crlv_chassi apps.fleet.test_pdf_import apps.ui.test_exit_orders apps.ui.test_dossier_actions apps.ui.test_custody_datetime apps.fleet.tests.VehicleInspectionTests --verbosity 2
         env:
           DJANGO_SETTINGS_MODULE: config.settings
       - run: pip install playwright

@@ -47,10 +47,10 @@ def _cnh_ocr(image, *, data=False):
 
 def _all_text(raw):
     """Extrai texto nativo e usa OCR quando o PDF só contém cabeçalhos/QR."""
+    from .pdf_validation import identification_pdf_reader
+    reader = identification_pdf_reader(raw)
     text = ""
     try:
-        from pypdf import PdfReader
-        reader = PdfReader(io.BytesIO(raw))
         text = "\n".join(page.extract_text() or "" for page in reader.pages)
     except Exception:
         text = ""
@@ -75,7 +75,7 @@ def _all_text(raw):
 
     try:
         from pdf2image import convert_from_bytes
-        pages = convert_from_bytes(raw, dpi=300)
+        pages = convert_from_bytes(raw, dpi=300, timeout=30)
         ocr_text = "\n".join(
             _cnh_ocr(page)
             for page in pages
@@ -443,6 +443,7 @@ def extract_cnh_data(file_obj):
     if nationality_match:
         nationality = nationality_match.group(1).replace(" ", "")
     parents = []
+    filiation_tail = ""
     filiation_match = re.search(r"FILIA[CÇ][AÃ]O", upper, re.IGNORECASE)
     if filiation_match:
         filiation_tail = upper[filiation_match.end():filiation_match.end() + 240]
@@ -484,8 +485,21 @@ def extract_cnh_data(file_obj):
             ]
             if len(parts) >= 2:
                 parents = parts[:2]
-    father = _clean(parents[0]) if parents else ""
-    mother = _clean(parents[1]) if len(parents) > 1 else ""
+    # Um único nome sem rótulo não informa se é pai ou mãe. Não atribua
+    # automaticamente à primeira posição, inclusive quando o pai não consta.
+    father = _clean(parents[0]) if len(parents) == 2 else ""
+    mother = _clean(parents[1]) if len(parents) == 2 else ""
+    for label, field in ((r"PAI", "father"), (r"M[AÃ]E", "mother")):
+        explicit = re.search(
+            rf"(?:^|\n)\s*{label}\s*[:.-]?\s*([^\n]+)", filiation_tail,
+        )
+        if explicit:
+            value = _clean(explicit.group(1))
+            if re.fullmatch(r"[A-ZÀ-ÖØ-Þ'’.-]+(?:\s+[A-ZÀ-ÖØ-Þ'’.-]+){1,7}", value):
+                if field == "father":
+                    father = value
+                else:
+                    mother = value
 
     if not father or not mother or not re.fullmatch(
         r"BRASILEIR[OA](?:\([A-Z]\))?", nationality,

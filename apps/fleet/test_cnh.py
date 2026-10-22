@@ -55,6 +55,22 @@ class CNHExtractionTests(SimpleTestCase):
         self.assertTrue(data["text_extraction_succeeded"])
 
 
+    @patch("apps.fleet.cnh._cnh_field_text", return_value="")
+    @patch("apps.fleet.cnh._all_text")
+    def test_single_parent_is_not_assumed_to_be_the_father(self, all_text, _extra):
+        all_text.return_value = "FILIAÇÃO\nANA PEREIRA DA SILVA\nVALIDADE\n31/12/2030"
+        data = extract_cnh_data(b"pdf")
+        self.assertEqual(data["father_name"], "")
+        self.assertEqual(data["mother_name"], "")
+
+    @patch("apps.fleet.cnh._cnh_field_text", return_value="")
+    @patch("apps.fleet.cnh._all_text")
+    def test_explicit_mother_without_father_is_recognized(self, all_text, _extra):
+        all_text.return_value = "FILIAÇÃO\nPAI: ---\nMÃE: ANA PEREIRA DA SILVA\nVALIDADE\n31/12/2030"
+        data = extract_cnh_data(b"pdf")
+        self.assertEqual(data["father_name"], "")
+        self.assertEqual(data["mother_name"], "ANA PEREIRA DA SILVA")
+
     @patch("apps.fleet.cnh._all_text")
     def test_extracts_supplemental_fields_when_ocr_values_share_label_lines(self, all_text):
         all_text.return_value = """
@@ -775,6 +791,90 @@ class CNHExistingDriverTests(TestCase):
         self.driver.refresh_from_db()
         self.assertEqual(self.driver.cnh_number, self.extracted["cnh_number"])
         self.assertTrue(self.driver.sectors.filter(pk=self.sector.pk).exists())
+
+    def test_creation_flow_renewal_preserves_fields_missing_from_ocr(self):
+        self.upload()
+        self.assertEqual(self.confirm(self.document()).status_code, 302)
+        self.user.user_permissions.add(Permission.objects.get(codename="add_driver"))
+        self.url = "/motoristas/novo/?sector=adm"
+        sparse = {**self.extracted, "birth_date": "", "father_name": "", "mother_name": ""}
+        self.upload(sparse)
+        document = Document.objects.order_by("-created_at").first()
+        response = self.confirm(document, birth_date="", father_name="", mother_name="")
+        self.assertEqual(response.status_code, 302)
+        self.driver.refresh_from_db()
+        self.assertEqual(self.driver.birth_date, date(1985, 2, 1))
+        self.assertEqual(self.driver.phone, "21999999999")
+        audit = AuditLog.objects.get(action="CNH ATUALIZADA A PARTIR DE PDF", entity_id=document.pk)
+        self.assertEqual(audit.new_values["form_values"]["father_name"], "JOSE DA SILVA")
+        self.assertEqual(audit.new_values["form_values"]["mother_name"], "ANA PEREIRA")
+        self.assertEqual(audit.new_values["form_values"]["birth_date"], "1985-02-01")
+        self.assertEqual(Driver.objects.count(), 1)
+
+    def test_creation_invalid_document_uuid_returns_form_error(self):
+        self.user.user_permissions.add(Permission.objects.get(codename="add_driver"))
+        self.url = "/motoristas/novo/?sector=adm"
+        from types import SimpleNamespace
+        response = self.confirm(SimpleNamespace(pk="invalid"))
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("document_id", response.context["confirm_form"].errors)
+        self.assertIsNone(response.context["preview"])
+
+    def test_creation_preview_does_not_expose_another_users_upload(self):
+        self.user.user_permissions.add(Permission.objects.get(codename="add_driver"))
+        self.url = "/motoristas/novo/?sector=adm"
+        self.upload()
+        document = self.document()
+        other = get_user_model().objects.create_user(username="other-cnh-creator")
+        other.sectors.add(self.sector)
+        other.user_permissions.add(Permission.objects.get(codename="add_driver"))
+        self.client.force_login(other)
+        response = self.confirm(document, cpf="invalid")
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.context["preview"])
+        self.assertIsNone(response.context["document"])
+        self.assertFalse(DocumentRelation.objects.exists())
+
+    def test_confirming_photo_reactivates_existing_photo(self):
+        from apps.fleet.models import DriverCNHPhoto
+        from apps.ui.cnh_photo import save_confirmed_cnh_photo
+        self.upload()
+        document = self.document()
+        photo = DriverCNHPhoto.objects.create(
+            driver=self.driver, document=document, image=b"old", active=False,
+        )
+        with patch("apps.ui.cnh_photo.document_photo", return_value=b"new"):
+            self.assertTrue(save_confirmed_cnh_photo(driver=self.driver, document=document, user=self.user))
+        photo.refresh_from_db()
+        self.assertTrue(photo.active)
+        self.assertEqual(bytes(photo.image), b"new")
+
+    def test_unrecognized_photo_is_reported_and_existing_photo_is_preserved(self):
+        from apps.fleet.models import DriverCNHPhoto
+        self.upload()
+        document = self.document()
+        photo = DriverCNHPhoto.objects.create(driver=self.driver, document=document, image=b"existing")
+        with patch("apps.ui.cnh_photo.document_photo", return_value=None):
+            response = self.confirm(document, save_cnh_photo="1")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Desmarque a opção")
+        photo.refresh_from_db()
+        self.assertEqual(bytes(photo.image), b"existing")
+        self.assertFalse(DocumentRelation.objects.exists())
+        self.assertEqual(self.confirm(document).status_code, 302)
+
+    def test_missing_photo_file_returns_error_and_rolls_back_confirmation(self):
+        self.upload()
+        document = self.document()
+        version = document.versions.get()
+        version.file.storage.delete(version.file.name)
+        response = self.confirm(document, save_cnh_photo="1")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Envie o documento novamente")
+        self.driver.refresh_from_db()
+        self.assertEqual(self.driver.cnh_number, "")
+        self.assertFalse(DocumentRelation.objects.exists())
+        self.assertFalse(AuditLog.objects.filter(action="CNH ATUALIZADA A PARTIR DE PDF").exists())
 
     def test_creation_flow_renewal_preserves_photo_confirmation(self):
         self.user.user_permissions.add(Permission.objects.get(codename="add_driver"))

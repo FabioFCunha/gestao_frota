@@ -87,9 +87,9 @@ def _first_token(value):
 def _all_text(raw, name):
     text = ""
     if name.endswith(".pdf"):
+        from .pdf_validation import identification_pdf_reader
+        reader = identification_pdf_reader(raw)
         try:
-            from pypdf import PdfReader
-            reader = PdfReader(io.BytesIO(raw))
             text = "\n".join(page.extract_text() or "" for page in reader.pages)
         except Exception:
             text = ""
@@ -100,10 +100,10 @@ def _all_text(raw, name):
             from PIL import Image
             if name.endswith(".pdf"):
                 from pdf2image import convert_from_bytes
-                pages = convert_from_bytes(raw, dpi=250)
-                text = "\n".join(pytesseract.image_to_string(page, lang="por") for page in pages)
+                pages = convert_from_bytes(raw, dpi=250, timeout=30)
+                text = "\n".join(pytesseract.image_to_string(page, lang="por", timeout=30) for page in pages)
             else:
-                text = pytesseract.image_to_string(Image.open(io.BytesIO(raw)), lang="por")
+                text = pytesseract.image_to_string(Image.open(io.BytesIO(raw)), lang="por", timeout=30)
         except Exception:
             text = ""
 

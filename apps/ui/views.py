@@ -1494,7 +1494,7 @@ def fine_list(request):
 def driver_create(request):
     from urllib.parse import urlencode
     from apps.fleet.models import Document, AuditLog, Driver
-    from apps.fleet.services import stage_cnh_document_for_creation, link_document, cnh_confirmation_source, validate_cnh_identity, update_driver_document_data
+    from apps.fleet.services import stage_cnh_document_for_creation, link_document, cnh_confirmation_source, validate_cnh_identity, update_driver_document_data, current_cnh_document_values
 
     requested_sector = request.GET.get("sector")
     list_url = reverse("driver_list")
@@ -1644,7 +1644,11 @@ def driver_create(request):
                                 driver=existing_driver,
                                 values=confirm_form.cleaned_data,
                                 user=request.user,
+                                preserve_blank=True,
                             )
+                            # Registra os valores efetivamente preservados/salvos, não
+                            # os campos vazios de uma leitura incompleta do OCR.
+                            reviewed_values.update(current_cnh_document_values(driver))
                             link_document(document=document, obj=driver, user=request.user)
                             AuditLog.objects.create(
                                 user=request.user,
@@ -1694,10 +1698,16 @@ def driver_create(request):
                         messages.success(request, f"Motorista {driver.name} cadastrado após conferência da CNH.")
                     return redirect(list_url)
 
-        if confirm_form and confirm_form.is_bound and confirm_form.data.get("document_id"):
-            document = Document.objects.filter(pk=confirm_form.data.get("document_id")).first()
+        if confirm_form and confirm_form.is_bound:
+            # O campo UUID só é seguro após a validação do formulário. A
+            # conferência pertence ao usuário que enviou o PDF.
+            document_id = confirm_form.cleaned_data.get("document_id")
+            document = Document.objects.filter(
+                pk=document_id, created_by=request.user, document_type__name="CNH",
+            ).first() if document_id else None
             if document:
                 staged_preview = AuditLog.objects.filter(
+                    user=request.user,
                     entity_type="document",
                     entity_id=document.id,
                     module="cnh",

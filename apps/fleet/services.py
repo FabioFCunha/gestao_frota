@@ -1261,13 +1261,13 @@ def stage_crlv_document(*, vehicle, file_obj, user):
     ext=file_obj.name.rsplit('.',1)[-1].lower() if '.' in file_obj.name else ''
     if ext not in {'pdf','jpg','jpeg','png'}: raise ValueError('CRLV deve ser PDF, JPG ou PNG.')
     if file_obj.size > getattr(settings,'DOCUMENT_MAX_UPLOAD_SIZE',10*1024*1024): raise ValueError('O arquivo excede o limite permitido.')
+    file_obj.seek(0)
+    data = extract_crlv_data(file_obj)
+    file_obj.seek(0)
     typ,_=DocumentType.objects.get_or_create(name='CRLV',defaults={'active':True}); status,_=DocumentStatus.objects.get_or_create(name='Ativo',defaults={'active':True})
     doc=Document.objects.create(title=f'CRLV - {file_obj.name}',document_type=typ,status=status,created_by=user)
     DocumentVersion.objects.create(document=doc,file=file_obj,original_filename=file_obj.name,file_extension=ext,mime_type=mimetypes.guess_type(file_obj.name)[0] or 'application/octet-stream',file_size=file_obj.size,uploaded_by=user)
-    # DocumentVersion pode consumir o ponteiro do UploadedFile durante o save.
-    # O extrator precisa receber o arquivo desde o início, não a posição EOF.
-    file_obj.seek(0)
-    link_document(document=doc,obj=vehicle,user=user); data=extract_crlv_data(file_obj)
+    link_document(document=doc,obj=vehicle,user=user)
     AuditLog.objects.create(user=user,module='crlv',action='ANEXO DE CRLV PARA CONFERÊNCIA',entity_type='document',entity_id=doc.id,new_values={'vehicle_id':str(vehicle.id),**data})
     return doc,data
 
@@ -1486,6 +1486,10 @@ def stage_crlv_document_for_creation(*, file_obj, user):
     if file_obj.size > getattr(settings, "DOCUMENT_MAX_UPLOAD_SIZE", 10 * 1024 * 1024):
         raise ValueError("O arquivo excede o limite permitido.")
 
+    file_obj.seek(0)
+    data = extract_crlv_data(file_obj)
+    file_obj.seek(0)
+
     typ, _ = DocumentType.objects.get_or_create(name="CRLV", defaults={"active": True})
     status, _ = DocumentStatus.objects.get_or_create(name="Ativo", defaults={"active": True})
     document = Document.objects.create(
@@ -1503,8 +1507,6 @@ def stage_crlv_document_for_creation(*, file_obj, user):
         file_size=file_obj.size,
         uploaded_by=user,
     )
-    file_obj.seek(0)
-    data = extract_crlv_data(file_obj)
     AuditLog.objects.create(
         user=user,
         module="crlv",
@@ -2247,7 +2249,7 @@ def current_cnh_document_values(driver):
     return dict((audit.new_values or {}).get("form_values") or {}) if audit else {}
 
 @transaction.atomic
-def update_driver_document_data(*, driver, values, user):
+def update_driver_document_data(*, driver, values, user, preserve_blank=False):
     """Salva campos da CNH e auditoria sem modificar vínculo, setor ou arquivos."""
     from .models import DriverCNHHistory
     from django.utils.dateparse import parse_date
@@ -2263,7 +2265,8 @@ def update_driver_document_data(*, driver, values, user):
     for field in fields:
         old = getattr(driver, field) if field in model_fields else old_document_values.get(field, "")
         old_values[field] = old.isoformat() if hasattr(old, "isoformat") else old
-        if field not in values or (field == "name" and driver.horus_user_id):
+        if (field not in values or (field == "name" and driver.horus_user_id)
+                or (preserve_blank and values.get(field) in (None, ""))):
             value = old
         else:
             value = values[field]
