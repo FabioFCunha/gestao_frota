@@ -1,0 +1,34 @@
+{% extends 'ui/base.html' %}
+{% block content %}
+<div class="panel-title"><h1>Acompanhamento de BDTs — Hórus</h1><a class="secondary-action" href="?{{ query }}">Atualizar</a></div>
+<p><strong>Hórus</strong> · <a href="?source=app">BDTs do aplicativo</a></p>
+<p>Última sincronização: {{ last_sync|date:"d/m/Y H:i"|default:"Não informada" }}.</p>
+<p>Vínculo por viatura, motorista e período da OS. A ausência de BDT pode decorrer de atraso na sincronização.</p>
+{% if error %}<p role="alert">{{ error }}</p>{% endif %}
+<form method="get" class="panel" style="display:flex;gap:12px;flex-wrap:wrap;align-items:end;">
+<input type="hidden" name="source" value="horus">
+<label>Início <input type="date" name="start" value="{{ start }}" required></label>
+<label>Fim <input type="date" name="end" value="{{ end }}" required></label>
+<label>Veículo <select name="vehicle"><option value="">Todos</option>{% for pk,label in vehicles %}<option value="{{ pk }}" {% if vehicle_filter == pk %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+<label>Motorista <select name="driver"><option value="">Todos</option>{% for d in drivers %}<option value="{{ d.pk }}" {% if driver_filter == d.pk|stringformat:'s' %}selected{% endif %}>{{ d.name }}</option>{% endfor %}</select></label>
+<label>Situação <select name="status"><option value="">Todas</option>{% for key,label in statuses %}<option value="{{ key }}" {% if status_filter == key %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+<button type="submit" class="primary-action">Filtrar</button>
+</form>
+<div class="grid">{% for label,total in counts %}<article class="panel"><strong>{{ total }}</strong> {{ label }}</article>{% endfor %}</div>
+<article class="panel" style="overflow-x:auto;">
+<table><thead><tr><th>Veículo / motorista</th><th>OS</th><th>Situação</th><th>Abertura / KM</th><th>Fechamento / KM</th><th>Percurso / duração</th><th>Sincronização</th></tr></thead><tbody>
+{% for row in page_obj %}<tr>
+<td>{{ row.plate }}<br>{{ row.driver.name|default:'Motorista não vinculado' }}</td>
+<td>{% if row.order %}<a href="{% url 'exit_order_detail' row.order.pk %}">{{ row.order.number }}</a><br>{{ row.order.destination }}{% else %}Sem OS correspondente{% endif %}</td>
+<td>{{ row.label }}</td>
+<td>{{ row.bdt.started_at|date:'d/m/Y H:i'|default:'—' }}<br>{{ row.bdt.started_km|default_if_none:'—'|default:'—' }}</td>
+<td>{{ row.bdt.ended_at|date:'d/m/Y H:i'|default:'—' }}<br>{{ row.bdt.ended_km|default_if_none:'—'|default:'—' }}</td>
+<td>{{ row.distance|default:'—' }}<br>{{ row.duration|default:'—' }}</td>
+<td>{{ row.bdt.last_synced_at|date:'d/m/Y H:i'|default:'—' }}</td>
+</tr>{% empty %}<tr><td colspan="7">Nenhum registro no período e filtros selecionados.</td></tr>{% endfor %}
+</tbody></table>
+<p>{{ page_obj.paginator.count }} registros · Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}.
+{% if page_obj.has_previous %}<a href="?{{ query }}&page={{ page_obj.previous_page_number }}">Anterior</a>{% endif %}
+{% if page_obj.has_next %}<a href="?{{ query }}&page={{ page_obj.next_page_number }}">Próxima</a>{% endif %}</p>
+</article>
+{% endblock %}

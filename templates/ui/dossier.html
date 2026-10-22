@@ -64,126 +64,111 @@
     </div>
 </section>
 
-<!-- PLACAS -->
-<section class="grid">
-    <article class="panel">
-        <div class="panel-title"><div><h3>🪪 Placas</h3></div></div>
-        <table>
-            <thead><tr><th>PLACA</th><th>TIPO</th><th>DESDE</th><th>STATUS</th></tr></thead>
-            <tbody>
-                {% for p in all_plates %}
-                <tr>
-                    <td><strong>{{ p.plate }}</strong></td>
-                    <td>{% if p.kind == 'CURRENT' %}Oficial{% else %}Reservada{% endif %}</td>
-                    <td>{{ p.starts_on|date:"d/m/Y" }}</td>
-                    <td>{% if not p.ends_on %}<span class="tag">Ativa</span>{% else %}Encerrada em {{ p.ends_on|date:"d/m/Y" }}{% endif %}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </article>
-
-    <!-- IDENTIFICAÇÃO -->
-    <article class="panel">
-        <div class="panel-title" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;"><div><h3>🚗 Identificação</h3></div>{% if perms.fleet.change_vehicle %}<a class="primary-action" href="{% url 'vehicle_crlv' vehicle.id %}">Inserir / atualizar CRLV</a>{% endif %}</div>
-        <ul style="list-style:none;padding:0;line-height:2;">
-            <li><strong>Marca:</strong> {{ vehicle.brand.name|default:"-" }}</li>
-            <li><strong>Modelo:</strong> {{ vehicle.model.name|default:"-" }}</li>
-            <li><strong>Versão:</strong> {{ vehicle.version|default:"-" }}</li>
-            <li><strong>Ano fabricação / modelo:</strong> {{ vehicle.manufacture_year|default:"-" }} / {{ vehicle.model_year|default:"-" }}</li>
-            <li><strong>Cor:</strong> {{ vehicle.color|default:"-" }}</li>
-            <li><strong>Combustível:</strong> {{ vehicle.fuel|default:"-" }}</li>
-            <li><strong>Categoria:</strong> {{ vehicle.category|default:"-" }}</li>
-            <li><strong>Espécie / tipo:</strong> {{ vehicle.vehicle_type|default:"-" }}</li>
-            <li><strong>RENAVAM:</strong> {{ vehicle.renavam|default:"-" }}</li>
-            <li><strong>Chassi:</strong> {{ vehicle.chassi|default:"-" }}</li>
-            <li><strong>CRLV confirmado:</strong> {{ vehicle.crlv_exercise|default:"-" }}</li>
-            <li><strong>Blindado:</strong> {% if vehicle.armored %}SIM{% else %}NÃO{% endif %}</li>
-        </ul>
-    </article>
-</section>
-
-<!-- DADOS DO CRLV -->
-<section class="panel" style="margin-top:20px;">
-    <div class="panel-title"><div><h3>📄 Dados do CRLV</h3></div></div>
-    {% if latest_crlv %}
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px 24px;">
-        <div><strong>Exercício:</strong> {{ latest_crlv.exercise }}</div>
-        <div><strong>Placa no documento:</strong> {{ latest_crlv.plate|default:"-" }}</div>
-        <div><strong>RENAVAM:</strong> {{ latest_crlv.renavam|default:"-" }}</div>
-        <div><strong>Chassi:</strong> {{ latest_crlv.chassi|default:"-" }}</div>
-        <div><strong>Fabricação:</strong> {{ latest_crlv.extracted_data.manufacture_year|default:"-" }}</div>
-        <div><strong>Ano modelo:</strong> {{ latest_crlv.extracted_data.model_year|default:"-" }}</div>
-        <div><strong>Cor:</strong> {{ latest_crlv.extracted_data.color|default:"-" }}</div>
-        <div><strong>Combustível:</strong> {{ latest_crlv.extracted_data.fuel|default:"-" }}</div>
-        <div><strong>Categoria:</strong> {{ latest_crlv.extracted_data.category|default:"-" }}</div>
-        <div><strong>Espécie / tipo:</strong> {{ latest_crlv.extracted_data.vehicle_type|default:"-" }}</div>
-        <div><strong>Motor:</strong> {{ vehicle.motor|default:"-" }}</div>
-        <div><strong>Potência / cilindrada:</strong> {{ vehicle.power_cylinder|default:"-" }}</div>
-        <div><strong>PBT:</strong> {{ vehicle.gross_weight|default:"-" }}</div>
-        <div><strong>CMT:</strong> {{ vehicle.cmt|default:"-" }}</div>
-        <div><strong>Eixos:</strong> {{ vehicle.axles|default:"-" }}</div>
-        <div><strong>Lotação:</strong> {{ vehicle.seating|default:"-" }}</div>
-        <div><strong>Carroceria:</strong> {{ vehicle.bodywork|default:"-" }}</div>
-        <div style="grid-column:1/-1;"><strong>Proprietário:</strong> {{ latest_crlv.extracted_data.owner_name|default:"-" }} — {{ latest_crlv.extracted_data.owner_document|default:"-" }}</div>
-        <div style="grid-column:1/-1;"><strong>Observações:</strong> {{ latest_crlv.extracted_data.observation|default:"-" }}</div>
-    </div>
-    {% else %}
-    <p>Nenhum CRLV confirmado.</p>
-    {% endif %}
-</section>
-
 <!-- KM E REVISÃO -->
-<section class="grid">
-    <article class="panel">
-        <div class="panel-title"><div><h3>📊 Quilometragem e Revisão</h3></div></div>
-        <div style="display:flex;gap:30px;flex-wrap:wrap;padding:10px 0;">
-            <div style="text-align:center;">
-                <p style="font-size:2em;font-weight:bold;margin:0;">{{ km_atual|default:0 }}</p>
-                <small>KM Atual</small>
+<section class="grid dossier-operational-grid">
+    <article class="panel dossier-revision-card {% if revisao_status == 'DEVIDA' or revisao_status == 'VENCIDA' %}dossier-revision-card--due{% elif revisao_status == 'PROXIMA' %}dossier-revision-card--near{% endif %}">
+        <div class="dossier-revision-header">
+            <h3><i data-lucide="gauge" aria-hidden="true"></i> Quilometragem e Revisão</h3>
+            {% if revisao_status == 'DEVIDA' or revisao_status == 'VENCIDA' %}<span class="dossier-revision-badge">Revisão devida</span>
+            {% elif revisao_status == 'PROXIMA' %}<span class="dossier-revision-badge">Revisão próxima</span>
+            {% elif revisao_status == 'SEM_QUILOMETRAGEM' or revisao_status == 'SEM_HISTORICO' %}<span class="dossier-revision-badge dossier-revision-badge--unknown">Pendente</span>
+            {% else %}<span class="dossier-revision-badge">Em dia</span>{% endif %}
+        </div>
+        <div class="dossier-revision-body">
+            <div>
+                <div class="dossier-revision-distance">{% if revision_distance is not None %}{{ revision_distance|floatformat:'0g' }}<span>km</span>{% else %}—{% endif %}</div>
+                <p class="dossier-revision-description">{% if revisao_status == 'SEM_QUILOMETRAGEM' %}Informe a quilometragem para calcular a próxima revisão.
+                {% elif revisao_status == 'SEM_HISTORICO' %}Inicialize a referência da primeira revisão.
+                {% elif revisao_status == 'DEVIDA' or revisao_status == 'VENCIDA' %}{% if revision_distance %}acima da quilometragem da revisão{% else %}revisão na quilometragem atual{% endif %}
+                {% else %}restantes até a próxima revisão{% endif %}</p>
             </div>
-            {% if km_prox_revisao %}
-            <div style="text-align:center;">
-                <p style="font-size:2em;font-weight:bold;margin:0;">{{ km_prox_revisao }}</p>
-                <small>Próxima Revisão</small>
-            </div>
-            <div style="text-align:center;">
-                {% if revisao_status == 'DEVIDA' or revisao_status == 'VENCIDA' %}
-                    <p style="font-size:2em;font-weight:bold;margin:0;color:#c0392b;">{{ km_faltando }} km</p>
-                    <small><strong style="color:#c0392b">⚠ REVISÃO VENCIDA</strong></small>
-                {% elif revisao_status == 'PROXIMA' %}
-                    <p style="font-size:2em;font-weight:bold;margin:0;color:#e67e22;">{{ km_faltando }} km</p>
-                    <small><strong style="color:#e67e22">⚡ REVISÃO PRÓXIMA</strong></small>
-                {% else %}
-                    <p style="font-size:2em;font-weight:bold;margin:0;color:#27ae60;">{{ km_faltando }} km</p>
-                    <small style="color:#27ae60">✓ Em dia</small>
-                {% endif %}
+            {% if revision_progress is not None %}
+            <div>
+                <div class="dossier-revision-track" role="progressbar" aria-label="Quilometragem atual em relação à próxima revisão" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ revision_progress }}">
+                    <span class="dossier-revision-fill" style="width:{{ revision_progress }}%;"></span>
+                </div>
+                <div class="dossier-revision-scale"><span>0 km</span><strong>{{ revision_progress }}% percorrido</strong><span>{{ km_prox_revisao|floatformat:'0g' }} km</span></div>
             </div>
             {% endif %}
+            <div class="dossier-revision-stats">
+                <div><strong>{% if km_atual is not None %}{{ km_atual|floatformat:'0g' }} km{% else %}—{% endif %}</strong><span>KM atual</span></div>
+                <div><strong>{% if km_prox_revisao is not None %}{{ km_prox_revisao|floatformat:'0g' }} km{% else %}—{% endif %}</strong><span>Próxima revisão</span></div>
+            </div>
         </div>
-        {% if revisao_status == 'SEM_QUILOMETRAGEM' %}<p>Informe a quilometragem para calcular a próxima revisão.</p>{% elif revisao_status == 'SEM_HISTORICO' %}<p>Inicialize a referência da primeira revisão para iniciar o ciclo de 10.000 km.</p>{% endif %}
     </article>
 
     <!-- OPERACIONAL -->
-    <article class="panel">
-        <div class="panel-title"><div><h3>👤 Operacional</h3></div></div>
-        <ul style="list-style:none;padding:0;line-height:2;">
-            <li><strong>Motorista:</strong> {% if active_driver %}{{ active_driver.name }} {% if active_driver.phone %}({{ active_driver.phone }}){% endif %}{% else %}{{ motorista|default:"-" }}{% endif %}</li>
-            <li><strong>SEI / Acautelamento:</strong> {% if active_custody %}{{ active_custody.sei_number }}{% else %}{{ vehicle.custody_info|default:"-" }}{% endif %}</li>
-            {% if active_custody %}<li><strong>Início do acautelamento:</strong> {{ active_custody.started_on|date:"d/m/Y" }}{% if active_custody.ended_on %} — encerrado em {{ active_custody.ended_on|date:"d/m/Y" }}{% endif %}</li>{% endif %}
-            <li><strong>Oficina:</strong> {{ oficina|default:"-" }}</li>
-            <li><strong>Unidade:</strong> {{ vehicle.unit.name|default:"-" }}</li>
-            <li><strong>Base:</strong> {{ vehicle.base.name|default:"-" }}</li>
-            <li><strong>Locadora:</strong> {{ vehicle.renter.name|default:"-" }}</li>
-            {% if vehicle.contract %}
-            <li><strong>Contrato:</strong> {{ vehicle.contract.number }} (até {{ vehicle.contract.ends_on|date:"d/m/Y" }})</li>
+    <article class="panel dossier-operational-card">
+        <div class="dossier-card-heading"><h3><i data-lucide="user-round" aria-hidden="true"></i> Operacional</h3></div>
+        <div class="dossier-driver-heading">
+            {% if active_driver_has_photo %}
+            <img class="dossier-driver-photo" src="{% url 'driver_cnh_photo' active_driver.pk %}"
+                 alt="Foto de {{ active_driver.name }}" width="84" height="108" loading="lazy">
+            {% else %}
+            <div class="dossier-driver-placeholder" aria-hidden="true">{% if active_driver %}{{ active_driver.name|first|upper }}{% if active_driver.name.split|length > 1 %}{{ active_driver.name.split|last|first|upper }}{% endif %}{% else %}<i data-lucide="user-round"></i>{% endif %}</div>
             {% endif %}
-        </ul>
+            <div class="dossier-driver-identity">
+                <span>Motorista</span>
+                <strong>{% if active_driver %}{{ active_driver.name }}{% else %}{{ motorista|default:"Não informado" }}{% endif %}</strong>
+                {% if active_driver.phone %}<span>{{ active_driver.phone }}</span>{% endif %}
+                {% if vehicle.unit %}<span class="dossier-driver-unit">{{ vehicle.unit.name }}</span>{% endif %}
+            </div>
+        </div>
+        <h4 class="dossier-operational-section">Acautelamento</h4>
+        <dl class="dossier-info-grid">
+            <div class="dossier-info-field"><dt>SEI / Acautelamento</dt><dd>{% if active_custody %}{{ active_custody.sei_number }}{% else %}{{ vehicle.custody_info|default:"—" }}{% endif %}</dd></div>
+            <div class="dossier-info-field"><dt>Início do acautelamento</dt><dd>{{ active_custody.started_on|date:"d/m/Y"|default:"—" }}</dd></div>
+            <div class="dossier-info-field"><dt>Unidade</dt><dd>{{ vehicle.unit.name|default:"—" }}</dd></div>
+            <div class="dossier-info-field"><dt>Base</dt><dd>{{ vehicle.base.name|default:"—" }}</dd></div>
+            <div class="dossier-info-field"><dt>Oficina</dt><dd>{{ oficina|default:"—" }}</dd></div>
+        </dl>
+        <h4 class="dossier-operational-section">Contrato</h4>
+        <dl class="dossier-info-grid">
+            <div class="dossier-info-field"><dt>Locadora</dt><dd>{{ vehicle.renter.name|default:"—" }}</dd></div>
+            <div class="dossier-info-field"><dt>Contrato</dt><dd>{% if vehicle.contract %}{{ vehicle.contract.number }}<small class="dossier-contract-validity">vigente até {{ vehicle.contract.ends_on|date:"d/m/Y" }}</small>{% else %}—{% endif %}</dd></div>
+        </dl>
         {% if active_custody and can_change_custody %}
-        <form method="post">{% csrf_token %}<input type="hidden" name="action" value="transfer_custody"><select name="new_driver" required>{% for d in all_drivers %}<option value="{{ d.id }}">{{ d.name }}</option>{% endfor %}</select><input type="text" name="transferred_at" required placeholder="2026-10-06T14:30:00-03:00"><button type="submit">Transferir</button></form>
-        <form method="post">{% csrf_token %}<input type="hidden" name="action" value="end_custody"><input type="date" name="ended_on" required><input type="text" name="assignment_ended_at" required placeholder="2026-10-06T14:30:00-03:00"><button type="submit">Encerrar</button></form>
+        <details class="dossier-custody-operation">
+            <summary>Transferir responsabilidade</summary>
+        <form method="post" class="dossier-custody-form">
+            {% csrf_token %}<input type="hidden" name="action" value="transfer_custody">
+            <div class="dossier-custody-fields">
+                <label>Novo motorista
+                    <select name="new_driver" required>{% for d in all_drivers %}<option value="{{ d.id }}">{{ d.name }}</option>{% endfor %}</select>
+                </label>
+                <label>Data e hora da transferência
+                    <input type="datetime-local" name="transferred_at" required step="60">
+                </label>
+            </div>
+            <div class="dossier-custody-actions"><button type="submit">Transferir</button></div>
+        </form>
+        </details>
+        <details class="dossier-custody-operation dossier-custody-operation--danger">
+            <summary>Encerrar acautelamento</summary>
+        <form method="post" class="dossier-custody-form">
+            {% csrf_token %}<input type="hidden" name="action" value="end_custody">
+            <div class="dossier-custody-fields">
+                <label>Data do encerramento<input type="date" name="ended_on" required></label>
+                <label>Data e hora do fim da responsabilidade
+                    <input type="datetime-local" name="assignment_ended_at" required step="60">
+                </label>
+            </div>
+            <div class="dossier-custody-actions"><button type="submit">Encerrar</button></div>
+        </form>
+        </details>
         {% elif can_start_custody %}
-        <form method="post">{% csrf_token %}<input type="hidden" name="action" value="start_custody"><input name="sei_number" required placeholder="SEI"><input type="date" name="started_on" required><select name="driver" required>{% for d in all_drivers %}<option value="{{ d.id }}">{{ d.name }}</option>{% endfor %}</select><button type="submit">Iniciar acautelamento</button></form>
+        <details class="dossier-custody-operation">
+            <summary>Iniciar acautelamento</summary>
+        <form method="post" class="dossier-custody-form">
+            {% csrf_token %}<input type="hidden" name="action" value="start_custody">
+            <div class="dossier-custody-fields">
+                <label>Processo SEI<input name="sei_number" required placeholder="SEI"></label>
+                <label>Data de início<input type="date" name="started_on" required></label>
+                <label>Motorista<select name="driver" required>{% for d in all_drivers %}<option value="{{ d.id }}">{{ d.name }}</option>{% endfor %}</select></label>
+            </div>
+            <div class="dossier-custody-actions"><button type="submit">Iniciar acautelamento</button></div>
+        </form>
+        </details>
         {% endif %}
         {% if obs_list %}
         <div style="margin-top:15px;padding:10px;background:#f9f9f9;border-radius:4px;">
@@ -195,6 +180,61 @@
             </ul>
         </div>
         {% endif %}
+    </article>
+</section>
+
+<!-- IDENTIFICAÇÃO E DOCUMENTO -->
+<section class="dossier-identification-grid">
+    <article class="panel dossier-info-card">
+        <div class="dossier-card-heading">
+            <h3><i data-lucide="car-front" aria-hidden="true"></i> Identificação</h3>
+            {% if perms.fleet.change_vehicle %}<a class="primary-action" href="{% url 'vehicle_crlv' vehicle.id %}">Inserir / atualizar CRLV</a>{% endif %}
+        </div>
+        <dl class="dossier-info-grid">
+            <div class="dossier-info-field"><dt>Marca</dt><dd>{{ vehicle.brand.name|default:"—" }}</dd></div>
+            <div class="dossier-info-field"><dt>Modelo</dt><dd>{{ vehicle.model.name|default:"—" }}</dd></div>
+            <div class="dossier-info-field"><dt>Versão</dt><dd>{{ vehicle.version|default:"—" }}</dd></div>
+            <div class="dossier-info-field"><dt>Ano fabricação / modelo</dt><dd>{{ vehicle.manufacture_year|default:"—" }} / {{ vehicle.model_year|default:"—" }}</dd></div>
+            <div class="dossier-info-field"><dt>Cor</dt><dd>{{ vehicle.color|default:"—" }}</dd></div>
+            <div class="dossier-info-field"><dt>Combustível</dt><dd>{{ vehicle.fuel|default:"—" }}</dd></div>
+            <div class="dossier-info-field"><dt>Categoria</dt><dd>{{ vehicle.category|default:"—" }}</dd></div>
+            <div class="dossier-info-field"><dt>Espécie / tipo</dt><dd>{{ vehicle.vehicle_type|default:"—" }}</dd></div>
+            <div class="dossier-info-field"><dt>RENAVAM</dt><dd>{{ vehicle.renavam|default:"—" }}</dd></div>
+            <div class="dossier-info-field"><dt>Chassi</dt><dd>{{ vehicle.chassi|default:"—" }}</dd></div>
+            <div class="dossier-info-field"><dt>CRLV confirmado</dt><dd>{{ vehicle.crlv_exercise|default:"—" }}</dd></div>
+            <div class="dossier-info-field"><dt>Blindado</dt><dd>{% if vehicle.armored %}SIM{% else %}NÃO{% endif %}</dd></div>
+        </dl>
+    </article>
+    <article class="panel dossier-info-card">
+        <div class="dossier-card-heading"><h3><i data-lucide="file-text" aria-hidden="true"></i> Dados do CRLV</h3></div>
+        {% if latest_crlv %}
+        <dl class="dossier-info-grid">
+            <div class="dossier-info-field"><dt>Exercício</dt><dd>{{ latest_crlv.exercise|default:"—" }}</dd></div>
+            <div class="dossier-info-field"><dt>Placa no documento</dt><dd>{{ latest_crlv.plate|default:"—" }}</dd></div>
+            <div class="dossier-info-field"><dt>RENAVAM</dt><dd>{{ latest_crlv.renavam|default:"—" }}</dd></div>
+            <div class="dossier-info-field"><dt>Chassi</dt><dd>{{ latest_crlv.chassi|default:"—" }}</dd></div>
+            <div class="dossier-info-field"><dt>Fabricação</dt><dd>{{ latest_crlv.extracted_data.manufacture_year|default:"—" }}</dd></div>
+            <div class="dossier-info-field"><dt>Ano modelo</dt><dd>{{ latest_crlv.extracted_data.model_year|default:"—" }}</dd></div>
+            <div class="dossier-info-field"><dt>Cor</dt><dd>{{ latest_crlv.extracted_data.color|default:"—" }}</dd></div>
+            <div class="dossier-info-field"><dt>Combustível</dt><dd>{{ latest_crlv.extracted_data.fuel|default:"—" }}</dd></div>
+            <div class="dossier-info-field"><dt>Categoria</dt><dd>{{ latest_crlv.extracted_data.category|default:"—" }}</dd></div>
+            <div class="dossier-info-field"><dt>Espécie / tipo</dt><dd>{{ latest_crlv.extracted_data.vehicle_type|default:"—" }}</dd></div>
+            <div class="dossier-info-field"><dt>Motor</dt><dd>{{ vehicle.motor|default:"—" }}</dd></div>
+            <div class="dossier-info-field"><dt>Potência / cilindrada</dt><dd>{{ vehicle.power_cylinder|default:"—" }}</dd></div>
+        </dl>
+        <details class="dossier-document-details">
+            <summary>Mais dados do CRLV</summary>
+            <dl class="dossier-info-grid">
+            <div class="dossier-info-field"><dt>PBT</dt><dd>{{ vehicle.gross_weight|default:"—" }}</dd></div>
+            <div class="dossier-info-field"><dt>CMT</dt><dd>{{ vehicle.cmt|default:"—" }}</dd></div>
+            <div class="dossier-info-field"><dt>Eixos</dt><dd>{{ vehicle.axles|default:"—" }}</dd></div>
+            <div class="dossier-info-field"><dt>Lotação</dt><dd>{{ vehicle.seating|default:"—" }}</dd></div>
+            <div class="dossier-info-field"><dt>Carroceria</dt><dd>{{ vehicle.bodywork|default:"—" }}</dd></div>
+            </dl>
+        <div class="dossier-info-note"><span>Proprietário</span><p>{{ latest_crlv.extracted_data.owner_name|default:"—" }} — {{ latest_crlv.extracted_data.owner_document|default:"—" }}</p></div>
+        <div class="dossier-info-note"><span>Observações</span><p>{{ latest_crlv.extracted_data.observation|default:"—" }}</p></div>
+        </details>
+        {% else %}<p>Nenhum CRLV confirmado.</p>{% endif %}
     </article>
 </section>
 
@@ -296,7 +336,7 @@
     </article>
 </section>
 
-<!-- MULTAS E VISTORIAS -->
+<!-- MULTAS -->
 <section class="grid">
     <article class="panel">
         <div class="panel-title"><div><h3>⚑ Multas</h3></div>{% if vehicle.active %}{% if perms.fleet.add_vehiclefine or request.user.is_system_creator %}
@@ -316,31 +356,5 @@
         {% endif %}
     </article>
 
-    <article class="panel">
-        <div class="panel-title"><div><h3>🔍 Vistorias</h3></div>
-{% if vehicle.active %}{% if perms.fleet.add_vehicleinspection or request.user.is_system_creator %}
-<a class="primary-action" href="{% url 'inspection_create' vehicle.id %}">Nova vistoria</a>
-{% endif %}{% endif %}</div>
-        {% if inspections %}
-        <table>
-            <thead><tr><th>TIPO</th><th>SITUAÇÃO</th><th>KM</th><th>DATA</th></tr></thead>
-            <tbody>
-                {% for i in inspections %}
-                <tr>
-  <td>
-    {{ i.type.name }}
-    {% include "ui/inspection_checklist.html" with inspection=i only %}
-  </td>
-  <td><span class="tag">{{ i.status.name }}</span></td>
-  <td>{{ i.mileage|default:"-" }}</td>
-  <td>{{ i.date|date:"d/m/Y" }}</td>
-</tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        {% else %}
-        <div class="empty">Nenhuma vistoria registrada.</div>
-        {% endif %}
-    </article>
 </section>
 {% endblock %}

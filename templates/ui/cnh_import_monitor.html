@@ -1,0 +1,7 @@
+{% extends 'ui/base.html' %}
+{% block heading %}Importações de CNH{% endblock %}
+{% block content %}<section class="panel" style="padding:24px;overflow:auto;">
+<h2>Acompanhamento das leituras</h2><p>{% for item in counts %}{{ item.label }}: {{ item.total }} · {% endfor %}</p>
+<table><thead><tr><th>Recebido</th><th>Arquivo</th><th>Responsável</th><th>Situação</th><th>Tentativas</th><th>Tempo (s)</th><th>Resultado</th></tr></thead><tbody>
+{% for job in jobs %}<tr><td>{{ job.created_at|date:"d/m/Y H:i" }}</td><td>{{ job.original_filename }}</td><td>{{ job.created_by.get_full_name|default:job.created_by.username }}</td><td>{{ job.get_state_display }}</td><td>{{ job.attempts }}</td><td>{{ job.duration_seconds|default_if_none:"—" }}</td><td>{{ job.error|default:"—" }}</td></tr>{% empty %}<tr><td colspan="7">Nenhuma importação registrada.</td></tr>{% endfor %}
+</tbody></table></section>{% endblock %}

@@ -1,4 +1,5 @@
 from urllib.parse import urlencode
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import SetPasswordForm
@@ -37,11 +38,15 @@ def audit(request, company, action, entity_id, values, old=None):
 
 
 def back(company):
-    return redirect(BASE+"?"+urlencode({"company":str(company.pk)}))
+    return redirect(("/empresas/" if getattr(settings, "CENTRAL_USER_MANAGEMENT", False) else BASE)+"?"+urlencode({"company":str(company.pk)}))
 
 
 @login_required
 def management(request):
+    if getattr(settings, 'CENTRAL_USER_MANAGEMENT', False) and not request.user.is_superuser:
+        return redirect('user_list') if request.method == 'GET' else HttpResponseForbidden('Use a área Usuários no sistema principal.')
+    if getattr(settings, 'CENTRAL_USER_MANAGEMENT', False) and request.POST.get('action') == 'assign':
+        return HttpResponseForbidden('Defina o veículo e o motorista na OS.')
     company, companies = managed_company(request)
     if not request.user.is_superuser and company is None:
         return HttpResponseForbidden("Acesso exclusivo ao administrador ou gestor da empresa.")
@@ -93,6 +98,8 @@ def management(request):
                         parts = data["name"].split(maxsplit=1)
                         user.first_name,user.last_name = parts[0],parts[1] if len(parts)>1 else ""
                         user.email=data["email"]
+                        if getattr(settings, "CENTRAL_USER_MANAGEMENT", False):
+                            user.username = user.email
                         user.is_staff=False; user.is_superuser=False
                         user.save()
                         driver = None
@@ -105,10 +112,10 @@ def management(request):
                             else:
                                 driver = Driver.objects.create(name=data["name"],email=data["email"])
                         member = Member.objects.create(company=company,user=user,driver=driver,role=data["role"])
-                        for vehicle in data["vehicles"]:
+                        for vehicle in data.get("vehicles", []):
                             vehicle.drivers.add(member)
                         audit(request,company,"PESSOA CADASTRADA",user.pk,
-                              {"username":user.username,"role":member.role,"vehicles":[v.pk for v in data["vehicles"]]})
+                              {"username":user.username,"role":member.role,"vehicles":[v.pk for v in data.get("vehicles", [])]})
                         messages.success(request,"Acesso criado. Informe ao usuário o login escolhido e a senha inicial.")
                     else:
                         data = form.cleaned_data
@@ -127,9 +134,9 @@ def management(request):
                                 VehicleMileage.objects.create(vehicle=vehicle,mileage=data["mileage"],
                                     recorded_by=request.user,notes="Cadastro inicial pelo painel da empresa.")
                         assignment, _ = CompanyVehicle.objects.update_or_create(company=company,vehicle=vehicle,defaults={"label":data["label"] or data["plate"]})
-                        assignment.drivers.set(data["drivers"])
+                        assignment.drivers.set(data.get("drivers", []))
                         audit(request,company,"VEÍCULO VINCULADO",vehicle.pk,
-                              {"label":assignment.label,"drivers":[m.pk for m in data["drivers"]]})
+                              {"label":assignment.label,"drivers":[m.pk for m in data.get("drivers", [])]})
                         messages.success(request,"Veículo cadastrado e vinculado à empresa.")
                 return back(company)
             except IntegrityError:

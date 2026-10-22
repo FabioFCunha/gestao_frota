@@ -16,7 +16,7 @@ def claim(model, pk, company_id):
 
 
 @transaction.atomic
-def bind_graph(model, pk, company_id, seen=None):
+def bind_graph(model, pk, company_id, seen=None, guard=None):
     seen = set() if seen is None else seen
     key=(model._meta.label_lower,pk)
     if key in seen or model._meta.label_lower in GLOBAL | CATALOG:
@@ -26,17 +26,19 @@ def bind_graph(model, pk, company_id, seen=None):
     token=set_scope(None)
     try:
         obj=model.objects.get(pk=pk)
+        if guard is not None:
+            guard(obj, seen)
         claim(model,pk,company_id)
         for field in model._meta.concrete_fields:
             if field.is_relation and field.remote_field.model._meta.app_label=='fleet':
                 target=field.remote_field.model
                 if issubclass(target,TenantModel) and getattr(obj,field.attname) is not None:
-                    bind_graph(target,getattr(obj,field.attname),company_id,seen)
+                    bind_graph(target,getattr(obj,field.attname),company_id,seen,guard=guard)
         # Child records are linked by actual FK, never guessed from dates or user names.
         child_models = {
             'vehicle': {'vehicleplate','vehiclemileage','vehicleinspection','vehiclefine','maintenance',
                         'vehiclehistory','vehicledriverassignment','vehiclecustody','vehicleexitorder','vehiclecrlv','bdt'},
-            'driver': {'drivercnhhistory'},
+            'driver': {'drivercnhhistory', 'drivercnhphoto'},
             'document': {'documentversion','documentrelation','vehiclecrlv'},
             'seiprocess': {'seiprocessrelation'},
         }.get(model._meta.model_name,set())
@@ -47,13 +49,13 @@ def bind_graph(model, pk, company_id, seen=None):
             if child._meta.app_label!='fleet' or not issubclass(child,TenantModel) or related.many_to_many:
                 continue
             for child_id in child.objects.filter(**{related.field.attname:pk}).values_list('pk',flat=True):
-                bind_graph(child,child_id,company_id,seen)
+                bind_graph(child,child_id,company_id,seen,guard=guard)
         from apps.fleet.models import DocumentRelation,SEIProcessRelation
         from django.contrib.contenttypes.models import ContentType
         ct=ContentType.objects.get_for_model(model)
         for relation_model in (DocumentRelation,SEIProcessRelation):
             for rel_id in relation_model.objects.filter(content_type=ct,object_id=pk).values_list('pk',flat=True):
-                bind_graph(relation_model,rel_id,company_id,seen)
+                bind_graph(relation_model,rel_id,company_id,seen,guard=guard)
     finally:
         reset_scope(token)
 
@@ -93,6 +95,21 @@ def fleet_saved(sender, instance, **kwargs):
     if kwargs.get('raw'):
         return
     if not company:
+        # A driver may have historical trips in more than one legacy sector.
+        # Their company must never pull an unowned vehicle/BDT into the tenant.
+        from apps.fleet.models import BDT
+        if sender is BDT:
+            existing = RecordOwner.objects.filter(model_label='fleet.bdt', object_id=instance.pk)
+            vehicle_owner = RecordOwner.objects.filter(model_label='fleet.vehicle', object_id=instance.vehicle_id)
+            if not vehicle_owner.exists():
+                if existing.exists():
+                    raise PermissionDenied('BDT da empresa não pode apontar para veículo sem vínculo com ela.')
+                return
+            from apps.fleet.driver_scope import MANAGEMENT_SECTORS
+            source_sector = MANAGEMENT_SECTORS.get(instance.horus_management_id)
+            vehicle_sector = instance.vehicle.sector.slug if instance.vehicle.sector_id else None
+            if source_sector and vehicle_sector and source_sector != vehicle_sector:
+                raise PermissionDenied('Origem do BDT difere do setor do veículo vinculado à empresa.')
         # Offline imports may append children to an explicitly owned vehicle/driver.
         candidates = set(RecordOwner.objects.filter(model_label=sender._meta.label_lower, object_id=instance.pk).values_list("company_id", flat=True))
         for field in sender._meta.concrete_fields:

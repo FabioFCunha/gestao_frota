@@ -1,0 +1,21 @@
+# Combine with the EXISTING deploy/pwa/compose.yaml, retaining VPS networking.
+# Paths are relative to the first compose file (deploy/pwa/compose.yaml).
+services:
+  proxy:
+    volumes:
+      - ../integrated/nginx.app.conf:/etc/nginx/conf.d/default.conf:ro
+      - main_fleet_static:/staticfiles:ro
+    networks:
+      main_fleet: {}
+      pilot_public_proxy: {}
+networks:
+  pilot_public_proxy:
+    external: true
+    name: ${PUBLIC_PROXY_NETWORK:-agenda-educacao_default}
+  main_fleet:
+    external: true
+    name: ${MAIN_FLEET_NETWORK:-gestao-frotas_default}
+volumes:
+  main_fleet_static:
+    external: true
+    name: ${MAIN_FLEET_STATIC_VOLUME:-gestao-frotas_frota_static}

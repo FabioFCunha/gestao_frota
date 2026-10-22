@@ -287,16 +287,31 @@ def open_vehicle_exit_order(*, vehicle_id, driver, departed_at, destination, rea
     return order
 
 
+def can_close_vehicle_exit_order(user):
+    from .tenant_scope import company_id
+    return bool(user and user.is_authenticated and (
+        user.has_perm('fleet.change_vehicleexitorder')
+        or (user.is_system_creator and not company_id())
+    ))
+
+
 @transaction.atomic
 def close_vehicle_exit_order(*, order_id, returned_at, return_notes, user):
     from django.core.exceptions import PermissionDenied
     from .models import VehicleExitOrder
 
     order = VehicleExitOrder.objects.select_for_update().get(pk=order_id)
-    if order.opened_by_id != user.id:
-        raise PermissionDenied("Somente o usuário que abriu a OS pode registrar o retorno.")
+    if not can_close_vehicle_exit_order(user):
+        raise PermissionDenied("Seu perfil não permite encerrar ordens de saída.")
+    from .sector_scope import validate_vehicle_scope
+    validate_vehicle_scope(user, order.vehicle)
     if order.state == VehicleExitOrder.State.CLOSED:
         raise ValueError("Esta OS já foi encerrada.")
+    from django.conf import settings
+    if getattr(settings, 'CENTRAL_USER_MANAGEMENT', False):
+        from apps.driverops.models import Trip
+        if Trip.objects.filter(exit_order=order, closed_at=None).exists():
+            raise ValueError('Encerre o BDT vinculado antes de registrar o retorno da OS.')
     if returned_at < order.departed_at:
         raise ValueError("O retorno não pode ser anterior à saída.")
 
@@ -311,7 +326,7 @@ def close_vehicle_exit_order(*, order_id, returned_at, return_notes, user):
         user=user, module="ordens de saída", action="ENCERRAMENTO OS SAÍDA",
         entity_type="vehicle_exit_order", entity_id=order.id,
         old_values={"state": VehicleExitOrder.State.PENDING},
-        new_values={"state": order.state, "returned_at": order.returned_at.isoformat()},
+        new_values={"state": order.state, "returned_at": order.returned_at.isoformat(), "closed_by_id": str(user.pk)},
         reason=f"Encerramento da {order.number}.",
     )
     return order
@@ -1236,6 +1251,8 @@ def link_document(*, document, obj, user):
             reason=f"Documento vinculado a {ct.model} ID {obj.id}"
         )
         
+    from .models import CNHImportJob
+    CNHImportJob.objects.filter(document=document, state='ready').update(state='confirmed')
     return relation
 
 @transaction.atomic
@@ -1246,13 +1263,13 @@ def stage_crlv_document(*, vehicle, file_obj, user):
     ext=file_obj.name.rsplit('.',1)[-1].lower() if '.' in file_obj.name else ''
     if ext not in {'pdf','jpg','jpeg','png'}: raise ValueError('CRLV deve ser PDF, JPG ou PNG.')
     if file_obj.size > getattr(settings,'DOCUMENT_MAX_UPLOAD_SIZE',10*1024*1024): raise ValueError('O arquivo excede o limite permitido.')
+    file_obj.seek(0)
+    data = extract_crlv_data(file_obj)
+    file_obj.seek(0)
     typ,_=DocumentType.objects.get_or_create(name='CRLV',defaults={'active':True}); status,_=DocumentStatus.objects.get_or_create(name='Ativo',defaults={'active':True})
     doc=Document.objects.create(title=f'CRLV - {file_obj.name}',document_type=typ,status=status,created_by=user)
     DocumentVersion.objects.create(document=doc,file=file_obj,original_filename=file_obj.name,file_extension=ext,mime_type=mimetypes.guess_type(file_obj.name)[0] or 'application/octet-stream',file_size=file_obj.size,uploaded_by=user)
-    # DocumentVersion pode consumir o ponteiro do UploadedFile durante o save.
-    # O extrator precisa receber o arquivo desde o início, não a posição EOF.
-    file_obj.seek(0)
-    link_document(document=doc,obj=vehicle,user=user); data=extract_crlv_data(file_obj)
+    link_document(document=doc,obj=vehicle,user=user)
     AuditLog.objects.create(user=user,module='crlv',action='ANEXO DE CRLV PARA CONFERÊNCIA',entity_type='document',entity_id=doc.id,new_values={'vehicle_id':str(vehicle.id),**data})
     return doc,data
 
@@ -1471,6 +1488,10 @@ def stage_crlv_document_for_creation(*, file_obj, user):
     if file_obj.size > getattr(settings, "DOCUMENT_MAX_UPLOAD_SIZE", 10 * 1024 * 1024):
         raise ValueError("O arquivo excede o limite permitido.")
 
+    file_obj.seek(0)
+    data = extract_crlv_data(file_obj)
+    file_obj.seek(0)
+
     typ, _ = DocumentType.objects.get_or_create(name="CRLV", defaults={"active": True})
     status, _ = DocumentStatus.objects.get_or_create(name="Ativo", defaults={"active": True})
     document = Document.objects.create(
@@ -1488,8 +1509,6 @@ def stage_crlv_document_for_creation(*, file_obj, user):
         file_size=file_obj.size,
         uploaded_by=user,
     )
-    file_obj.seek(0)
-    data = extract_crlv_data(file_obj)
     AuditLog.objects.create(
         user=user,
         module="crlv",
@@ -1901,13 +1920,6 @@ def get_operational_alerts(filters: dict) -> dict:
         status__name__in=["Aberto", "Em andamento"]
     ).values("id", "sei_number", "status__name", "opening_date")
     
-    # 5. Pending Inspections (Reprovadas ou Com ressalvas)
-    pending_inspections = VehicleInspection.objects.filter(
-        status__name__in=["Reprovada", "Com ressalvas"]
-    )
-    if vehicle_ids is not None:
-        pending_inspections = pending_inspections.filter(vehicle_id__in=vehicle_ids).select_related('vehicle').values("id", "vehicle__plate_history__plate", "status__name", "date")
-
     # 6. Revisoes preventivas
     # Regra oficial WW Trans:
     # - intervalo de 10.000 km;
@@ -1962,7 +1974,6 @@ def get_operational_alerts(filters: dict) -> dict:
         "open_maintenances": list(open_maintenances),
         "pending_fines": list(pending_fines),
         "open_sei": list(open_sei),
-        "pending_inspections": list(pending_inspections),
         "revisoes_vencidas": revisoes_vencidas,
         "expired_cnh": list(expired_cnh),
     }
@@ -2089,10 +2100,21 @@ def stage_cnh_document_for_creation(*, file_obj, user, driver=None):
     if file_obj.size > getattr(settings, "DOCUMENT_MAX_UPLOAD_SIZE", 10 * 1024 * 1024):
         raise ValueError("O arquivo excede o limite permitido.")
 
+    import time
+    import logging
+    from .cnh_review import quality_issues
+    started = time.monotonic()
+    import hashlib
     file_obj.seek(0)
-    extracted = extract_cnh_data(file_obj)
+    source_hash = hashlib.sha256(file_obj.read()).hexdigest()
+    file_obj.seek(0)
+    extracted = dict(extract_cnh_data(file_obj))
+    extracted['_read_issues'] = quality_issues(extracted)
+    extracted['_duration_ms'] = round((time.monotonic() - started) * 1000)
+    logging.getLogger(__name__).info('cnh_read duration_ms=%s issue_count=%s',
+        extracted['_duration_ms'], len(extracted['_read_issues']))
     if driver is not None:
-        validate_cnh_identity(extracted=extracted, values=extracted, driver=driver)
+        validate_cnh_identity(extracted=extracted, values=extracted, driver=driver, check_values=False)
     file_obj.seek(0)
 
     document_type, _ = DocumentType.objects.get_or_create(
@@ -2107,7 +2129,7 @@ def stage_cnh_document_for_creation(*, file_obj, user, driver=None):
         status=status,
         created_by=user,
     )
-    DocumentVersion.objects.create(
+    version = DocumentVersion.objects.create(
         document=document,
         file=file_obj,
         original_filename=file_obj.name,
@@ -2116,6 +2138,8 @@ def stage_cnh_document_for_creation(*, file_obj, user, driver=None):
         file_size=file_obj.size,
         uploaded_by=user,
     )
+    extracted['_source_version_id'] = str(version.pk)
+    extracted['_source_sha256'] = source_hash
     AuditLog.objects.create(
         user=user,
         module="cnh",
@@ -2126,8 +2150,11 @@ def stage_cnh_document_for_creation(*, file_obj, user, driver=None):
     )
     return document, extracted
 
-def validate_cnh_identity(*, extracted, values, driver=None):
+def validate_cnh_identity(*, extracted, values, driver=None, check_values=True):
     """Confere a identidade do PDF, do formulário e dos cadastros de todos os setores."""
+    from .cnh_review import validate_review_values
+    if check_values:
+        validate_review_values(values)
     def digits(value):
         return re.sub(r"[^0-9]", "", str(value or ""))
     for field, label in (("cpf", "CPF"), ("cnh_number", "registro da CNH")):
@@ -2137,7 +2164,7 @@ def validate_cnh_identity(*, extracted, values, driver=None):
             raise ValueError("CPF e registro devem ser reconhecidos no PDF. Envie uma CNH legível.")
         if reviewed != source:
             raise ValueError(f"O {label} confirmado deve ser igual ao identificado no PDF.")
-        if driver is not None:
+        if driver is not None and field == "cpf":
             current = digits(getattr(driver, field))
             if current and current != source:
                 raise ValueError(f"O {label} do PDF não corresponde ao motorista selecionado.")
@@ -2165,6 +2192,21 @@ def cnh_confirmation_source(*, document_id, user, driver=None):
     if staged is None:
         raise ValueError("O documento não está disponível nesta sessão. Envie a CNH novamente.")
     extracted = dict(staged.new_values or {})
+    if not document.active or document.status.name.casefold() == 'arquivado':
+        raise ValueError('Documento inativo ou arquivado. Envie a CNH novamente.')
+    version = document.versions.order_by('-created_at').first()
+    if not version or str(version.pk) != extracted.get('_source_version_id'):
+        raise ValueError('A versão do PDF mudou ou precisa ser conferida novamente. Envie a CNH novamente.')
+    import hashlib
+    try:
+        with version.file.open('rb') as source:
+            digest = hashlib.sha256()
+            for chunk in source.chunks():
+                digest.update(chunk)
+    except OSError as exc:
+        raise ValueError('Não foi possível ler o PDF original. Envie o documento novamente.') from exc
+    if digest.hexdigest() != extracted.get('_source_sha256'):
+        raise ValueError('O PDF foi alterado após a leitura. Envie a CNH novamente.')
     if driver is not None and extracted.get("driver_id") != str(driver.pk):
         raise ValueError("A CNH foi enviada para outro motorista.")
     if DocumentRelation.objects.filter(document=document).exists() or AuditLog.objects.filter(
@@ -2207,6 +2249,11 @@ def confirm_cnh_for_driver(*, driver, document_id, values, user):
         reviewed[field] = current.isoformat() if hasattr(current, "isoformat") else current
     driver.save(update_fields=[*changed, "updated_at"])
     link_document(document=document, obj=driver, user=user)
+    if values.get("_save_cnh_photo"):
+        from apps.ui.cnh_photo import save_confirmed_cnh_photo
+        save_confirmed_cnh_photo(
+            driver=driver, document=document, user=user,
+        )
     if driver.cnh_expiration and (
         old_values["cnh_expiration"] != reviewed["cnh_expiration"]
         or old_values["cnh_number"] != reviewed["cnh_number"]
@@ -2235,8 +2282,10 @@ def current_cnh_document_values(driver):
     return dict((audit.new_values or {}).get("form_values") or {}) if audit else {}
 
 @transaction.atomic
-def update_driver_document_data(*, driver, values, user):
+def update_driver_document_data(*, driver, values, user, preserve_blank=False):
     """Salva campos da CNH e auditoria sem modificar vínculo, setor ou arquivos."""
+    from .cnh_review import validate_review_values
+    validate_review_values(values)
     from .models import DriverCNHHistory
     from django.utils.dateparse import parse_date
     driver = Driver.objects.select_for_update().get(pk=driver.pk)
@@ -2251,7 +2300,8 @@ def update_driver_document_data(*, driver, values, user):
     for field in fields:
         old = getattr(driver, field) if field in model_fields else old_document_values.get(field, "")
         old_values[field] = old.isoformat() if hasattr(old, "isoformat") else old
-        if field not in values or (field == "name" and driver.horus_user_id):
+        if (field not in values or (field == "name" and driver.horus_user_id)
+                or (preserve_blank and values.get(field) in (None, ""))):
             value = old
         else:
             value = values[field]

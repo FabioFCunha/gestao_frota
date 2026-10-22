@@ -1,6 +1,6 @@
-const CACHE='transfrota-pwa-v1';
+const CACHE='transfrota-pwa-v5';
 const ROOT='/api/driver/app/';
-const ASSETS=['app.js','rules.mjs','style.css','manifest.webmanifest','icon-192.png','icon-512.png'].map(p=>ROOT+p);
+const ASSETS=['app.js','addresses.mjs','rules.mjs','style.css','manifest.webmanifest','icon-192.png','icon-512.png'].map(p=>ROOT+p).concat(['/static/images/transfrota-logo.png']);
 self.addEventListener('install',event=>{
   event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(ASSETS)));
 });

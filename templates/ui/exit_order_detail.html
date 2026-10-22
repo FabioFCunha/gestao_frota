@@ -5,7 +5,9 @@
   <div class="os-detail-title"><div><h2>{{ order.number }}</h2><p>Ordem de saída de viatura</p></div></div>
   <div class="os-detail-toolbar">
     <a class="os-back-button" href="{% url 'exit_order_list' %}"><i data-lucide="arrow-left"></i> Voltar</a>
-    <div class="os-detail-actions"><button class="os-print-button" type="button" onclick="window.print()"><i data-lucide="printer"></i> Imprimir</button>{% if can_close %}<a class="os-return-button" href="{% url 'exit_order_return' order.id %}"><i data-lucide="rotate-ccw"></i> Registrar retorno</a>{% endif %}</div>
+    <div class="os-detail-actions">{% if request.user.is_system_creator or perms.fleet.change_vehicleexitorder %}
+<a class="os-back-button" href="{% url 'exit_order_edit' order.pk %}">Editar OS</a>
+{% endif %}<button class="os-print-button" type="button" onclick="window.print()"><i data-lucide="printer"></i> Imprimir</button>{% if can_close %}<a class="os-return-button" href="{% url 'exit_order_return' order.id %}"><i data-lucide="rotate-ccw"></i> Registrar retorno</a>{% endif %}</div>
   </div>
 
   <div class="os-detail-grid">
@@ -22,6 +24,19 @@
     {% for row in bdt_rows %}
     <section style="padding:16px 0;border-bottom:1px solid #ddd;">
       <p><strong>Situação:</strong> {{ row.status }}</p>
+      <!-- bdt-metrics -->
+      <p><strong>Abertura registrada no Hórus:</strong> Sim</p>
+      <div class="os-detail-fields">
+        <div class="os-info-line"><div>
+          <span>KM percorrido no BDT</span>
+          <strong>{{ row.distance }}</strong>
+        </div></div>
+        <div class="os-info-line"><div>
+          <span>{{ row.duration_label }}</span>
+          <strong>{{ row.duration }}</strong>
+        </div></div>
+      </div>
+
       <div class="os-detail-fields">
         <div class="os-info-line"><div>
           <span>Data da abertura</span>
@@ -33,7 +48,7 @@
         </div></div>
         <div class="os-info-line"><div>
           <span>KM inicial</span>
-          <strong>{{ row.bdt.started_km|default_if_none:"Não informado"|default:"Não informado" }}</strong>
+          <strong>{{ row.bdt.started_km|default_if_none:"Não informado" }}</strong>
         </div></div>
         <div class="os-info-line"><div>
           <span>Data do fechamento</span>
@@ -45,7 +60,7 @@
         </div></div>
         <div class="os-info-line"><div>
           <span>KM final</span>
-          <strong>{{ row.bdt.ended_km|default_if_none:"Não informado"|default:"Não informado" }}</strong>
+          <strong>{{ row.bdt.ended_km|default_if_none:"Não informado" }}</strong>
         </div></div>
       </div>
       <p>Última sincronização: {{ row.bdt.last_synced_at|date:"d/m/Y H:i" }}</p>
@@ -57,6 +72,6 @@
     <p>Informações do Hórus, disponíveis somente para consulta.</p>
   </article>
 
-  <article class="os-audit-card"><h3>Log de auditoria</h3><div class="os-audit-list">{% for audit in audits %}<div class="os-audit-entry"><span class="os-audit-avatar">{{ audit.user.username|default:"S"|first|upper }}</span><p><strong>{{ audit.action|capfirst }}</strong> por {{ audit.user.get_full_name|default:audit.user.username|default:"Sistema" }} em {{ audit.created_at|date:"d/m/Y H:i" }}</p></div>{% empty %}<p class="os-audit-empty">Nenhum registro de auditoria encontrado.</p>{% endfor %}</div></article>
+  <article class="os-audit-card"><h3>Log de auditoria</h3><div class="os-audit-list">{% for audit in audits %}<div class="os-audit-entry"><span class="os-audit-avatar">{{ audit.user.username|default:"S"|first|upper }}</span><p><strong>{{ audit.action|capfirst }}</strong> por {{ audit.user.get_full_name|default:audit.user.username|default:"Sistema" }} em {{ audit.created_at|date:"d/m/Y H:i" }}</p>{% if audit.action == "EDIÇÃO OS SAÍDA" %}<div style="white-space:pre-wrap;overflow-wrap:anywhere;">{{ audit.reason }}</div>{% endif %}</div>{% empty %}<p class="os-audit-empty">Nenhum registro de auditoria encontrado.</p>{% endfor %}</div></article>
 </section>
 {% endblock %}

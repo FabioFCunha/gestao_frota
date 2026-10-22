@@ -21,12 +21,38 @@
 .cnh-data strong { overflow-wrap:anywhere; }
 @media(max-width:760px) { .cnh-fields,.cnh-data-grid { grid-template-columns:1fr; } .cnh-field-wide { grid-column:auto; } .cnh-hero { padding:20px; } }
 
-.cnh-loading { position:fixed; inset:0; z-index:2000; display:flex; align-items:center; justify-content:center; padding:20px; background:rgba(15,23,42,.65); }
-.cnh-loading[hidden] { display:none; }
-.cnh-loading-panel { width:min(420px,100%); padding:32px; border-radius:16px; background:#fff; text-align:center; box-shadow:0 20px 60px rgba(0,0,0,.25); color:#0f172a; }
-.cnh-loading-spinner { width:48px; height:48px; margin:0 auto 20px; border:5px solid #dbeafe; border-top-color:#1d4e89; border-radius:50%; animation:cnh-loading-spin .85s linear infinite; }
-@keyframes cnh-loading-spin { to { transform:rotate(360deg); } }
-@media(prefers-reduced-motion:reduce) { .cnh-loading-spinner { animation:none; } }
+/* cnh-photo-top-right */
+.cnh-photo-top-right {
+    float:right;
+    width:190px;
+    margin:0 0 20px 24px;
+    padding:16px;
+    box-sizing:border-box;
+    border:1px solid #e2e8f0;
+    border-radius:10px;
+    background:#f8fafc;
+}
+.cnh-photo-top-right img {
+    max-width:100%;
+    margin-left:auto !important;
+    margin-right:auto !important;
+}
+.cnh-photo-top-right + .cnh-fields {
+    overflow:hidden;
+}
+.cnh-photo-top-right ~ .cnh-fields + div {
+    clear:both;
+}
+@media(max-width:760px) {
+    .cnh-photo-top-right {
+        float:none;
+        width:100%;
+        margin:0 0 20px;
+        text-align:center;
+    }
+}
+
+
 </style>
 
 <div class="cnh-shell">
@@ -61,35 +87,17 @@
             <div><strong>Documento lido</strong><div style="color:#64748b;margin-top:3px;">{{ document.title|default:"CNH enviada" }} — confira os dados extraídos abaixo e corrija os campos necessários.</div></div>
         </div>
 
-        {% if preview and preview.text_extraction_succeeded %}
+        {% if preview and preview.text_extraction_succeeded and not cnh_review_issues %}
         <div style="padding:12px 14px;border:1px solid #bbf7d0;border-radius:9px;background:#f0fdf4;color:#166534;">
-            Texto do PDF extraído. Confira especialmente nome, CPF, registro, categoria e validade.
+            Leitura disponível para conferência. Revise os campos e as alterações antes de salvar.
         </div>
         {% else %}
         <div role="alert" style="padding:12px 14px;border:1px solid #fed7aa;border-radius:9px;background:#fff7ed;color:#9a3412;">
-            Não foi possível reconhecer o texto automaticamente. O documento foi anexado; preencha os campos manualmente após conferi-lo.
+            Leitura incompleta ou com inconsistências. Confira os alertas e compare os campos com o PDF antes de confirmar.
         </div>
         {% endif %}
 
-        {% if preview %}
-        <div class="cnh-data-grid">
-            <div class="cnh-data"><small>Nome identificado</small><strong>{{ preview.name|default:"Não identificado" }}</strong></div>
-            <div class="cnh-data"><small>CPF identificado</small><strong>{{ preview.cpf|default:"Não identificado" }}</strong></div>
-            <div class="cnh-data"><small>Nº de registro identificado</small><strong>{{ preview.cnh_number|default:"Não identificado" }}</strong></div>
-            <div class="cnh-data"><small>Categoria identificada</small><strong>{{ preview.cnh_category|default:"Não identificada" }}</strong></div>
-            <div class="cnh-data"><small>Validade identificada</small><strong>{{ preview.cnh_expiration_display|default:preview.cnh_expiration|default:"Não identificada" }}</strong></div>
-            <div class="cnh-data"><small>Data de nascimento</small><strong>{{ preview.birth_date_display|default:preview.birth_date|default:"Não identificada" }}</strong></div>
-            <div class="cnh-data"><small>Emissão da CNH</small><strong>{{ preview.cnh_issue_date_display|default:preview.cnh_issue_date|default:"Não identificada" }}</strong></div>
-            <div class="cnh-data"><small>Primeira habilitação</small><strong>{{ preview.cnh_first_issue_date_display|default:preview.cnh_first_issue_date|default:"Não identificada" }}</strong></div>
-            <div class="cnh-data"><small>Documento de identidade</small><strong>{{ preview.identity_document|default:"Não identificado" }}</strong></div>
-            <div class="cnh-data"><small>Órgão emissor</small><strong>{{ preview.issuing_authority|default:"Não identificado" }}</strong></div>
-            <div class="cnh-data"><small>UF emissora</small><strong>{{ preview.issuing_state|default:"Não identificada" }}</strong></div>
-            <div class="cnh-data"><small>Nacionalidade</small><strong>{{ preview.nationality|default:"Não identificada" }}</strong></div>
-            <div class="cnh-data"><small>Filiação — pai</small><strong>{{ preview.father_name|default:"Não identificada" }}</strong></div>
-            <div class="cnh-data"><small>Filiação — mãe</small><strong>{{ preview.mother_name|default:"Não identificada" }}</strong></div>
-            <div class="cnh-data"><small>Local de emissão</small><strong>{{ preview.location|default:"Não identificado" }}</strong></div>
-        </div>
-        {% endif %}
+        {% if document %}<p><a href="{% url 'cnh_original' document.pk %}" target="_blank" rel="noopener">Abrir documento original</a></p>{% endif %}
 
         {% endif %}
         <div class="cnh-step" style="margin-top:26px;">
@@ -97,21 +105,46 @@
             <div><strong>{% if cnh_edit_mode %}Dados do motorista{% elif cnh_target %}Conferência e vínculo ao motorista{% else %}Conferência e cadastro{% endif %}</strong><div style="color:#64748b;margin-top:3px;">Os campos abaixo são editáveis. Dados complementares lidos do documento também serão guardados no histórico da CNH.</div></div>
         </div>
 
-        <form method="post" action="" style="margin-top:18px;">
+        <form method="post" action="" style="margin-top:18px;" data-cnh-confirm="{% if document and not cnh_edit_mode %}true{% endif %}">
             {% csrf_token %}
             {% if not cnh_edit_mode %}
             <input type="hidden" name="step" value="confirm">
+
+
             {{ confirm_form.document_id }}
             {% for error in confirm_form.document_id.errors %}<div role="alert" style="color:#b91c1c;">{{ error }}</div>{% endfor %}
             {% endif %}
             {% if confirm_form.non_field_errors %}
             <div role="alert" style="padding:12px;margin-bottom:16px;border-radius:8px;background:#fef2f2;color:#b91c1c;">{{ confirm_form.non_field_errors }}</div>
             {% endif %}
+            {% if document %}
+            <div class="cnh-photo-top-right">
+                <strong>Foto extraída da CNH</strong>
+                <img src="{% url 'cnh_photo_preview' document.pk %}{% if requested_sector %}?sector={{ requested_sector|urlencode }}{% endif %}"
+                     alt="Prévia da foto extraída"
+                     style="display:block;width:140px;height:auto;margin:12px 0;border-radius:8px;"
+                     onerror="this.hidden=true;this.parentElement.querySelector('.photo-choice').hidden=true;this.parentElement.querySelector('.photo-unavailable').hidden=false;">
+                <label class="photo-choice" style="display:block;">
+                    <input type="checkbox" name="save_cnh_photo" value="1">
+                    Usar esta foto no cadastro do motorista
+                </label>
+                <small class="photo-unavailable" hidden>
+                    Foto não identificada neste documento. A foto atual será preservada.
+                </small>
+                <small style="display:block;margin-top:8px;color:#64748b;">
+                    Confira o recorte antes de selecionar.
+                </small>
+            </div>
+            {% endif %}
             <div class="cnh-fields">
                 {% for field in confirm_form.visible_fields %}
                 <div class="{% if field.name == 'sectors' or field.name == 'renewal_date' %}cnh-field-wide{% endif %}">
                     <label for="{{ field.id_for_label }}">{% if field.name == 'phone' %}<svg class="cnh-whatsapp-icon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" style="vertical-align:middle;margin-right:6px;color:#25d366;"><path d="M12 3a9 9 0 0 0-7.8 13.5L3 21l4.6-1.2A9 9 0 1 0 12 3Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M8.1 7.2c.3-.2.8-.1 1 .3l1 2c.1.3.1.6-.1.8l-.7.7c.7 1.3 1.7 2.3 3 3l.7-.8c.2-.2.5-.3.8-.1l2 1c.4.2.5.6.3 1-.5 1-1.4 1.6-2.4 1.4-3.5-.7-6.3-3.5-7-7-.2-1 .4-1.9 1.4-2.3Z" fill="currentColor"/></svg>{% endif %}{{ field.label }}{% if field.field.required %} <span style="color:#dc2626">*</span>{% endif %}</label>
                     {{ field }}
+                    {% for row in cnh_review_rows %}{% if row.field == field.name %}
+                    {% if row.issue %}<small style="display:block;color:#9a3412;margin-top:5px;">{{ row.issue }}</small>{% endif %}
+                    {% if row.preserved %}<small style="display:block;color:#64748b;margin-top:5px;">Dado atual preservado.</small>{% endif %}
+                    {% endif %}{% endfor %}
                     {% if field.help_text %}<small style="display:block;color:#64748b;margin-top:5px;">{{ field.help_text }}</small>{% endif %}
                     {% for error in field.errors %}<small style="display:block;color:#b91c1c;margin-top:5px;">{{ error }}</small>{% endfor %}
                 </div>
@@ -158,41 +191,36 @@
     {% endif %}
 </div>
 
-<div id="cnh-loading" class="cnh-loading" hidden>
-    <div class="cnh-loading-panel" role="status" aria-live="polite" tabindex="-1">
-        <div class="cnh-loading-spinner" aria-hidden="true"></div>
-        <strong style="display:block;font-size:1.15rem;">Lendo PDF da CNH… Aguarde.</strong>
-        <p style="margin:12px 0 0;color:#64748b;">Estamos preparando os dados para sua conferência.</p>
-    </div>
+<div id="cnh-submit-loading" hidden style="position:fixed;inset:0;z-index:2000;background:rgba(15,23,42,.55);padding:20px;">
+  <div style="max-width:420px;margin:20vh auto 0;background:white;padding:24px;border-radius:18px;text-align:center;">
+    <strong>Processando documento</strong>
+    {% include 'ui/partials/cnh_car_loading.html' %}
+  </div>
 </div>
 <script>
 (function () {
-    const form = document.getElementById('cnh-upload-form');
-    const loading = document.getElementById('cnh-loading');
-    if (!form || !loading) return;
-
-    const button = form.querySelector('button[type="submit"]');
-    const originalLabel = button.textContent;
-
-    form.addEventListener('submit', function (event) {
-        if (form.dataset.cnhReading === 'true') {
-            event.preventDefault();
-            return;
-        }
-        form.dataset.cnhReading = 'true';
-        form.setAttribute('aria-busy', 'true');
-        button.disabled = true;
-        button.textContent = 'Lendo PDF…';
-        loading.hidden = false;
-        loading.querySelector('[role="status"]').focus();
-    });
-
-    window.addEventListener('pageshow', function () {
-        delete form.dataset.cnhReading;
-        form.removeAttribute('aria-busy');
-        button.disabled = false;
-        button.textContent = originalLabel;
-        loading.hidden = true;
+    const upload = document.getElementById('cnh-upload-form');
+    const confirm = document.querySelector('[data-cnh-confirm="true"]');
+    [upload, confirm].filter(Boolean).forEach(form => {
+        const button = form.querySelector('button[type="submit"]');
+        if (!button) return;
+        const originalLabel = button.textContent;
+        const reset = () => {
+            delete form.dataset.submitting;
+            form.removeAttribute('aria-busy');
+            button.disabled = false;
+            button.textContent = originalLabel;
+            document.getElementById('cnh-submit-loading').hidden = true;
+        };
+        form.addEventListener('submit', event => {
+            if (form.dataset.submitting) { event.preventDefault(); return; }
+            form.dataset.submitting = 'true';
+            form.setAttribute('aria-busy', 'true');
+            button.disabled = true;
+            button.textContent = form === upload ? 'Enviando PDF…' : 'Confirmando dados…';
+            document.getElementById('cnh-submit-loading').hidden = false;
+        });
+        window.addEventListener('pageshow', reset);
     });
 })();
 </script>

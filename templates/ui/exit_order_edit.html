@@ -1,0 +1,28 @@
+{% extends 'ui/base.html' %}
+{% block title %}Editar {{ order.number }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div><h1>Editar {{ order.number }}</h1>
+  <p>As alterações serão registradas com seu usuário, data e horário.</p></div>
+</div>
+<div class="card form-card">
+  <form method="post">
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+    {% for field in form %}
+      {% if field.is_hidden %}
+        {{ field }}{{ field.errors }}
+      {% else %}
+        <div class="form-group">
+          <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+          {{ field }}{{ field.errors }}
+        </div>
+      {% endif %}
+    {% endfor %}
+    <div class="form-actions">
+      <button class="btn btn-primary" type="submit">Salvar alterações</button>
+      <a class="btn btn-secondary" href="{% url 'exit_order_detail' order.pk %}">Cancelar</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

@@ -148,7 +148,7 @@ class DriverForm(forms.ModelForm):
             self.fields.pop("sectors",None)
             allowed = set()
         self._original_identity = {
-            field: getattr(self.instance, field) or "" for field in ("cpf", "cnh_number")
+            field: getattr(self.instance, field) or "" for field in ("cpf",)
         }
         self._requested_sector = requested_sector
         self._allowed_sector_slugs = allowed
@@ -169,6 +169,21 @@ class DriverForm(forms.ModelForm):
     def clean(self):
         import re
         cleaned = super().clean()
+        from apps.fleet.cnh_review import validate_review_values
+        from apps.fleet.cnh_legacy import _cpf_digits
+        normalized_cpf = _cpf_digits(str(cleaned.get('cpf') or ''))
+        if normalized_cpf:
+            cleaned['cpf'] = f'{normalized_cpf[:3]}.{normalized_cpf[3:6]}.{normalized_cpf[6:9]}-{normalized_cpf[9:]}'
+        if cleaned.get('cnh_number'):
+            number = re.sub(r'[^0-9]', '', cleaned['cnh_number'])
+            if len(number) == 11:
+                cleaned['cnh_number'] = number
+        if cleaned.get('cnh_category'):
+            cleaned['cnh_category'] = cleaned['cnh_category'].strip().upper()
+        try:
+            validate_review_values(cleaned)
+        except ValueError as exc:
+            self.add_error(None, str(exc))
         if not self.instance._state.adding:
             for field, old in self._original_identity.items():
                 if field not in self.fields or field in self.errors:
@@ -666,6 +681,7 @@ class BrazilianDateField(forms.DateField):
 
 
 class CNHDriverCreateForm(DriverForm):
+    identity_confirmed = forms.BooleanField(label="Conferi os campos com o PDF original e confirmo os dados para salvar.", required=False)
     birth_date = BrazilianDateField(label="Data de nascimento", required=False)
     cnh_expiration = BrazilianDateField(label="Validade CNH", required=False)
 
@@ -692,6 +708,17 @@ class CNHDriverCreateForm(DriverForm):
         super().__init__(*args, user=user, requested_sector=requested_sector, **kwargs)
         # Renovação é um evento administrativo, não um dado impresso na CNH.
         self.fields.pop("renewal_date", None)
+        from django.conf import settings
+        self.fields["identity_confirmed"].required = getattr(settings, "CNH_REQUIRE_REVIEW_CONFIRMATION", False)
+        if isinstance(self, CNHDriverUpdateForm):
+            self.fields["identity_confirmed"].required = True
+
+    def _get_validation_exclusions(self):
+        # A unicidade do CPF/CNH é validada pelo fluxo transacional de confirmação,
+        # que distingue renovação do mesmo motorista de documento de outra pessoa.
+        exclude = super()._get_validation_exclusions()
+        exclude.update(field for field in ("cpf", "cnh_number") if field in self.fields)
+        return exclude
 
     def save(self, commit=True):
         driver = super().save(commit=commit)
@@ -750,6 +777,7 @@ class DriverDocumentEditForm(CNHDriverCreateForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields.pop("document_id", None)
+        self.fields.pop("identity_confirmed", None)
         self.fields["phone"].label = "Telefone / WhatsApp"
         self.fields["phone"].widget = forms.TextInput(attrs={
             **INPUT, "type": "tel", "autocomplete": "tel", "inputmode": "tel",

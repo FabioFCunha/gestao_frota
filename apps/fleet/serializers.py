@@ -8,13 +8,11 @@ class VehicleSerializer(serializers.ModelSerializer):
     current_plate = serializers.SerializerMethodField()
     reserved_plate = serializers.SerializerMethodField()
     current_mileage = serializers.SerializerMethodField()
-    latest_inspection_date = serializers.SerializerMethodField()
-    latest_inspection_status = serializers.SerializerMethodField()
 
     class Meta:
         model = Vehicle
         fields = "__all__"
-        read_only_fields = ["id", "created_at", "updated_at", "created_by", "sector", "current_mileage", "current_driver", "current_plate", "reserved_plate", "latest_inspection_date", "latest_inspection_status"]
+        read_only_fields = ["id", "created_at", "updated_at", "created_by", "sector", "current_mileage", "current_driver", "current_plate", "reserved_plate"]
 
     def get_current_driver(self, obj):
         active_assignment = next((a for a in obj.driver_assignments.all() if a.is_active), None)
@@ -34,13 +32,6 @@ class VehicleSerializer(serializers.ModelSerializer):
         active_plate = next((p for p in obj.plate_history.all() if p.kind == "RESERVED" and p.ends_on is None), None)
         return active_plate.plate if active_plate else ""
 
-    def get_latest_inspection_date(self, obj):
-        latest = next(iter(obj.inspections.all()), None)
-        return latest.date if latest else None
-
-    def get_latest_inspection_status(self, obj):
-        latest = next(iter(obj.inspections.all()), None)
-        return latest.status.name if latest and latest.status else None
 
 
 class VehicleHistorySerializer(serializers.ModelSerializer):

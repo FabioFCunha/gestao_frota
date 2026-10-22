@@ -1,7 +1,10 @@
+from django.conf import settings
+from .cnh_imports import enqueue_response, imported_document, confirmation_response
+from .cnh_safety import review_context, audit_context
 from .exit_order_bdt import exit_order_bdt_rows
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import LoginView
-from django.db import transaction, IntegrityError
+from django.db import transaction, IntegrityError, models
 from django.db.models import Count, Q, Prefetch
 from django.core.paginator import Paginator
 from django.core.exceptions import PermissionDenied, ValidationError
@@ -18,7 +21,7 @@ from apps.accounts.decorators import module_permission
 from apps.fleet.models import VehiclePlate, Renter
 from apps.fleet.sector_scope import apply_sector_scope, validate_vehicle_scope
 
-from apps.fleet.services import get_vehicle_revision_interval
+from apps.fleet.services import get_vehicle_revision_interval, can_close_vehicle_exit_order
 
 class FleetLoginView(LoginView):
     template_name = "ui/login.html"
@@ -26,6 +29,17 @@ class FleetLoginView(LoginView):
     redirect_authenticated_user = True
 
     def get_success_url(self):
+        from django.conf import settings
+        if getattr(settings, 'CENTRAL_USER_MANAGEMENT', False):
+            from apps.driverops.surfaces import management_url, app_url
+            from apps.driverops.models import Member
+            if self.request.user.is_superuser:
+                return management_url('/empresas/')
+            member = Member.objects.filter(user=self.request.user, active=True, company__active=True).first()
+            if member and member.role == Member.DRIVER:
+                return app_url()
+            if member and member.role in Member.DESKTOP_ROLES:
+                return management_url('/')
         if hasattr(self.request, 'company_member'):
             if self.request.user.is_superuser:
                 return '/api/driver/management/'
@@ -34,7 +48,7 @@ class FleetLoginView(LoginView):
             member = Member.objects.filter(user=self.request.user, active=True, company__active=True).first()
             if member and member.role == Member.DRIVER:
                 return '/api/driver/app/'
-            if member and member.role == Member.MANAGER:
+            if member and member.role in Member.DESKTOP_ROLES:
                 next_url = self.get_redirect_url()
                 if not next_url or urlsplit(next_url).path.startswith('/api/driver/'):
                     return '/'
@@ -44,7 +58,8 @@ class FleetLoginView(LoginView):
 @login_required
 def dashboard(request):
     if hasattr(request, 'company_member') and request.user.is_superuser:
-        return redirect('/api/driver/management/')
+        from django.conf import settings
+        return redirect('/empresas/' if getattr(settings, 'CENTRAL_USER_MANAGEMENT', False) else '/api/driver/management/')
     from datetime import timedelta
     from apps.fleet.models import Vehicle, VehiclePlate, Maintenance, VehicleFine
     from apps.fleet.services import get_dashboard_metrics, get_operational_alerts, get_crlv_alerts
@@ -201,7 +216,12 @@ def dashboard(request):
         else:
             rev_dict = None
 
+        cnh_days = (active_driver.cnh_expiration - today).days if active_driver and active_driver.cnh_expiration else None
         plate_rows.append({
+            "brand": vehicle.brand.name if vehicle.brand else "",
+            "crlv_exercise": vehicle.crlv_exercise,
+            "cnh_label": "Sem motorista" if not active_driver else "Não informada" if cnh_days is None else "Vencida" if cnh_days < 0 else f"Vence em {cnh_days} dias" if cnh_days <= 30 else "Regular",
+            "cnh_tone": "vc-muted" if cnh_days is None else "vc-danger" if cnh_days < 0 else "vc-warning" if cnh_days <= 30 else "vc-good",
             "id": vehicle.id,
             "plate": current_plate,
             "model": vehicle.model.name if vehicle.model else "",
@@ -253,6 +273,19 @@ def dashboard(request):
     licensing_calendar_missing_count = len({
         item["vehicle_id"] for item in crlv_alerts.get("calendar_missing", [])
     })
+
+    for row in plate_rows:
+        pending = licensing_by_vehicle.get(str(row['id']))
+        if 'crlv_vencido' in row['alerts']:
+            row.update(crlv_label='Vencido', crlv_tone='vc-danger')
+        elif pending:
+            row.update(crlv_label=pending['status_label'], crlv_tone='vc-warning')
+        elif not row['crlv_exercise']:
+            row.update(crlv_label='Não informado', crlv_tone='vc-muted')
+        elif row['crlv_exercise'] >= today.year:
+            row.update(crlv_label='Regular', crlv_tone='vc-good')
+        else:
+            row.update(crlv_label='Verificar calendário', crlv_tone='vc-muted')
 
     context = {
         "show_sector_filter": can_select_sector(request.user),
@@ -694,7 +727,7 @@ def licensing_calendar(request):
 @module_permission("fleet.view_vehicle")
 def vehicle_dossier(request, pk):
     import re
-    from apps.fleet.models import Vehicle, VehiclePlate, VehicleMileage, VehicleCustody, VehicleExitOrder, VehicleCRLV
+    from apps.fleet.models import Vehicle, VehiclePlate, VehicleMileage, VehicleCustody, VehicleExitOrder, VehicleCRLV, DriverCNHPhoto
     from django.shortcuts import get_object_or_404
 
     from apps.fleet.sector_scope import validate_vehicle_scope
@@ -748,7 +781,6 @@ def vehicle_dossier(request, pk):
     km_history = VehicleMileage.objects.filter(vehicle=vehicle).order_by('-date')[:10]
     maintenances = vehicle.maintenances.select_related('status', 'type', 'workshop').order_by('-entered_at')[:10]
     fines = vehicle.fines.select_related('status').order_by('-date')[:10]
-    inspections = vehicle.inspections.select_related('type', 'status').order_by('-date')[:10]
     exit_orders = vehicle.exit_orders.select_related('driver', 'opened_by', 'closed_by').order_by('-departed_at')[:10]
     pending_exit_order = next((order for order in exit_orders if order.state == VehicleExitOrder.State.PENDING), None)
     active_assignment = (
@@ -802,6 +834,10 @@ def vehicle_dossier(request, pk):
     km_prox_revisao = revision["next_revision_km"]
     km_faltando = revision["km_remaining"]
     revisao_status = revision["status"]
+    revision_progress = (
+        max(0, min(100, round(km_atual * 100 / km_prox_revisao)))
+        if km_atual is not None and km_prox_revisao is not None and km_prox_revisao > 0 else None
+    )
     bdt_revision_due = bool(
         bdt_latest_operational and km_prox_revisao is not None
         and normalize_km(bdt_latest_operational.ended_km) >= km_prox_revisao
@@ -809,6 +845,7 @@ def vehicle_dossier(request, pk):
 
     if request.method == 'POST':
         from datetime import datetime
+        from django.forms import DateTimeField
         from apps.fleet.models import Driver
         from apps.fleet.services import start_vehicle_custody, transfer_vehicle_custody, end_vehicle_custody
         action = request.POST.get('action')
@@ -825,16 +862,16 @@ def vehicle_dossier(request, pk):
                 elif action == 'transfer_custody':
                     transfer_vehicle_custody(custody=active_custody,
                         new_driver=Driver.objects.get(pk=request.POST.get('new_driver')), user=request.user,
-                        transferred_at=datetime.fromisoformat(request.POST.get('transferred_at')),
+                        transferred_at=DateTimeField().clean(request.POST.get('transferred_at')),
                         notes=request.POST.get('notes', ''))
                 else:
                     end_vehicle_custody(custody=active_custody, user=request.user,
                         ended_on=datetime.fromisoformat(request.POST.get('ended_on')).date(),
-                        assignment_ended_at=datetime.fromisoformat(request.POST.get('assignment_ended_at')),
+                        assignment_ended_at=DateTimeField().clean(request.POST.get('assignment_ended_at')),
                         notes=request.POST.get('notes', ''))
                 messages.success(request, 'Acautelamento atualizado com sucesso.')
-            except (Driver.DoesNotExist, TypeError, ValueError) as exc:
-                messages.error(request, str(exc))
+            except (Driver.DoesNotExist, TypeError, ValueError, ValidationError) as exc:
+                messages.error(request, ' '.join(exc.messages) if isinstance(exc, ValidationError) else str(exc))
             return redirect('vehicle_dossier', pk=vehicle.pk)
 
     context = {
@@ -847,11 +884,12 @@ def vehicle_dossier(request, pk):
         'km_history': km_history,
         'maintenances': maintenances,
         'fines': fines,
-        'inspections': inspections,
         'exit_orders': exit_orders,
         'pending_exit_order': pending_exit_order,
-        'can_close_exit_order_ids': {str(order.id) for order in exit_orders if order.state == VehicleExitOrder.State.PENDING and order.opened_by_id == request.user.id},
+        'can_close_exit_order_ids': {str(order.id) for order in exit_orders if order.state == VehicleExitOrder.State.PENDING and can_close_vehicle_exit_order(request.user)},
         'active_driver': active_driver,
+        'active_driver_has_photo': bool(active_driver and request.user.has_perm('fleet.view_driver')
+                                       and DriverCNHPhoto.objects.filter(driver=active_driver, active=True).exists()),
         'active_assignment': active_assignment,
         'active_custody': active_custody,
         'all_drivers': __import__('apps.fleet.models', fromlist=['Driver']).Driver.objects.filter(active=True).order_by('name'),
@@ -863,6 +901,8 @@ def vehicle_dossier(request, pk):
         'km_prox_revisao': km_prox_revisao,
         'km_atual': km_atual,
         'km_faltando': km_faltando,
+        'revision_distance': abs(km_faltando) if km_faltando is not None else None,
+        'revision_progress': revision_progress,
         'revisao_status': revisao_status,
         'obs_list': obs_list,
         'bdt_page': bdt_page,
@@ -1474,8 +1514,8 @@ def fine_list(request):
 @module_permission("fleet.add_driver")
 def driver_create(request):
     from urllib.parse import urlencode
-    from apps.fleet.models import Document, AuditLog
-    from apps.fleet.services import stage_cnh_document_for_creation, link_document, cnh_confirmation_source, validate_cnh_identity
+    from apps.fleet.models import Document, AuditLog, Driver
+    from apps.fleet.services import stage_cnh_document_for_creation, link_document, cnh_confirmation_source, validate_cnh_identity, update_driver_document_data, current_cnh_document_values
 
     requested_sector = request.GET.get("sector")
     list_url = reverse("driver_list")
@@ -1489,7 +1529,12 @@ def driver_create(request):
             if form.is_valid():
                 try:
                     with transaction.atomic():
-                        form.save()
+                        saved_driver = form.save()
+                        AuditLog.objects.create(user=request.user, module='cnh',
+                            action='MOTORISTA CADASTRADO MANUALMENTE', entity_type='driver',
+                            entity_id=saved_driver.pk, new_values={'driver_id':str(saved_driver.pk),
+                                'cpf':saved_driver.cpf, 'cnh_number':saved_driver.cnh_number},
+                            reason='Cadastro manual, sem leitura automática de documento.')
                 except (ValidationError, IntegrityError) as exc:
                     form.add_error(None, "CPF, CNH ou matrícula já cadastrados." if isinstance(exc, IntegrityError) else str(exc))
                 else:
@@ -1513,6 +1558,8 @@ def driver_create(request):
         upload_form = CNHUploadForm(request.POST, request.FILES)
         if upload_form.is_valid():
             try:
+                if getattr(settings, 'CNH_BACKGROUND_IMPORTS', False):
+                    return enqueue_response(request, upload_form.cleaned_data['file'])
                 document, preview = stage_cnh_document_for_creation(
                     file_obj=upload_form.cleaned_data["file"],
                     user=request.user,
@@ -1596,34 +1643,99 @@ def driver_create(request):
                         document, extracted = cnh_confirmation_source(
                             document_id=document.pk, user=request.user,
                         )
-                        validate_cnh_identity(extracted=extracted, values=confirm_form.cleaned_data)
-                        driver = confirm_form.save()
-                        link_document(document=document, obj=driver, user=request.user)
-                        AuditLog.objects.create(
-                            user=request.user,
-                            module="cnh",
-                            action="CNH CADASTRADA A PARTIR DE PDF",
-                            entity_type="document",
-                            entity_id=document.id,
-                            new_values={
-                                "driver_id": str(driver.id),
-                                "driver_name": driver.name,
-                                "reviewed": True,
-                                "source": "CNH PDF",
-                                "extracted_data": extracted,
-                                "form_values": reviewed_values,
-                            },
+                        cpf_digits = "".join(
+                            ch for ch in str(extracted.get("cpf") or "") if ch.isdigit()
                         )
+                        existing_driver = None
+                        if len(cpf_digits) == 11:
+                            cpf_key = models.Func(
+                                models.F("cpf"), models.Value(r"[^0-9]"), models.Value(""),
+                                models.Value("g"), function="REGEXP_REPLACE",
+                                output_field=models.CharField(),
+                            )
+                            from apps.fleet.driver_scope import apply_driver_sector_scope
+                            existing_driver = apply_driver_sector_scope(
+                                Driver.objects.all(), request.user, requested_sector,
+                            ).annotate(cpf_identity_key=cpf_key).filter(cpf_identity_key=cpf_digits).first()
+
+                        validate_cnh_identity(
+                            extracted=extracted,
+                            values=confirm_form.cleaned_data,
+                            driver=existing_driver,
+                        )
+                        if existing_driver is not None:
+                            if not request.user.has_perm("fleet.change_driver") and not request.user.is_system_creator:
+                                raise ValueError("Seu perfil não permite atualizar motoristas existentes.")
+                            # CPF identifica o cadastro existente: renovar em vez de criar
+                            # um segundo motorista, preservando setor, unidade e vínculos.
+                            driver = update_driver_document_data(
+                                driver=existing_driver,
+                                values=confirm_form.cleaned_data,
+                                user=request.user,
+                                preserve_blank=True,
+                            )
+                            # Registra os valores efetivamente preservados/salvos, não
+                            # os campos vazios de uma leitura incompleta do OCR.
+                            reviewed_values.update(current_cnh_document_values(driver))
+                            link_document(document=document, obj=driver, user=request.user)
+                            AuditLog.objects.create(
+                                user=request.user,
+                                module="cnh",
+                                action="CNH ATUALIZADA A PARTIR DE PDF",
+                                entity_type="document",
+                                entity_id=document.id,
+                                old_values={},
+                                new_values={
+                                    "driver_id": str(driver.id),
+                                    "driver_name": driver.name,
+                                    "reviewed": True,
+                                    "source": "CNH PDF",
+                                    "extracted_data": extracted,
+                                    "form_values": reviewed_values,
+                                },
+                            )
+                        else:
+                            driver = confirm_form.save()
+                            link_document(document=document, obj=driver, user=request.user)
+                            AuditLog.objects.create(
+                                user=request.user,
+                                module="cnh",
+                                action="CNH CADASTRADA A PARTIR DE PDF",
+                                entity_type="document",
+                                entity_id=document.id,
+                                new_values={
+                                    "driver_id": str(driver.id),
+                                    "driver_name": driver.name,
+                                    "reviewed": True,
+                                    "source": "CNH PDF",
+                                    "extracted_data": extracted,
+                                    "form_values": reviewed_values,
+                                },
+                            )
+                        if request.POST.get("save_cnh_photo") == "1":
+                            from .cnh_photo import save_confirmed_cnh_photo
+                            save_confirmed_cnh_photo(
+                                driver=driver, document=document, user=request.user,
+                            )
                 except (ValueError, ValidationError, IntegrityError) as exc:
                     confirm_form.add_error(None, "CPF, CNH ou matrícula já cadastrados." if isinstance(exc, IntegrityError) else str(exc))
                 else:
-                    messages.success(request, f"Motorista {driver.name} cadastrado após conferência da CNH.")
-                    return redirect(list_url)
+                    if existing_driver is not None:
+                        messages.success(request, f"CNH de {driver.name} atualizada no cadastro existente.")
+                    else:
+                        messages.success(request, f"Motorista {driver.name} cadastrado após conferência da CNH.")
+                    return confirmation_response(request, document.pk, list_url)
 
-        if confirm_form and confirm_form.is_bound and confirm_form.data.get("document_id"):
-            document = Document.objects.filter(pk=confirm_form.data.get("document_id")).first()
+        if confirm_form and confirm_form.is_bound:
+            # O campo UUID só é seguro após a validação do formulário. A
+            # conferência pertence ao usuário que enviou o PDF.
+            document_id = confirm_form.cleaned_data.get("document_id")
+            document = Document.objects.filter(
+                pk=document_id, created_by=request.user, document_type__name="CNH",
+            ).first() if document_id else None
             if document:
                 staged_preview = AuditLog.objects.filter(
+                    user=request.user,
                     entity_type="document",
                     entity_id=document.id,
                     module="cnh",
@@ -1631,11 +1743,19 @@ def driver_create(request):
                 ).order_by("-created_at").first()
                 preview = dict(staged_preview.new_values or {}) if staged_preview else None
 
+    if request.method == 'GET' and request.GET.get('import'):
+        document, preview = imported_document(request)
+        confirm_form = CNHDriverCreateForm(initial={
+            **{field:preview.get(field, '') for field in CNHDriverCreateForm.Meta.fields},
+            'document_id':document.pk,
+        }, user=request.user, requested_sector=requested_sector)
+
     return render(request, "ui/driver_create_cnh.html", {
         "upload_form": upload_form,
         "confirm_form": confirm_form,
         "preview": preview,
         "document": document,
+        **review_context(request, preview),
         "title": "Cadastrar motorista pela CNH",
         "back_url_url": list_url,
         "requested_sector": requested_sector,
@@ -1672,7 +1792,7 @@ def driver_edit(request, pk):
             if "phone" not in request.POST:
                 values.pop("phone", None)
             driver = update_driver_document_data(driver=driver, values=values, user=request.user)
-        except (ValidationError, IntegrityError) as exc:
+        except (ValueError, ValidationError, IntegrityError) as exc:
             form.add_error(None, "CPF ou CNH já cadastrados em outro motorista." if isinstance(exc, IntegrityError) else str(exc))
         else:
             messages.success(request, "Dados documentais do motorista atualizados com sucesso!")
@@ -2323,7 +2443,7 @@ def exit_order_detail(request, pk):
         'plate': _exit_order_plate(order.vehicle),
         'audits': audits,
         'bdt_rows': exit_order_bdt_rows(order),
-        'can_close': order.state == VehicleExitOrder.State.PENDING and order.opened_by_id == request.user.id and (request.user.is_system_creator or request.user.has_perm('fleet.change_vehicleexitorder')),
+        'can_close': order.state == VehicleExitOrder.State.PENDING and can_close_vehicle_exit_order(request.user),
     })
 
 
@@ -2334,8 +2454,6 @@ def exit_order_return(request, pk):
     from apps.fleet.services import close_vehicle_exit_order
     order = get_object_or_404(VehicleExitOrder.objects.select_related('vehicle', 'opened_by'), pk=pk)
     validate_vehicle_scope(request.user, order.vehicle, request.GET.get("sector"))
-    if order.opened_by_id != request.user.id:
-        raise PermissionDenied('Somente o usuário que abriu a OS pode registrar o retorno.')
     if request.method == 'POST':
         form = VehicleExitOrderReturnForm(request.POST)
         if form.is_valid():
@@ -2397,6 +2515,8 @@ def driver_cnh(request, pk):
         upload_form = CNHUploadForm(request.POST, request.FILES)
         if upload_form.is_valid():
             try:
+                if getattr(settings, 'CNH_BACKGROUND_IMPORTS', False):
+                    return enqueue_response(request, upload_form.cleaned_data['file'], driver)
                 document, preview = stage_cnh_document_for_creation(
                     file_obj=upload_form.cleaned_data["file"], user=request.user, driver=driver,
                 )
@@ -2417,13 +2537,16 @@ def driver_cnh(request, pk):
             try:
                 driver = confirm_cnh_for_driver(
                     driver=driver, document_id=confirm_form.cleaned_data["document_id"],
-                    values=confirm_form.cleaned_data, user=request.user,
+                    values={
+                        **confirm_form.cleaned_data,
+                        "_save_cnh_photo": request.POST.get("save_cnh_photo") == "1",
+                    }, user=request.user,
                 )
             except (ValueError, ValidationError, IntegrityError, Document.DoesNotExist) as exc:
                 confirm_form.add_error(None, "CPF ou CNH já cadastrados em outro motorista." if isinstance(exc, IntegrityError) else "Documento não localizado." if isinstance(exc, Document.DoesNotExist) else str(exc))
             else:
                 messages.success(request, f"CNH vinculada ao cadastro existente de {driver.name}.")
-                return redirect(list_url)
+                return confirmation_response(request, confirm_form.cleaned_data["document_id"], list_url)
         # Não mostrar documento de outro usuário ou de outro motorista ao reexibir erros.
         try:
             document_id = uuid.UUID(str(request.POST.get("document_id", "")))
@@ -2438,8 +2561,44 @@ def driver_cnh(request, pk):
                 document = Document.objects.filter(pk=document_id).first()
                 preview = dict(staged.new_values or {})
         driver.refresh_from_db()
+    if request.method == 'GET' and request.GET.get('import'):
+        document, preview = imported_document(request, driver)
+        previous_values = current_cnh_document_values(driver)
+        initial = {'document_id':document.pk}
+        for field in CNHDriverUpdateForm.Meta.fields:
+            initial[field] = preview.get(field) or getattr(driver, field, '') or previous_values.get(field, '')
+        confirm_form = CNHDriverUpdateForm(initial=initial, instance=driver, user=request.user, requested_sector=requested_sector)
+
     return render(request, "ui/driver_create_cnh.html", {
         "upload_form": upload_form, "confirm_form": confirm_form, "preview": preview,
         "document": document, "cnh_target": driver, "back_url_url": list_url,
+        **review_context(request, preview, driver),
+        **audit_context(driver),
         "requested_sector": requested_sector,
     })
+
+
+@login_required
+@module_permission("fleet.add_maintenance")
+def maintenance_type_quick_create(request):
+    from apps.fleet.models import MaintenanceType
+    from django.db import transaction
+
+    if request.method != "POST":
+        return JsonResponse({"error": "Use POST."}, status=405)
+
+    name = " ".join((request.POST.get("name") or "").split())
+    if not name or len(name) > 150:
+        return JsonResponse(
+            {"error": "Informe um nome com até 150 caracteres."}, status=400
+        )
+
+    with transaction.atomic():
+        maintenance_type = MaintenanceType.objects.filter(name__iexact=name).order_by("created_at").first()
+        if maintenance_type is None:
+            maintenance_type = MaintenanceType.objects.create(name=name, active=True)
+        elif not maintenance_type.active:
+            maintenance_type.active = True
+            maintenance_type.save(update_fields=["active", "updated_at"])
+
+    return JsonResponse({"id": str(maintenance_type.pk), "name": maintenance_type.name})
