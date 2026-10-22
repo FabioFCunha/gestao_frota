@@ -97,7 +97,7 @@ class SafetyTests(TestCase):
             response=self.client.post(self.url,{'step':'upload','file':upload()})
         self.assertEqual(response.status_code,200);self.assertContains(response,'Cadastro atual');self.assertContains(response,'<iframe')
         self.assertContains(response,'Leitura incompleta');self.assertContains(response,'dígitos verificadores inválidos')
-        self.assertContains(response,'Corrigir CPF cadastrado')
+        self.assertNotContains(response,'Corrigir CPF cadastrado')
     def test_async_queue_finishes_before_human_confirmation_and_rejects_duplicate_enqueues(self):
         from apps.fleet.cnh_jobs import enqueue,claim_next,process
         with override_settings(CNH_BACKGROUND_IMPORTS=True):

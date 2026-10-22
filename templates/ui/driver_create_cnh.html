@@ -81,14 +81,12 @@
         {% endif %}
     </section>
 
-    {% if perms.fleet.correct_driver_identity %}<p><a href="{% url 'cnh_import_monitor' %}">Acompanhar importações de CNH</a></p>{% endif %}
     {% if messages %}
         {% for message in messages %}
         <div role="status" style="padding:12px 14px;border-radius:9px;margin-bottom:14px;background:#eff6ff;color:#1e3a8a;">{{ message }}</div>
         {% endfor %}
     {% endif %}
 
-    {% if cnh_target and perms.fleet.correct_driver_identity %}<p><a href="{% url 'driver_identity_correction' cnh_target.pk %}">Corrigir CPF cadastrado com documento e auditoria</a></p>{% endif %}
     {% if document and confirm_form and not cnh_edit_mode %}{% include 'ui/partials/cnh_progress.html' with cnh_stage='review' %}{% endif %}
     {% if confirm_form %}
     <div class="cnh-review-layout {% if document %}has-pdf{% endif %}">
@@ -123,7 +121,6 @@
             <td>{{ row.current|default:"—" }}</td><td>{{ row.read|default:"Não identificado" }}{% if row.issue %}<small style="display:block;color:#9a3412;">{{ row.issue }}</small>{% endif %}{% if row.preserved %}<small style="display:block;">Dado atual preservado.</small>{% endif %}</td>
             <td class="cnh-proposed" data-field="{{ row.field }}" data-current="{{ row.current }}" data-locked="{{ row.locked|yesno:'true,false' }}">{{ row.proposed|default:"—" }}</td>
         </tr>{% endfor %}</tbody></table></div>
-        {% if cnh_can_correct %}<p><a href="{% url 'driver_identity_correction' cnh_review_driver.pk %}">Corrigir CPF cadastrado com documento e auditoria</a></p>{% endif %}
         {% endif %}
 
         {% endif %}
@@ -205,13 +202,6 @@
     </section>
     {% endif %}
 
-    {% if cnh_recent_audits %}<details class="panel" style="padding:20px;margin-top:20px;">
-    <summary>Histórico de alterações da CNH</summary>
-    {% for audit in cnh_recent_audits %}<div style="border-bottom:1px solid #e2e8f0;padding:12px 0;">
-    <strong>{{ audit.action }}</strong> · {{ audit.created_at|date:"d/m/Y H:i" }} · {{ audit.user.get_full_name|default:audit.user.username|default:"Sistema" }}
-    {% if audit.reason %}<p>{{ audit.reason }}</p>{% endif %}
-    {% if audit.action == 'CORREÇÃO CPF COM DOCUMENTO' %}<p>CPF anterior: {{ audit.old_values.cpf|default:"Não informado" }} → CPF corrigido: {{ audit.new_values.cpf }}</p>{% endif %}
-    </div>{% endfor %}</details>{% endif %}
     {% if not cnh_target %}
     <div style="text-align:center;margin:18px 0 8px;color:#64748b;">
         <a href="{% url 'driver_create' %}?manual=1{% if requested_sector %}&amp;sector={{ requested_sector|urlencode }}{% endif %}">Prefiro cadastrar manualmente</a>

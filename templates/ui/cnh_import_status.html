@@ -48,7 +48,6 @@
     {% if job.driver_id %}<a class="cnh-reading-back" href="{% url 'driver_cnh' job.driver_id %}">Voltar à CNH deste motorista</a>{% endif %}
     <a class="cnh-reading-list" href="{% url 'driver_list' %}">Voltar aos motoristas</a>
   </div>
-  {% if job.driver_id and perms.fleet.correct_driver_identity %}<a class="cnh-reading-correction" href="{% url 'driver_identity_correction' job.driver_id %}">Corrigir CPF cadastrado com documento e auditoria</a>{% endif %}
 </section>
 <script>
 (() => {
