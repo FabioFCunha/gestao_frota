@@ -70,8 +70,8 @@
                         {% endif %}
                     </td>
                     <td style="white-space:nowrap;">
-                        <a class="table-action" href="{% url 'driver_assign_vehicle' d.id %}{% if requested_sector %}?sector={{ requested_sector|urlencode }}{% endif %}">Vincular veículo</a>
-                        {% if perms.fleet.change_driver or user.is_system_creator %}<a class="table-action" href="{% url 'driver_cnh' d.id %}{% if requested_sector %}?sector={{ requested_sector|urlencode }}{% endif %}">Inserir/atualizar CNH</a>{% endif %}
+                        <a class="table-action secondary" href="{% url 'driver_assign_vehicle' d.id %}{% if requested_sector %}?sector={{ requested_sector|urlencode }}{% endif %}">Vincular veículo</a>
+                        {% if perms.fleet.change_driver or user.is_system_creator %}<a class="table-action secondary" href="{% url 'driver_cnh' d.id %}{% if requested_sector %}?sector={{ requested_sector|urlencode }}{% endif %}">Inserir/atualizar CNH</a>{% endif %}
                         <a class="table-action secondary" href="{% url 'driver_edit' d.id %}{% if requested_sector %}?sector={{ requested_sector|urlencode }}{% endif %}">Editar</a>
                         {% if d.active and perms.fleet.delete_driver %}<a class="table-action secondary" style="color:#b91c1c;" href="{% url 'driver_delete' d.id %}{% if requested_sector %}?sector={{ requested_sector|urlencode }}{% endif %}">Excluir</a>{% endif %}
                     </td>
