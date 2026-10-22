@@ -1,5 +1,5 @@
 from django.conf import settings
-from .cnh_imports import enqueue_response, imported_document
+from .cnh_imports import enqueue_response, imported_document, confirmation_response
 from .cnh_safety import review_context, audit_context
 from .exit_order_bdt import exit_order_bdt_rows
 from django.contrib.auth.decorators import login_required
@@ -1706,7 +1706,7 @@ def driver_create(request):
                         messages.success(request, f"CNH de {driver.name} atualizada no cadastro existente.")
                     else:
                         messages.success(request, f"Motorista {driver.name} cadastrado após conferência da CNH.")
-                    return redirect(list_url)
+                    return confirmation_response(request, document.pk, list_url)
 
         if confirm_form and confirm_form.is_bound:
             # O campo UUID só é seguro após a validação do formulário. A
@@ -2528,7 +2528,7 @@ def driver_cnh(request, pk):
                 confirm_form.add_error(None, "CPF ou CNH já cadastrados em outro motorista." if isinstance(exc, IntegrityError) else "Documento não localizado." if isinstance(exc, Document.DoesNotExist) else str(exc))
             else:
                 messages.success(request, f"CNH vinculada ao cadastro existente de {driver.name}.")
-                return redirect(list_url)
+                return confirmation_response(request, confirm_form.cleaned_data["document_id"], list_url)
         # Não mostrar documento de outro usuário ou de outro motorista ao reexibir erros.
         try:
             document_id = uuid.UUID(str(request.POST.get("document_id", "")))

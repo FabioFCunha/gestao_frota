@@ -1,0 +1,14 @@
+{% extends 'ui/base.html' %}
+{% block title %}CNH confirmada | Gestão de Frotas{% endblock %}
+{% block heading %}Leitura da CNH{% endblock %}
+{% block content %}
+<article class="panel" style="max-width:720px;margin:28px auto;padding:32px;border-radius:20px;">
+  <h2>CNH confirmada</h2>
+  <p>Os dados conferidos foram salvos e o documento foi vinculado ao cadastro do motorista.</p>
+  {% include 'ui/partials/cnh_progress.html' with cnh_stage='confirmed' %}
+  <div style="display:flex;gap:12px;flex-wrap:wrap;">
+    {% if job.driver_id %}<a class="primary-action" href="{% url 'driver_cnh' job.driver_id %}">Ver CNH do motorista</a>{% endif %}
+    <a class="secondary-action" href="{% url 'driver_list' %}">Voltar aos motoristas</a>
+  </div>
+</article>
+{% endblock %}

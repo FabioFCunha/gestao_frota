@@ -21,13 +21,6 @@
 .cnh-data strong { overflow-wrap:anywhere; }
 @media(max-width:760px) { .cnh-fields,.cnh-data-grid { grid-template-columns:1fr; } .cnh-field-wide { grid-column:auto; } .cnh-hero { padding:20px; } }
 
-.cnh-loading { position:fixed; inset:0; z-index:2000; display:flex; align-items:center; justify-content:center; padding:20px; background:rgba(15,23,42,.65); }
-.cnh-loading[hidden] { display:none; }
-.cnh-loading-panel { width:min(420px,100%); padding:32px; border-radius:16px; background:#fff; text-align:center; box-shadow:0 20px 60px rgba(0,0,0,.25); color:#0f172a; }
-.cnh-loading-spinner { width:48px; height:48px; margin:0 auto 20px; border:5px solid #dbeafe; border-top-color:#1d4e89; border-radius:50%; animation:cnh-loading-spin .85s linear infinite; }
-@keyframes cnh-loading-spin { to { transform:rotate(360deg); } }
-@media(prefers-reduced-motion:reduce) { .cnh-loading-spinner { animation:none; } }
-
 /* cnh-photo-top-right */
 .cnh-photo-top-right {
     float:right;
@@ -96,6 +89,7 @@
     {% endif %}
 
     {% if cnh_target and perms.fleet.correct_driver_identity %}<p><a href="{% url 'driver_identity_correction' cnh_target.pk %}">Corrigir CPF cadastrado com documento e auditoria</a></p>{% endif %}
+    {% if document and confirm_form and not cnh_edit_mode %}{% include 'ui/partials/cnh_progress.html' with cnh_stage='review' %}{% endif %}
     {% if confirm_form %}
     <div class="cnh-review-layout {% if document %}has-pdf{% endif %}">
     {% if document %}<aside class="cnh-pdf">
@@ -138,7 +132,7 @@
             <div><strong>{% if cnh_edit_mode %}Dados do motorista{% elif cnh_target %}Conferência e vínculo ao motorista{% else %}Conferência e cadastro{% endif %}</strong><div style="color:#64748b;margin-top:3px;">Os campos abaixo são editáveis. Dados complementares lidos do documento também serão guardados no histórico da CNH.</div></div>
         </div>
 
-        <form method="post" action="" style="margin-top:18px;">
+        <form method="post" action="" style="margin-top:18px;" data-cnh-confirm="{% if document and not cnh_edit_mode %}true{% endif %}">
             {% csrf_token %}
             {% if not cnh_edit_mode %}
             <input type="hidden" name="step" value="confirm">
@@ -228,13 +222,6 @@
     {% endif %}
 </div>
 
-<div id="cnh-loading" class="cnh-loading" hidden>
-    <div class="cnh-loading-panel" role="status" aria-live="polite" tabindex="-1">
-        <div class="cnh-loading-spinner" aria-hidden="true"></div>
-        <strong style="display:block;font-size:1.15rem;">Lendo PDF da CNH… Aguarde.</strong>
-        <p style="margin:12px 0 0;color:#64748b;">Estamos preparando os dados para sua conferência.</p>
-    </div>
-</div>
 <script>
 (function () {
     document.querySelectorAll('.cnh-proposed').forEach(cell => {
@@ -244,32 +231,39 @@
         const update = () => { cell.textContent = input.value || cell.dataset.current || '—'; };
         input.addEventListener('input', update); update();
     });
-    const form = document.getElementById('cnh-upload-form');
-    const loading = document.getElementById('cnh-loading');
-    if (!form || !loading) return;
-
-    const button = form.querySelector('button[type="submit"]');
-    const originalLabel = button.textContent;
-
-    form.addEventListener('submit', function (event) {
-        if (form.dataset.cnhReading === 'true') {
-            event.preventDefault();
-            return;
-        }
-        form.dataset.cnhReading = 'true';
-        form.setAttribute('aria-busy', 'true');
-        button.disabled = true;
-        button.textContent = 'Lendo PDF…';
-        loading.hidden = false;
-        loading.querySelector('[role="status"]').focus();
-    });
-
-    window.addEventListener('pageshow', function () {
-        delete form.dataset.cnhReading;
-        form.removeAttribute('aria-busy');
-        button.disabled = false;
-        button.textContent = originalLabel;
-        loading.hidden = true;
+    const upload = document.getElementById('cnh-upload-form');
+    const confirm = document.querySelector('[data-cnh-confirm="true"]');
+    [upload, confirm].filter(Boolean).forEach(form => {
+        const button = form.querySelector('button[type="submit"]');
+        if (!button) return;
+        const originalLabel = button.textContent;
+        const reset = () => {
+            delete form.dataset.submitting;
+            form.removeAttribute('aria-busy');
+            button.disabled = false;
+            button.textContent = originalLabel;
+            document.querySelectorAll('[data-cnh-progress] li').forEach((step, index) => {
+                if (form !== confirm || index < 2) return;
+                step.className = index === 2 ? 'is-current' : '';
+                step.querySelector('.cnh-progress-circle').textContent = index + 1;
+                if (index === 2) step.setAttribute('aria-current', 'step');
+                else step.removeAttribute('aria-current');
+            });
+        };
+        form.addEventListener('submit', event => {
+            if (form.dataset.submitting) { event.preventDefault(); return; }
+            form.dataset.submitting = 'true';
+            form.setAttribute('aria-busy', 'true');
+            button.disabled = true;
+            button.textContent = form === upload ? 'Enviando PDF…' : 'Confirmando dados…';
+            if (form === confirm) document.querySelectorAll('[data-cnh-progress] li').forEach((step, index) => {
+                step.className = index < 3 ? 'is-done' : 'is-current';
+                step.querySelector('.cnh-progress-circle').textContent = index < 3 ? '✓' : '4';
+                if (index === 3) step.setAttribute('aria-current', 'step');
+                else step.removeAttribute('aria-current');
+            });
+        });
+        window.addEventListener('pageshow', reset);
     });
 })();
 </script>

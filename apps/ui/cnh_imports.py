@@ -16,6 +16,13 @@ def enqueue_response(request, file_obj, driver=None):
     return redirect('cnh_import_status', pk=job.pk)
 
 
+def confirmation_response(request, document_id, fallback):
+    job = CNHImportJob.objects.filter(document_id=document_id, created_by=request.user, state='confirmed').first()
+    if job is None:
+        return redirect(fallback)
+    return redirect('cnh_import_status', pk=job.pk)
+
+
 def review_url(job):
     if job.state == 'confirmed':
         return reverse('driver_cnh', args=[job.driver_id]) if job.driver_id else reverse('driver_list')
@@ -52,10 +59,14 @@ def import_status(request, pk):
         job.refresh_from_db()
     if request.GET.get('format') == 'json':
         response = JsonResponse({'state':job.state, 'label':job.get_state_display(), 'error':job.error,
-            'review_url':review_url(job) if job.state in ('ready','confirmed') else None})
+            'review_url':reverse('cnh_import_status', args=[job.pk]) if job.state == 'confirmed' else review_url(job) if job.state == 'ready' else None})
         add_never_cache_headers(response)
         return response
-    if job.state in ('ready','confirmed'):
+    if job.state == 'confirmed':
+        response = render(request, 'ui/cnh_import_complete.html', {'job':job})
+        add_never_cache_headers(response)
+        return response
+    if job.state == 'ready':
         return redirect(review_url(job))
     response = render(request, 'ui/cnh_import_status.html', {'job':job, 'retry_error':error})
     add_never_cache_headers(response)

@@ -14,15 +14,6 @@
 .cnh-reading-badge:before {content:'';width:7px;height:7px;border-radius:50%;background:currentColor;}
 .cnh-reading h2 {font-size:22px;line-height:1.35;margin:0 0 6px;}
 .cnh-reading-description {margin:0;color:#64748b;line-height:1.65;font-size:14px;}
-.cnh-reading-steps {display:flex;list-style:none;padding:0;margin:30px -4px 28px;}
-.cnh-reading-steps li {flex:1;position:relative;text-align:center;min-width:0;color:#64748b;font-size:13px;}
-.cnh-reading-steps li:not(:last-child):after {content:'';position:absolute;left:calc(50% + 19px);right:calc(-50% + 19px);top:16px;height:2px;background:#e2e8f0;}
-.cnh-reading-steps li:first-child:after {background:#13934e;}
-.cnh-reading-step {box-sizing:border-box;display:grid;place-items:center;position:relative;z-index:1;width:33px;height:33px;margin:0 auto 11px;border:2px solid #e2e8f0;border-radius:50%;background:#f4f6f8;font-weight:600;}
-.cnh-reading-steps .is-done .cnh-reading-step {background:#16894e;border-color:#16894e;color:#fff;font-size:18px;}
-.cnh-reading-steps .is-current .cnh-reading-step {border-color:#2563eb;background:#e8f0ff;color:#2563eb;}
-.cnh-reading-spinner {width:15px;height:15px;box-sizing:border-box;border:2px solid #2563eb;border-left-color:transparent;border-radius:50%;animation:cnh-reading-spin 1s linear infinite;}
-#cnh-job[data-state="failed"] .cnh-reading-spinner {animation:none;border-color:#b91c1c;}
 .cnh-reading-note {display:flex;align-items:flex-start;gap:13px;padding:14px 18px;margin:0 0 24px;border-radius:15px;background:#e6efff;color:#153458;font-size:14px;line-height:1.6;}
 .cnh-reading-note svg {flex-shrink:0;width:18px;height:18px;margin-top:3px;color:#2563eb;}
 .cnh-reading-actions {display:flex;flex-wrap:wrap;gap:10px;}
@@ -35,9 +26,7 @@
 #job-error:not(:empty) {padding:12px;border-radius:10px;background:#fef2f2;color:#991b1b;}
 #job-retry {margin-bottom:20px;}
 #job-retry p {font-size:14px;line-height:1.6;}
-@keyframes cnh-reading-spin {to {transform:rotate(360deg);}}
-@media(prefers-reduced-motion:reduce) {.cnh-reading-spinner {animation:none;}}
-@media(max-width:600px) {.cnh-reading {padding:22px 18px;margin:16px auto;border-radius:16px;}.cnh-reading-file {flex-wrap:wrap;padding:12px;gap:10px;}.cnh-reading-badge {margin-left:50px;}.cnh-reading-steps li {font-size:11px;}.cnh-reading-actions a {width:100%;}.cnh-reading-note {padding:14px;}}
+@media(max-width:600px) {.cnh-reading {padding:22px 18px;margin:16px auto;border-radius:16px;}.cnh-reading-file {flex-wrap:wrap;padding:12px;gap:10px;}.cnh-reading-badge {margin-left:50px;}.cnh-reading-actions a {width:100%;}.cnh-reading-note {padding:14px;}}
 </style>
 <section class="cnh-reading" id="cnh-job" data-state="{{ job.state }}" aria-labelledby="job-label">
   <div class="cnh-reading-file">
@@ -47,12 +36,7 @@
   </div>
   <h2 id="job-label" aria-live="polite">{% if job.state == 'pending' or job.state == 'running' %}Lendo documento{% else %}{{ job.get_state_display }}{% endif %}</h2>
   <p class="cnh-reading-description">O PDF está salvo e em processamento. O resultado será conferido por você antes de qualquer alteração.</p>
-  <ol class="cnh-reading-steps" aria-label="Etapas da leitura">
-    <li class="is-done"><span class="cnh-reading-step" aria-hidden="true">✓</span>Envio recebido</li>
-    <li class="is-current" aria-current="step"><span class="cnh-reading-step" aria-hidden="true"><span class="cnh-reading-spinner"></span></span>Leitura</li>
-    <li><span class="cnh-reading-step" aria-hidden="true">3</span>Conferência</li>
-    <li><span class="cnh-reading-step" aria-hidden="true">4</span>Confirmação</li>
-  </ol>
+  {% include 'ui/partials/cnh_progress.html' with cnh_stage='reading' %}
   <p id="job-error" class="cnh-reading-status" role="status">{{ job.error }}</p>
   <p id="job-connection" class="cnh-reading-status" role="status"></p>
   <div id="job-retry" {% if job.state != 'failed' %}hidden{% endif %}>
@@ -68,7 +52,7 @@
 </section>
 <script>
 (() => {
- const root=document.getElementById('cnh-job'); let stopped=root.dataset.state==='failed'; let elapsed=0;
+ const root=document.getElementById('cnh-job'); let stopped=root.dataset.state==='failed';
  async function poll(){
   if(stopped)return;
   try{
@@ -80,8 +64,7 @@
    document.getElementById('job-error').textContent=data.error||'';
    if(data.review_url){location.assign(data.review_url);return;}
    if(data.state==='failed'){stopped=true;document.getElementById('job-retry').hidden=false;return;}
-   elapsed+=3;
-   document.getElementById('job-connection').textContent=elapsed>90?'A leitura está demorando. Você pode voltar mais tarde a este endereço.':'';
+   document.getElementById('job-connection').textContent='';
   }catch(e){document.getElementById('job-connection').textContent='Não foi possível consultar agora. Tentaremos novamente; seu envio continua salvo.';}
   setTimeout(poll,3000);
  }
