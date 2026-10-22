@@ -21,6 +21,7 @@
                 <option value="cnh_vencida" {% if status == "cnh_vencida" %}selected{% endif %}>CNHs Vencidas</option>
             </select>
             <button type="submit" class="primary-action">Buscar</button>
+            <a class="secondary-action" href="{% url 'driver_list' %}">Limpar filtros</a>
         </form>
     </div>
     <a class="primary-action" href="{% url 'driver_create' %}{% if requested_sector %}?sector={{ requested_sector|urlencode }}{% endif %}">+ Novo Motorista</a>
