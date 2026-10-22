@@ -1286,3 +1286,115 @@ button:not(.side-logout):not(.dashboard-informe-item):not(.secondary-action):not
 .dossier-custody-operation .dossier-custody-form { padding:4px 16px 16px; }
 .dossier-custody-operation--danger > summary { color:#dc2626; }
 @media (max-width:480px) { .dossier-driver-heading { gap:14px; } .dossier-driver-identity > strong { font-size:18px; } }
+
+/* =========================================================
+   REAL BRAZILIAN MERCOSUL PLATE & MODERN OVERVIEW UPGRADE
+   ========================================================= */
+.real-mercosul-plate {
+    display: inline-flex;
+    flex-direction: column;
+    width: 168px;
+    height: 56px;
+    background: #ffffff;
+    border: 2.5px solid #0f172a;
+    border-radius: 7px;
+    overflow: hidden;
+    box-shadow: 0 4px 10px -2px rgba(15, 23, 42, 0.15), inset 0 0 0 1px rgba(255, 255, 255, 0.9), inset 0 0 3px rgba(0, 0, 0, 0.08);
+    position: relative;
+    user-select: none;
+    flex-shrink: 0;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.real-mercosul-plate:hover {
+    box-shadow: 0 6px 14px -2px rgba(15, 23, 42, 0.22), inset 0 0 0 1px rgba(255, 255, 255, 0.9);
+}
+.real-mercosul-plate::before {
+    content: '';
+    position: absolute;
+    inset: 1px;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 4px;
+    pointer-events: none;
+    z-index: 2;
+}
+.rmp-header {
+    height: 18px;
+    background: linear-gradient(180deg, #003399 0%, #002575 100%);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 6px;
+    border-bottom: 1.5px solid #001a4e;
+    position: relative;
+    z-index: 1;
+}
+.rmp-emblem {
+    display: block;
+    width: 14px;
+    height: 11px;
+    flex-shrink: 0;
+}
+.rmp-country {
+    font-family: 'Plus Jakarta Sans', 'Inter', -apple-system, sans-serif;
+    font-size: 9.5px;
+    font-weight: 800;
+    color: #ffffff;
+    letter-spacing: 0.18em;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+    text-transform: uppercase;
+    line-height: 1;
+    padding-top: 1px;
+}
+.rmp-flag {
+    display: block;
+    width: 16px;
+    height: 11px;
+    border-radius: 1px;
+    box-shadow: 0 0.5px 1.5px rgba(0, 0, 0, 0.25);
+    flex-shrink: 0;
+}
+.rmp-body {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+    overflow: hidden;
+}
+.rmp-number {
+    font-family: 'Plus Jakarta Sans', 'Manrope', 'Montserrat', Arial Black, sans-serif;
+    font-weight: 900;
+    font-size: 24px;
+    letter-spacing: 0.1em;
+    color: #0f172a;
+    line-height: 1;
+    text-transform: uppercase;
+    position: relative;
+    z-index: 2;
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.9), 0 -1px 0 rgba(15, 23, 42, 0.35), 0.5px 0 0 rgba(15, 23, 42, 0.15);
+}
+.rmp-watermark {
+    position: absolute;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 26px;
+    font-weight: 900;
+    color: rgba(148, 163, 184, 0.14);
+    letter-spacing: 0.05em;
+    pointer-events: none;
+    z-index: 1;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+}
+.rmp-seal {
+    position: absolute;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #e2e8f0, #475569);
+    border: 0.5px solid #334155;
+    z-index: 2;
+}
+.rmp-seal--bl { bottom: 3px; left: 4px; }
+.rmp-seal--br { bottom: 3px; right: 4px; }
