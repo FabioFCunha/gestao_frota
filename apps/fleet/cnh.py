@@ -689,4 +689,6 @@ def extract_cnh_data(file_obj):
         previous_category if previous_category in _CNH_VALID_CATEGORIES else ""
     )
     data.update(_cnh_front_identity_category(raw))
+    from .cnh_legacy import extract_legacy_cnh_data
+    data.update(extract_legacy_cnh_data(raw))
     return data

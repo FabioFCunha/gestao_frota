@@ -46,6 +46,15 @@ def extract_cnh_photo(raw):
                 return output.getvalue()
     except Exception:
         return None
+    # O modelo antigo tem foto e rótulos em outras posições.
+    from apps.fleet.cnh_legacy import legacy_cnh_images, _crop
+    front, _ = legacy_cnh_images(raw)
+    if front is not None:
+        portrait = _crop(front, (.184, .333, .458, .859), scale=1)
+        portrait.thumbnail((450, 600))
+        output = io.BytesIO()
+        portrait.save(output, format="JPEG", quality=90)
+        return output.getvalue()
     return None
 
 
