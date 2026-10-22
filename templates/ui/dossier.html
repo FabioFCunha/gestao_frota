@@ -64,6 +64,125 @@
     </div>
 </section>
 
+<!-- KM E REVISÃO -->
+<section class="grid dossier-operational-grid">
+    <article class="panel dossier-revision-card {% if revisao_status == 'DEVIDA' or revisao_status == 'VENCIDA' %}dossier-revision-card--due{% elif revisao_status == 'PROXIMA' %}dossier-revision-card--near{% endif %}">
+        <div class="dossier-revision-header">
+            <h3><i data-lucide="gauge" aria-hidden="true"></i> Quilometragem e Revisão</h3>
+            {% if revisao_status == 'DEVIDA' or revisao_status == 'VENCIDA' %}<span class="dossier-revision-badge">Revisão devida</span>
+            {% elif revisao_status == 'PROXIMA' %}<span class="dossier-revision-badge">Revisão próxima</span>
+            {% elif revisao_status == 'SEM_QUILOMETRAGEM' or revisao_status == 'SEM_HISTORICO' %}<span class="dossier-revision-badge dossier-revision-badge--unknown">Pendente</span>
+            {% else %}<span class="dossier-revision-badge">Em dia</span>{% endif %}
+        </div>
+        <div class="dossier-revision-body">
+            <div>
+                <div class="dossier-revision-distance">{% if revision_distance is not None %}{{ revision_distance|floatformat:'0g' }}<span>km</span>{% else %}—{% endif %}</div>
+                <p class="dossier-revision-description">{% if revisao_status == 'SEM_QUILOMETRAGEM' %}Informe a quilometragem para calcular a próxima revisão.
+                {% elif revisao_status == 'SEM_HISTORICO' %}Inicialize a referência da primeira revisão.
+                {% elif revisao_status == 'DEVIDA' or revisao_status == 'VENCIDA' %}{% if revision_distance %}acima da quilometragem da revisão{% else %}revisão na quilometragem atual{% endif %}
+                {% else %}restantes até a próxima revisão{% endif %}</p>
+            </div>
+            {% if revision_progress is not None %}
+            <div>
+                <div class="dossier-revision-track" role="progressbar" aria-label="Quilometragem atual em relação à próxima revisão" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ revision_progress }}">
+                    <span class="dossier-revision-fill" style="width:{{ revision_progress }}%;"></span>
+                </div>
+                <div class="dossier-revision-scale"><span>0 km</span><strong>{{ revision_progress }}% percorrido</strong><span>{{ km_prox_revisao|floatformat:'0g' }} km</span></div>
+            </div>
+            {% endif %}
+            <div class="dossier-revision-stats">
+                <div><strong>{% if km_atual is not None %}{{ km_atual|floatformat:'0g' }} km{% else %}—{% endif %}</strong><span>KM atual</span></div>
+                <div><strong>{% if km_prox_revisao is not None %}{{ km_prox_revisao|floatformat:'0g' }} km{% else %}—{% endif %}</strong><span>Próxima revisão</span></div>
+            </div>
+        </div>
+    </article>
+
+    <!-- OPERACIONAL -->
+    <article class="panel dossier-operational-card">
+        <div class="dossier-card-heading"><h3><i data-lucide="user-round" aria-hidden="true"></i> Operacional</h3></div>
+        <div class="dossier-driver-heading">
+            {% if active_driver_has_photo %}
+            <img class="dossier-driver-photo" src="{% url 'driver_cnh_photo' active_driver.pk %}"
+                 alt="Foto de {{ active_driver.name }}" width="84" height="108" loading="lazy">
+            {% else %}
+            <div class="dossier-driver-placeholder" aria-hidden="true">{% if active_driver %}{{ active_driver.name|first|upper }}{% if active_driver.name.split|length > 1 %}{{ active_driver.name.split|last|first|upper }}{% endif %}{% else %}<i data-lucide="user-round"></i>{% endif %}</div>
+            {% endif %}
+            <div class="dossier-driver-identity">
+                <span>Motorista</span>
+                <strong>{% if active_driver %}{{ active_driver.name }}{% else %}{{ motorista|default:"Não informado" }}{% endif %}</strong>
+                {% if active_driver.phone %}<span>{{ active_driver.phone }}</span>{% endif %}
+                {% if vehicle.unit %}<span class="dossier-driver-unit">{{ vehicle.unit.name }}</span>{% endif %}
+            </div>
+        </div>
+        <h4 class="dossier-operational-section">Acautelamento</h4>
+        <dl class="dossier-info-grid">
+            <div class="dossier-info-field"><dt>SEI / Acautelamento</dt><dd>{% if active_custody %}{{ active_custody.sei_number }}{% else %}{{ vehicle.custody_info|default:"—" }}{% endif %}</dd></div>
+            <div class="dossier-info-field"><dt>Início do acautelamento</dt><dd>{{ active_custody.started_on|date:"d/m/Y"|default:"—" }}</dd></div>
+            <div class="dossier-info-field"><dt>Unidade</dt><dd>{{ vehicle.unit.name|default:"—" }}</dd></div>
+            <div class="dossier-info-field"><dt>Base</dt><dd>{{ vehicle.base.name|default:"—" }}</dd></div>
+            <div class="dossier-info-field"><dt>Oficina</dt><dd>{{ oficina|default:"—" }}</dd></div>
+        </dl>
+        <h4 class="dossier-operational-section">Contrato</h4>
+        <dl class="dossier-info-grid">
+            <div class="dossier-info-field"><dt>Locadora</dt><dd>{{ vehicle.renter.name|default:"—" }}</dd></div>
+            <div class="dossier-info-field"><dt>Contrato</dt><dd>{% if vehicle.contract %}{{ vehicle.contract.number }}<small class="dossier-contract-validity">vigente até {{ vehicle.contract.ends_on|date:"d/m/Y" }}</small>{% else %}—{% endif %}</dd></div>
+        </dl>
+        {% if active_custody and can_change_custody %}
+        <details class="dossier-custody-operation">
+            <summary>Transferir responsabilidade</summary>
+        <form method="post" class="dossier-custody-form">
+            {% csrf_token %}<input type="hidden" name="action" value="transfer_custody">
+            <div class="dossier-custody-fields">
+                <label>Novo motorista
+                    <select name="new_driver" required>{% for d in all_drivers %}<option value="{{ d.id }}">{{ d.name }}</option>{% endfor %}</select>
+                </label>
+                <label>Data e hora da transferência
+                    <input type="datetime-local" name="transferred_at" required step="60">
+                </label>
+            </div>
+            <div class="dossier-custody-actions"><button type="submit">Transferir</button></div>
+        </form>
+        </details>
+        <details class="dossier-custody-operation dossier-custody-operation--danger">
+            <summary>Encerrar acautelamento</summary>
+        <form method="post" class="dossier-custody-form">
+            {% csrf_token %}<input type="hidden" name="action" value="end_custody">
+            <div class="dossier-custody-fields">
+                <label>Data do encerramento<input type="date" name="ended_on" required></label>
+                <label>Data e hora do fim da responsabilidade
+                    <input type="datetime-local" name="assignment_ended_at" required step="60">
+                </label>
+            </div>
+            <div class="dossier-custody-actions"><button type="submit">Encerrar</button></div>
+        </form>
+        </details>
+        {% elif can_start_custody %}
+        <details class="dossier-custody-operation">
+            <summary>Iniciar acautelamento</summary>
+        <form method="post" class="dossier-custody-form">
+            {% csrf_token %}<input type="hidden" name="action" value="start_custody">
+            <div class="dossier-custody-fields">
+                <label>Processo SEI<input name="sei_number" required placeholder="SEI"></label>
+                <label>Data de início<input type="date" name="started_on" required></label>
+                <label>Motorista<select name="driver" required>{% for d in all_drivers %}<option value="{{ d.id }}">{{ d.name }}</option>{% endfor %}</select></label>
+            </div>
+            <div class="dossier-custody-actions"><button type="submit">Iniciar acautelamento</button></div>
+        </form>
+        </details>
+        {% endif %}
+        {% if obs_list %}
+        <div style="margin-top:15px;padding:10px;background:#f9f9f9;border-radius:4px;">
+            <strong>Observações:</strong>
+            <ul style="margin:5px 0 0 15px;">
+                {% for obs in obs_list %}
+                <li>{{ obs }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+    </article>
+</section>
+
 <!-- IDENTIFICAÇÃO E DOCUMENTO -->
 <section class="dossier-identification-grid">
     <article class="panel dossier-info-card">
@@ -116,116 +235,6 @@
         <div class="dossier-info-note"><span>Observações</span><p>{{ latest_crlv.extracted_data.observation|default:"—" }}</p></div>
         </details>
         {% else %}<p>Nenhum CRLV confirmado.</p>{% endif %}
-    </article>
-</section>
-
-<!-- KM E REVISÃO -->
-<section class="grid dossier-operational-grid">
-    <article class="panel dossier-revision-card {% if revisao_status == 'DEVIDA' or revisao_status == 'VENCIDA' %}dossier-revision-card--due{% elif revisao_status == 'PROXIMA' %}dossier-revision-card--near{% endif %}">
-        <div class="dossier-revision-header">
-            <h3><i data-lucide="gauge" aria-hidden="true"></i> Quilometragem e Revisão</h3>
-            {% if revisao_status == 'DEVIDA' or revisao_status == 'VENCIDA' %}<span class="dossier-revision-badge">Revisão devida</span>
-            {% elif revisao_status == 'PROXIMA' %}<span class="dossier-revision-badge">Revisão próxima</span>
-            {% elif revisao_status == 'SEM_QUILOMETRAGEM' or revisao_status == 'SEM_HISTORICO' %}<span class="dossier-revision-badge dossier-revision-badge--unknown">Pendente</span>
-            {% else %}<span class="dossier-revision-badge">Em dia</span>{% endif %}
-        </div>
-        <div class="dossier-revision-body">
-            <div>
-                <div class="dossier-revision-distance">{% if revision_distance is not None %}{{ revision_distance|floatformat:'0g' }}<span>km</span>{% else %}—{% endif %}</div>
-                <p class="dossier-revision-description">{% if revisao_status == 'SEM_QUILOMETRAGEM' %}Informe a quilometragem para calcular a próxima revisão.
-                {% elif revisao_status == 'SEM_HISTORICO' %}Inicialize a referência da primeira revisão.
-                {% elif revisao_status == 'DEVIDA' or revisao_status == 'VENCIDA' %}{% if revision_distance %}acima da quilometragem da revisão{% else %}revisão na quilometragem atual{% endif %}
-                {% else %}restantes até a próxima revisão{% endif %}</p>
-            </div>
-            {% if revision_progress is not None %}
-            <div>
-                <div class="dossier-revision-track" role="progressbar" aria-label="Quilometragem atual em relação à próxima revisão" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ revision_progress }}">
-                    <span class="dossier-revision-fill" style="width:{{ revision_progress }}%;"></span>
-                </div>
-                <div class="dossier-revision-scale"><span>0 km</span><strong>{{ revision_progress }}% percorrido</strong><span>{{ km_prox_revisao|floatformat:'0g' }} km</span></div>
-            </div>
-            {% endif %}
-            <div class="dossier-revision-stats">
-                <div><strong>{% if km_atual is not None %}{{ km_atual|floatformat:'0g' }} km{% else %}—{% endif %}</strong><span>KM atual</span></div>
-                <div><strong>{% if km_prox_revisao is not None %}{{ km_prox_revisao|floatformat:'0g' }} km{% else %}—{% endif %}</strong><span>Próxima revisão</span></div>
-            </div>
-        </div>
-    </article>
-
-    <!-- OPERACIONAL -->
-    <article class="panel dossier-operational-card">
-        <div class="dossier-card-heading"><h3><i data-lucide="user-round" aria-hidden="true"></i> Operacional</h3></div>
-        <div class="dossier-operational-summary">
-        <ul style="list-style:none;padding:0;line-height:2;">
-            <li><strong>Motorista:</strong> {% if active_driver %}{{ active_driver.name }} {% if active_driver.phone %}({{ active_driver.phone }}){% endif %}{% else %}{{ motorista|default:"-" }}{% endif %}</li>
-            <li><strong>SEI / Acautelamento:</strong> {% if active_custody %}{{ active_custody.sei_number }}{% else %}{{ vehicle.custody_info|default:"-" }}{% endif %}</li>
-            {% if active_custody %}<li><strong>Início do acautelamento:</strong> {{ active_custody.started_on|date:"d/m/Y" }}{% if active_custody.ended_on %} — encerrado em {{ active_custody.ended_on|date:"d/m/Y" }}{% endif %}</li>{% endif %}
-            <li><strong>Oficina:</strong> {{ oficina|default:"-" }}</li>
-            <li><strong>Unidade:</strong> {{ vehicle.unit.name|default:"-" }}</li>
-            <li><strong>Base:</strong> {{ vehicle.base.name|default:"-" }}</li>
-            <li><strong>Locadora:</strong> {{ vehicle.renter.name|default:"-" }}</li>
-            {% if vehicle.contract %}
-            <li><strong>Contrato:</strong> {{ vehicle.contract.number }} (até {{ vehicle.contract.ends_on|date:"d/m/Y" }})</li>
-            {% endif %}
-        </ul>
-        {% if active_driver_has_photo %}
-        <img class="dossier-driver-photo" src="{% url 'driver_cnh_photo' active_driver.pk %}"
-             alt="Foto de {{ active_driver.name }}" width="88" height="116" loading="lazy">
-        {% endif %}
-        </div>
-        {% if active_custody and can_change_custody %}
-        <details class="dossier-custody-operation">
-            <summary>Transferir responsabilidade</summary>
-        <form method="post" class="dossier-custody-form">
-            {% csrf_token %}<input type="hidden" name="action" value="transfer_custody">
-            <div class="dossier-custody-fields">
-                <label>Novo motorista
-                    <select name="new_driver" required>{% for d in all_drivers %}<option value="{{ d.id }}">{{ d.name }}</option>{% endfor %}</select>
-                </label>
-                <label>Data e hora da transferência
-                    <input type="datetime-local" name="transferred_at" required step="60">
-                </label>
-            </div>
-            <div class="dossier-custody-actions"><button type="submit">Transferir</button></div>
-        </form>
-        </details>
-        <details class="dossier-custody-operation">
-            <summary>Encerrar acautelamento</summary>
-        <form method="post" class="dossier-custody-form">
-            {% csrf_token %}<input type="hidden" name="action" value="end_custody">
-            <div class="dossier-custody-fields">
-                <label>Data do encerramento<input type="date" name="ended_on" required></label>
-                <label>Data e hora do fim da responsabilidade
-                    <input type="datetime-local" name="assignment_ended_at" required step="60">
-                </label>
-            </div>
-            <div class="dossier-custody-actions"><button type="submit">Encerrar</button></div>
-        </form>
-        </details>
-        {% elif can_start_custody %}
-        <details class="dossier-custody-operation">
-            <summary>Iniciar acautelamento</summary>
-        <form method="post" class="dossier-custody-form">
-            {% csrf_token %}<input type="hidden" name="action" value="start_custody">
-            <div class="dossier-custody-fields">
-                <label>Processo SEI<input name="sei_number" required placeholder="SEI"></label>
-                <label>Data de início<input type="date" name="started_on" required></label>
-                <label>Motorista<select name="driver" required>{% for d in all_drivers %}<option value="{{ d.id }}">{{ d.name }}</option>{% endfor %}</select></label>
-            </div>
-            <div class="dossier-custody-actions"><button type="submit">Iniciar acautelamento</button></div>
-        </form>
-        </details>
-        {% endif %}
-        {% if obs_list %}
-        <div style="margin-top:15px;padding:10px;background:#f9f9f9;border-radius:4px;">
-            <strong>Observações:</strong>
-            <ul style="margin:5px 0 0 15px;">
-                {% for obs in obs_list %}
-                <li>{{ obs }}</li>
-                {% endfor %}
-            </ul>
-        </div>
-        {% endif %}
     </article>
 </section>
 
