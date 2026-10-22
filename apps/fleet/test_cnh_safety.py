@@ -87,7 +87,7 @@ class SafetyTests(TestCase):
     def test_pdf_preview_is_private_and_only_uploader_can_read(self):
         doc=self.stage();url=reverse('cnh_original',args=[doc.pk])
         response=self.client.get(url);self.assertEqual(response.status_code,200)
-        self.assertEqual(response['X-Frame-Options'],'SAMEORIGIN');self.assertIn('no-store',response['Cache-Control']);response.file_to_stream.close()
+        self.assertEqual(response['X-Frame-Options'],'SAMEORIGIN');self.assertIn('no-store',response['Cache-Control'])
         other=get_user_model().objects.create_user(username='other-cnh')
         other.user_permissions.add(Permission.objects.get(codename='add_driver'));self.client.force_login(other)
         self.assertEqual(self.client.get(url).status_code,404)
