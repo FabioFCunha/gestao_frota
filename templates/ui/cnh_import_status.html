@@ -1,19 +1,70 @@
 {% extends 'ui/base.html' %}
+{% block title %}Leitura da CNH | Gestão de Frotas{% endblock %}
 {% block heading %}Leitura da CNH{% endblock %}
 {% block content %}
-<section class="panel" style="padding:28px;max-width:700px;margin:auto;" id="cnh-job" data-state="{{ job.state }}">
-<p>{{ job.original_filename }}</p>
-<h2 id="job-label">{{ job.get_state_display }}</h2>
-<p>O PDF está salvo para processamento. Você pode sair desta página e voltar a este endereço; os dados do motorista só serão alterados após a conferência.</p>
-<p id="job-error" role="status">{{ job.error }}</p>
-<p id="job-connection" role="status"></p>
-<p>Etapas: envio recebido → leitura → conferência → confirmação.</p>
-<div id="job-retry" {% if job.state != 'failed' %}hidden{% endif %}>
-<p>{{ retry_error }}</p><form method="post">{% csrf_token %}<button class="primary-action">Tentar novamente</button></form>
-<p>Se a falha persistir, envie outra cópia do documento pela tela do motorista.</p></div>
-{% if job.driver_id %}<p><a href="{% url 'driver_cnh' job.driver_id %}">Voltar à CNH deste motorista</a></p>
-{% if perms.fleet.correct_driver_identity %}<p><a href="{% url 'driver_identity_correction' job.driver_id %}">Corrigir CPF cadastrado com documento e auditoria</a></p>{% endif %}{% endif %}
-<p><a href="{% url 'driver_list' %}">Voltar aos motoristas</a></p>
+<style>
+.cnh-reading {box-sizing:border-box;width:100%;max-width:720px;margin:28px auto;padding:32px;border:1px solid #dfe5ed;border-radius:20px;background:#fff;color:#101f2e;}
+.cnh-reading-file {display:flex;align-items:center;gap:14px;padding:14px 16px;border:1px solid #dfe5ed;border-radius:15px;margin-bottom:28px;}
+.cnh-reading-icon {display:grid;place-items:center;flex-shrink:0;width:40px;height:40px;border-radius:12px;background:#f3f5f7;color:#607185;}
+.cnh-reading-icon svg {width:20px;height:20px;}
+.cnh-reading-name {flex:1;min-width:0;line-height:1.5;}
+.cnh-reading-name strong {display:block;font-size:14px;overflow-wrap:anywhere;}
+.cnh-reading-name small {display:block;color:#64748b;font-size:13px;}
+.cnh-reading-badge {display:inline-flex;align-items:center;gap:6px;flex-shrink:0;padding:5px 11px;border-radius:20px;background:#e3f5ec;color:#13864e;font-size:12px;font-weight:600;}
+.cnh-reading-badge:before {content:'';width:7px;height:7px;border-radius:50%;background:currentColor;}
+.cnh-reading h2 {font-size:22px;line-height:1.35;margin:0 0 6px;}
+.cnh-reading-description {margin:0;color:#64748b;line-height:1.65;font-size:14px;}
+.cnh-reading-steps {display:flex;list-style:none;padding:0;margin:30px -4px 28px;}
+.cnh-reading-steps li {flex:1;position:relative;text-align:center;min-width:0;color:#64748b;font-size:13px;}
+.cnh-reading-steps li:not(:last-child):after {content:'';position:absolute;left:calc(50% + 19px);right:calc(-50% + 19px);top:16px;height:2px;background:#e2e8f0;}
+.cnh-reading-steps li:first-child:after {background:#13934e;}
+.cnh-reading-step {box-sizing:border-box;display:grid;place-items:center;position:relative;z-index:1;width:33px;height:33px;margin:0 auto 11px;border:2px solid #e2e8f0;border-radius:50%;background:#f4f6f8;font-weight:600;}
+.cnh-reading-steps .is-done .cnh-reading-step {background:#16894e;border-color:#16894e;color:#fff;font-size:18px;}
+.cnh-reading-steps .is-current .cnh-reading-step {border-color:#2563eb;background:#e8f0ff;color:#2563eb;}
+.cnh-reading-spinner {width:15px;height:15px;box-sizing:border-box;border:2px solid #2563eb;border-left-color:transparent;border-radius:50%;animation:cnh-reading-spin 1s linear infinite;}
+#cnh-job[data-state="failed"] .cnh-reading-spinner {animation:none;border-color:#b91c1c;}
+.cnh-reading-note {display:flex;align-items:flex-start;gap:13px;padding:14px 18px;margin:0 0 24px;border-radius:15px;background:#e6efff;color:#153458;font-size:14px;line-height:1.6;}
+.cnh-reading-note svg {flex-shrink:0;width:18px;height:18px;margin-top:3px;color:#2563eb;}
+.cnh-reading-actions {display:flex;flex-wrap:wrap;gap:10px;}
+.cnh-reading-actions a {box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;padding:12px 17px;border-radius:12px;text-decoration:none;font-size:14px;font-weight:600;line-height:1.4;}
+.cnh-reading-back {background:#15232e;color:#fff;}
+.cnh-reading-list {background:#fff;color:#15232e;border:1px solid #dfe5ed;}
+.cnh-reading-correction {display:inline-block;margin-top:16px;font-size:14px;color:#64748b;text-decoration:underline;}
+.cnh-reading-status:empty {display:none;}
+.cnh-reading-status {font-size:14px;line-height:1.6;overflow-wrap:anywhere;}
+#job-error:not(:empty) {padding:12px;border-radius:10px;background:#fef2f2;color:#991b1b;}
+#job-retry {margin-bottom:20px;}
+#job-retry p {font-size:14px;line-height:1.6;}
+@keyframes cnh-reading-spin {to {transform:rotate(360deg);}}
+@media(prefers-reduced-motion:reduce) {.cnh-reading-spinner {animation:none;}}
+@media(max-width:600px) {.cnh-reading {padding:22px 18px;margin:16px auto;border-radius:16px;}.cnh-reading-file {flex-wrap:wrap;padding:12px;gap:10px;}.cnh-reading-badge {margin-left:50px;}.cnh-reading-steps li {font-size:11px;}.cnh-reading-actions a {width:100%;}.cnh-reading-note {padding:14px;}}
+</style>
+<section class="cnh-reading" id="cnh-job" data-state="{{ job.state }}" aria-labelledby="job-label">
+  <div class="cnh-reading-file">
+    <span class="cnh-reading-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/></svg></span>
+    <div class="cnh-reading-name"><strong>{{ job.original_filename|default:"Documento CNH.pdf" }}</strong><small>Documento enviado</small></div>
+    <span class="cnh-reading-badge">PDF salvo</span>
+  </div>
+  <h2 id="job-label" aria-live="polite">{% if job.state == 'pending' or job.state == 'running' %}Lendo documento{% else %}{{ job.get_state_display }}{% endif %}</h2>
+  <p class="cnh-reading-description">O PDF está salvo e em processamento. O resultado será conferido por você antes de qualquer alteração.</p>
+  <ol class="cnh-reading-steps" aria-label="Etapas da leitura">
+    <li class="is-done"><span class="cnh-reading-step" aria-hidden="true">✓</span>Envio recebido</li>
+    <li class="is-current" aria-current="step"><span class="cnh-reading-step" aria-hidden="true"><span class="cnh-reading-spinner"></span></span>Leitura</li>
+    <li><span class="cnh-reading-step" aria-hidden="true">3</span>Conferência</li>
+    <li><span class="cnh-reading-step" aria-hidden="true">4</span>Confirmação</li>
+  </ol>
+  <p id="job-error" class="cnh-reading-status" role="status">{{ job.error }}</p>
+  <p id="job-connection" class="cnh-reading-status" role="status"></p>
+  <div id="job-retry" {% if job.state != 'failed' %}hidden{% endif %}>
+    <p>{{ retry_error }}</p><form method="post">{% csrf_token %}<button class="primary-action">Tentar novamente</button></form>
+    <p>Se a falha persistir, envie outra cópia do documento pela tela do motorista.</p>
+  </div>
+  <div class="cnh-reading-note"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 11v6m0-10v2"/></svg><span>Você pode sair desta página e voltar a este endereço. Os dados do motorista só serão alterados após a conferência.</span></div>
+  <div class="cnh-reading-actions">
+    {% if job.driver_id %}<a class="cnh-reading-back" href="{% url 'driver_cnh' job.driver_id %}">Voltar à CNH deste motorista</a>{% endif %}
+    <a class="cnh-reading-list" href="{% url 'driver_list' %}">Voltar aos motoristas</a>
+  </div>
+  {% if job.driver_id and perms.fleet.correct_driver_identity %}<a class="cnh-reading-correction" href="{% url 'driver_identity_correction' job.driver_id %}">Corrigir CPF cadastrado com documento e auditoria</a>{% endif %}
 </section>
 <script>
 (() => {
@@ -24,7 +75,8 @@
    const r=await fetch('?format=json',{credentials:'same-origin',cache:'no-store'});
    if(!r.ok)throw new Error('request');
    const data=await r.json();
-   document.getElementById('job-label').textContent=data.label;
+   root.dataset.state=data.state;
+   document.getElementById('job-label').textContent=['pending','running'].includes(data.state)?'Lendo documento':data.label;
    document.getElementById('job-error').textContent=data.error||'';
    if(data.review_url){location.assign(data.review_url);return;}
    if(data.state==='failed'){stopped=true;document.getElementById('job-retry').hidden=false;return;}
