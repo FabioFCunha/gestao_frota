@@ -37,7 +37,7 @@ class CompanyCNHSafetyTests(TestCase):
             self.assertTrue(RecordOwner.objects.filter(model_label=model,object_id=pk,company=self.company).exists())
         self.client.force_login(self.manager)
         response=self.client.get(reverse('driver_create')+'?import='+str(job.pk));self.assertEqual(response.status_code,200)
-        self.assertContains(response,'<iframe')
+        self.assertContains(response,'Abrir documento original')
         outsider=get_user_model().objects.create_user(username='fora-cnh')
         Member.objects.create(user=outsider,company=self.other,role=Member.MANAGER)
         self.client.force_login(outsider)

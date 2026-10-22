@@ -36,7 +36,7 @@
   </div>
   <h2 id="job-label" aria-live="polite">{% if job.state == 'pending' or job.state == 'running' %}Lendo documento{% else %}{{ job.get_state_display }}{% endif %}</h2>
   <p class="cnh-reading-description">O PDF está salvo e em processamento. O resultado será conferido por você antes de qualquer alteração.</p>
-  {% include 'ui/partials/cnh_progress.html' with cnh_stage='reading' %}
+  {% include 'ui/partials/cnh_car_loading.html' %}
   <p id="job-error" class="cnh-reading-status" role="status">{{ job.error }}</p>
   <p id="job-connection" class="cnh-reading-status" role="status"></p>
   <div id="job-retry" {% if job.state != 'failed' %}hidden{% endif %}>

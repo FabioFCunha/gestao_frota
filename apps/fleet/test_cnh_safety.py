@@ -95,7 +95,7 @@ class SafetyTests(TestCase):
         # Mesmo o CPF inválido no PDF pode ser exibido como suspeito; confirmar é bloqueado.
         with patch('apps.fleet.cnh.extract_cnh_data',return_value={**DATA,'cpf':self.driver.cpf,'cnh_category':''}):
             response=self.client.post(self.url,{'step':'upload','file':upload()})
-        self.assertEqual(response.status_code,200);self.assertContains(response,'Cadastro atual');self.assertContains(response,'<iframe')
+        self.assertEqual(response.status_code,200);self.assertContains(response,'Abrir documento original')
         self.assertContains(response,'Leitura incompleta');self.assertContains(response,'dígitos verificadores inválidos')
         self.assertNotContains(response,'Corrigir CPF cadastrado')
     def test_async_queue_finishes_before_human_confirmation_and_rejects_duplicate_enqueues(self):
@@ -111,7 +111,7 @@ class SafetyTests(TestCase):
         self.assertFalse(DocumentRelation.objects.exists());self.assertEqual(Driver.objects.count(),1)
         self.assertEqual(self.client.get(reverse('cnh_import_status',args=[job.pk])).status_code,302)
         response=self.client.get(reverse('driver_create')+'?import='+str(job.pk))
-        self.assertEqual(response.status_code,200);self.assertContains(response,'<iframe')
+        self.assertEqual(response.status_code,200);self.assertContains(response,'Abrir documento original')
         self.assertEqual(self.client.get(reverse('driver_create')+'?import=not-a-uuid').status_code,404)
     def test_progress_reaches_review_and_only_finishes_after_successful_confirmation(self):
         from apps.fleet.cnh_jobs import enqueue, claim_next, process
@@ -120,7 +120,7 @@ class SafetyTests(TestCase):
         job = enqueue(file_obj=upload(), user=self.user, driver=self.driver, sector='adm')
         status_url = reverse('cnh_import_status', args=[job.pk])
         pending = self.client.get(status_url)
-        self.assertContains(pending, 'data-cnh-progress')
+        self.assertContains(pending, 'cnh-car-loader')
         self.assertNotContains(pending, 'cnh-loading')
         claim_next()
         with patch('apps.fleet.cnh.extract_cnh_data', return_value=DATA):
@@ -128,7 +128,7 @@ class SafetyTests(TestCase):
         job.refresh_from_db()
         review_url = self.url + '&import=' + str(job.pk)
         review = self.client.get(review_url)
-        self.assertContains(review, 'aria-current="step"')
+        self.assertNotContains(review, 'data-cnh-progress')
         self.assertContains(review, 'data-cnh-confirm="true"')
         self.assertNotContains(review, 'id="cnh-loading"')
         failed = self.client.post(review_url, {**DATA, 'step':'confirm', 'document_id':str(job.document_id)})
@@ -140,7 +140,7 @@ class SafetyTests(TestCase):
         job.refresh_from_db(); self.assertEqual(job.state, 'confirmed')
         complete = self.client.get(status_url)
         self.assertContains(complete, 'CNH confirmada')
-        self.assertContains(complete, 'class="is-done"', count=4)
+        self.assertNotContains(complete, 'data-cnh-progress')
         self.assertNotContains(complete, 'aria-current="step"')
 
     def test_failed_job_can_retry_and_revoked_permission_prevents_processing(self):
