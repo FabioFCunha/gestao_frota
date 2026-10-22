@@ -59,7 +59,16 @@ def _cpf_digits(text):
 def _name(text):
     from .cnh import _clean
     # O nome pode quebrar no meio de uma palavra na borda do campo.
-    text = re.sub(r"\b([A-Z])\s*\n([A-Z]{2,})\b", r"\1\2", text.strip())
+    text = text.strip()
+    # Reconstitui apenas quebras reconhecíveis, sem unir nomes completos
+    # legítimos (por exemplo, RUI / ALVES).
+    surnames = {"SILVA", "PEREIRA", "OLIVEIRA", "ALMEIDA", "RODRIGUES", "NASCIMENTO", "FERREIRA", "CARVALHO", "SANTOS"}
+    def join_boundary(match):
+        left, right = match.groups()
+        if len(left) == 1 or left + right in surnames:
+            return left + right
+        return left + " " + right
+    text = re.sub(r"\b([A-Z]{1,3})[ \t]*\n([A-Z]{2,})\b", join_boundary, text)
     text = _clean(text).strip(" |")
     return text if re.fullmatch(r"[A-ZÀ-ÖØ-Þ'’.-]+(?:\s+[A-ZÀ-ÖØ-Þ'’.-]+){1,9}", text) else ""
 
@@ -82,6 +91,13 @@ def extract_legacy_cnh_data(raw):
     result["cnh_number"] = number if len(number) == 11 else ""
     category = _read(front, (.84, .805, .935, .854)).strip(" \n|[]")
     result["cnh_category"] = category if category in _CNH_VALID_CATEGORIES else ""
+    identity = _read(front, (.50, .35, .94, .405))
+    found = re.search(r"(?m)^\s*(\d[\d. -]{4,19})\s+([A-Z][A-Z./-]{1,19})\s+([A-Z]{2})\s*$", identity)
+    if found:
+        from .cnh import _CNH_STATES, _clean
+        if found.group(3) in _CNH_STATES:
+            result.update(identity_document=_clean(found.group(1)),
+                          issuing_authority=found.group(2), issuing_state=found.group(3))
     for field, bounds in (
         ("birth_date", (.765, .451, .94, .497)),
         ("cnh_expiration", (.5, .91, .699, .955)),

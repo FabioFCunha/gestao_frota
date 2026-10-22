@@ -645,6 +645,8 @@ def _cnh_front_identity_category(raw):
                 if category in _CNH_VALID_CATEGORIES:
                     result["cnh_category"] = category
 
+                from .cnh_front import extract_front_fields
+                result.update(extract_front_fields(image, read_region))
                 return result
     except Exception:
         return result

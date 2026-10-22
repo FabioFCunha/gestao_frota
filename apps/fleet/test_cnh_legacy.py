@@ -26,6 +26,7 @@ class LegacyCNHTests(SimpleTestCase):
             (.503, .448, .739, .502): "123.456.789-09",
             (.166, .91, .475, .955): "01234567890",
             (.84, .805, .935, .854): "AD",
+            (.50, .35, .94, .405): "123456789 DETRAN RJ",
             (.765, .451, .94, .497): "25/08/1983",
             (.5, .91, .699, .955): "01/07/2031",
             (.72, .91, .94, .955): "18/12/2006",
@@ -45,6 +46,8 @@ class LegacyCNHTests(SimpleTestCase):
         self.assertEqual(data["name"], "MOTORISTA DE TESTE")
         self.assertEqual(data["cpf"], "123.456.789-09")
         self.assertEqual(data["cnh_number"], "01234567890")
+        self.assertEqual(data["issuing_authority"], "DETRAN")
+        self.assertEqual(data["issuing_state"], "RJ")
         self.assertEqual(data["cnh_category"], "AD")
         self.assertEqual(data["cnh_expiration"], "2031-07-01")
         self.assertEqual(data["cnh_first_issue_date"], "2006-12-18")
