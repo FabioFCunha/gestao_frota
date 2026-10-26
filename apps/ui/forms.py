@@ -9,6 +9,18 @@ from apps.fleet.models import (
 INPUT = {'class': 'form-input'}
 SELECT = {'class': 'form-input'}
 
+
+class BDTIncidentForm(forms.Form):
+    from apps.fleet.models import BDTIncidentFollowUp
+
+    status = forms.ChoiceField(label="Situação", choices=BDTIncidentFollowUp.Status.choices,
+                               widget=forms.Select(attrs=SELECT))
+    responsible = forms.CharField(label="Responsável", max_length=150,
+                                  widget=forms.TextInput(attrs=INPUT))
+    note = forms.CharField(label="Providência / observação", max_length=5000,
+                           widget=forms.Textarea(attrs={**INPUT, "rows": 3}))
+    expected_revision = forms.IntegerField(min_value=0, widget=forms.HiddenInput())
+
 class CRLVUploadForm(forms.Form):
     file=forms.FileField(widget=forms.FileInput(attrs={**INPUT,'accept':'.pdf,.jpg,.jpeg,.png'}))
     def clean_file(self):

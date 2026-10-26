@@ -742,19 +742,56 @@ def vehicle_dossier(request, pk):
     from apps.fleet.utils import normalize_km
     from django.core.paginator import Paginator
 
-    bdt_qs = BDT.objects.filter(vehicle=vehicle).select_related('driver').order_by('-started_at', '-created_at')
-    from apps.fleet.bdt_incidents import detect_bdt_incident
+    from apps.fleet.bdt_incidents import detect_bdt_incident, can_manage_bdt_incidents, update_bdt_incident
+    from apps.ui.forms import BDTIncidentForm
 
-    bdt_incident_count = 0
-    bdt_incident_alerts = []
+    incident_error_id, incident_error_form = None, None
+    if request.method == 'POST' and request.POST.get('action') == 'update_bdt_incident':
+        if not can_manage_bdt_incidents(request.user):
+            raise PermissionDenied
+        try:
+            incident_error_id = uuid.UUID(request.POST.get('bdt_id', ''))
+        except (TypeError, ValueError, AttributeError):
+            raise Http404
+        get_object_or_404(BDT.objects.filter(vehicle=vehicle), pk=incident_error_id)
+        incident_error_form = BDTIncidentForm(request.POST, prefix=f'incident-{incident_error_id}')
+        if incident_error_form.is_valid():
+            try:
+                update_bdt_incident(
+                    bdt_id=incident_error_id, vehicle_id=vehicle.pk, user=request.user,
+                    requested_sector=request.GET.get('sector'),
+                    **incident_error_form.cleaned_data,
+                )
+            except ValidationError as exc:
+                incident_error_form.add_error(None, exc)
+            else:
+                from urllib.parse import urlencode
+                params = {key: request.GET[key] for key in ('bdt_page', 'sector') if request.GET.get(key)}
+                target = reverse('vehicle_dossier', kwargs={'pk': vehicle.pk})
+                if params:
+                    target += '?' + urlencode(params)
+                return redirect(target + '#bdt-utilizacao')
+
+    bdt_qs = BDT.objects.filter(vehicle=vehicle).select_related('driver', 'incident_followup').order_by('-started_at', '-created_at')
     for bdt in bdt_qs:
         bdt.incident_alert = detect_bdt_incident(bdt.note)
-        if bdt.incident_alert:
-            bdt_incident_count += 1
-            if len(bdt_incident_alerts) < 5:
-                bdt_incident_alerts.append(bdt)
-
+        bdt.followup = getattr(bdt, 'incident_followup', None)
     bdt_page = Paginator(bdt_qs, 3).get_page(request.GET.get('bdt_page', 1))
+    from django.db.models import prefetch_related_objects
+    prefetch_related_objects(bdt_page.object_list, 'incident_followup__history__author')
+    for bdt in bdt_page.object_list:
+        if bdt.incident_alert or bdt.followup:
+            bdt.incident_form = BDTIncidentForm(
+                initial={
+                    'status': bdt.followup.status if bdt.followup else 'PENDING',
+                    'responsible': bdt.followup.responsible if bdt.followup else '',
+                    'expected_revision': bdt.followup.revision if bdt.followup else 0,
+                },
+                prefix=f'incident-{bdt.pk}',
+            )
+            bdt.incident_form_has_errors = bdt.pk == incident_error_id
+            if bdt.incident_form_has_errors:
+                bdt.incident_form = incident_error_form
     bdt_total_km = 0
     bdt_total_valid = True
     for started, ended in bdt_qs.values_list('started_km', 'ended_km'):
@@ -917,8 +954,7 @@ def vehicle_dossier(request, pk):
         'revisao_status': revisao_status,
         'obs_list': obs_list,
         'bdt_page': bdt_page,
-        'bdt_incident_count': bdt_incident_count,
-        'bdt_incident_alerts': bdt_incident_alerts,
+        'can_manage_bdt_incidents': can_manage_bdt_incidents(request.user),
         'bdt_summary': bdt_summary,
         'bdt_latest_operational': bdt_latest_operational,
         'bdt_latest_distance': bdt_latest_distance,
@@ -930,7 +966,7 @@ def vehicle_dossier(request, pk):
         'bdt_latest_ended_km': normalize_km(bdt_latest_operational.ended_km) if bdt_latest_operational else None,
         'bdt_inconsistencies': bdt_inconsistencies,
     }
-    return render(request, "ui/dossier.html", context)
+    return render(request, "ui/dossier.html", context, status=400 if incident_error_form else 200)
 
 
 @login_required

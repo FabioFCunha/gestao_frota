@@ -238,7 +238,21 @@
 </section>
 
 <!-- BDTS / UTILIZAÇÃO -->
-<section class="grid">
+<style>
+.bdt-followup {min-width:210px;max-width:340px;white-space:normal;}
+.bdt-followup .bdt-followup-status {display:inline-block;padding:3px 8px;border-radius:6px;background:#fff4de;color:#92400e;font-weight:600;}
+.bdt-followup .bdt-followup-status--IN_REVIEW {background:#eff6ff;color:#1d4ed8;}
+.bdt-followup .bdt-followup-status--RESOLVED {background:#f0fdf4;color:#15803d;}
+.bdt-followup details {margin-top:8px;}
+.bdt-followup summary {cursor:pointer;color:#173358;}
+.bdt-followup form {margin:12px 0;}
+.bdt-followup label {display:block;margin-bottom:4px;}
+.bdt-followup input:not([type=hidden]),.bdt-followup select,.bdt-followup textarea {box-sizing:border-box;width:100%;}
+.bdt-followup .errorlist {padding-left:18px;color:#b91c1c;white-space:normal;}
+.bdt-followup-history {padding-left:18px;overflow-wrap:anywhere;}
+.bdt-followup-history li {margin:10px 0;}
+</style>
+<section class="grid" id="bdt-utilizacao">
     <article class="panel" style="grid-column:1/-1;">
         <div class="panel-title"><div><h3>BDTs / Utilização</h3></div><a class="secondary-action" href="{% url 'bdt_list' %}?vehicle={{ vehicle.id }}">Ver todos os BDTs</a></div>
         <div style="display:flex;gap:24px;flex-wrap:wrap;margin-bottom:14px;">
@@ -248,8 +262,9 @@
             <span><strong>{% if bdt_summary.total_km is not None %}{{ bdt_summary.total_km }} km{% else %}Não informado{% endif %}</strong> KM total válido</span>
         </div>
         {% if bdt_page.object_list %}
+        <div style="overflow-x:auto;">
         <table>
-            <thead><tr><th>INÍCIO</th><th>ENCERRAMENTO</th><th>MOTORISTA</th><th>KM INICIAL</th><th>KM FINAL</th><th>OBSERVAÇÃO</th><th></th></tr></thead>
+            <thead><tr><th>INÍCIO</th><th>ENCERRAMENTO</th><th>MOTORISTA</th><th>KM INICIAL</th><th>KM FINAL</th><th>OBSERVAÇÃO</th><th>ACOMPANHAMENTO</th><th></th></tr></thead>
             <tbody>
             {% for bdt in bdt_page.object_list %}
                 <tr>
@@ -258,12 +273,14 @@
                     <td>{{ bdt.driver.name|default:"Não informado" }}</td>
                     <td>{% if bdt.started_km is not None %}{{ bdt.started_km }} km{% else %}Não informado{% endif %}</td>
                     <td>{% if bdt.ended_km is not None %}{{ bdt.ended_km }} km{% else %}Não informado{% endif %}</td>
-                    <td>{% if bdt.incident_alert %}<strong style="display:block;color:#92400e;">{{ bdt.incident_alert.label }}</strong>{% endif %}{{ bdt.note|default:"Não informado"|truncatechars:80 }}</td>
+                    <td>{% if bdt.followup.status == 'RESOLVED' %}<strong style="display:block;color:#64748b;">Avaria acompanhada</strong>{% elif bdt.incident_alert %}<strong style="display:block;color:#92400e;">{{ bdt.incident_alert.label }}</strong>{% endif %}{{ bdt.note|default:"Não informado"|truncatechars:80 }}</td>
+                    <td>{% include 'ui/bdt_incident_followup.html' with bdt=bdt %}</td>
                     <td><a class="secondary-action" href="{% url 'bdt_list' %}?vehicle={{ vehicle.id }}&bdt={{ bdt.id }}">Abrir detalhes</a></td>
                 </tr>
             {% endfor %}
             </tbody>
         </table>
+        </div>
         {% else %}<div class="empty">Nenhum BDT vinculado a esta viatura.</div>{% endif %}
         {% if bdt_page.has_other_pages %}
         <div style="display:flex;gap:12px;align-items:center;margin-top:14px;">

@@ -408,6 +408,29 @@ class BDT(BaseModel):
         return normalize_km(self.ended_km) - normalize_km(self.started_km)
 
 
+class BDTIncidentFollowUp(BaseModel):
+    class Status(models.TextChoices):
+        PENDING = "PENDING", "Pendente"
+        IN_REVIEW = "IN_REVIEW", "Em análise"
+        RESOLVED = "RESOLVED", "Resolvido"
+
+    bdt = models.OneToOneField(BDT, on_delete=models.PROTECT, related_name="incident_followup")
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.PENDING)
+    responsible = models.CharField(max_length=150)
+    revision = models.PositiveIntegerField(default=0)
+
+
+class BDTIncidentUpdate(BaseModel):
+    followup = models.ForeignKey(BDTIncidentFollowUp, on_delete=models.PROTECT, related_name="history")
+    status = models.CharField(max_length=12, choices=BDTIncidentFollowUp.Status.choices)
+    responsible = models.CharField(max_length=150)
+    note = models.TextField()
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+
+
 class VehicleMileage(BaseModel):
     MANUAL = "MANUAL"
     INTEGRACAO = "INTEGRACAO"
