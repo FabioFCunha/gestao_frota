@@ -1,23 +1,560 @@
 {% extends 'ui/base.html' %}
+{% load static %}
 {% block title %}Dashboard | Gestão de Frotas{% endblock %}
 
 {% block heading %}Gestão da Frota{% endblock %}
 {% block content %}
 <style>
+
 .dashboard-informe-item { display:block; width:100%; text-align:left; padding:10px 0; border:0; border-bottom:1px solid #eee; background:transparent; cursor:pointer; color:inherit; }
 .dashboard-informe-item:hover { opacity:.75; }
 #dashboard-informe-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:1100; align-items:center; justify-content:center; padding:20px; }
 #dashboard-informe-modal .panel { width:min(680px,96vw); max-height:90vh; overflow:auto; }
 .dashboard-informe-actions { margin-top:22px; display:flex; gap:10px; justify-content:flex-end; flex-wrap:wrap; }
-.crlv-overview-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; }
-.crlv-status-card { display:flex; flex-direction:column; min-width:0; padding:20px; }
-.crlv-status-card h3 { margin:0 0 8px; font-size:1.05rem; }
-.crlv-status-count { display:block; margin-bottom:4px; font-size:1.35rem; font-weight:750; letter-spacing:-.03em; }
-.crlv-status-card .crlv-pending-list { margin-top:12px; max-height:520px; overflow:auto; }
-.crlv-status-card .crlv-pending-list > div { padding:10px 0; border-bottom:1px solid #e5e7eb; line-height:1.5; }
-.crlv-status-actions { display:flex; gap:10px; flex-wrap:wrap; margin-top:auto; padding-top:16px; }
-.crlv-status-actions > a, .crlv-status-actions > button { justify-content:center; text-align:center; }
-@media (max-width: 760px) { .crlv-overview-grid { grid-template-columns:minmax(0,1fr); } }
+
+/* ── Modern Real Mercosul Plate ── */
+.real-mercosul-plate {
+    display: inline-flex;
+    flex-direction: column;
+    width: 168px;
+    height: 56px;
+    background: #ffffff;
+    border: 2.5px solid #0f172a;
+    border-radius: 7px;
+    overflow: hidden;
+    box-shadow: 0 4px 10px -2px rgba(15, 23, 42, 0.15), inset 0 0 0 1px rgba(255, 255, 255, 0.9), inset 0 0 3px rgba(0, 0, 0, 0.08);
+    position: relative;
+    user-select: none;
+    flex-shrink: 0;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.real-mercosul-plate:hover {
+    box-shadow: 0 6px 14px -2px rgba(15, 23, 42, 0.22), inset 0 0 0 1px rgba(255, 255, 255, 0.9);
+}
+.real-mercosul-plate::before {
+    content: '';
+    position: absolute;
+    inset: 1px;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 4px;
+    pointer-events: none;
+    z-index: 2;
+}
+.rmp-header {
+    height: 18px;
+    background: linear-gradient(180deg, #003399 0%, #002575 100%);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 6px;
+    border-bottom: 1.5px solid #001a4e;
+    position: relative;
+    z-index: 1;
+}
+.rmp-emblem {
+    display: block;
+    width: 14px;
+    height: 11px;
+    flex-shrink: 0;
+}
+.rmp-country {
+    font-family: 'Plus Jakarta Sans', 'Inter', -apple-system, sans-serif;
+    font-size: 9.5px;
+    font-weight: 800;
+    color: #ffffff;
+    letter-spacing: 0.18em;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+    text-transform: uppercase;
+    line-height: 1;
+    padding-top: 1px;
+}
+.rmp-flag {
+    display: block;
+    width: 16px;
+    height: 11px;
+    border-radius: 1px;
+    box-shadow: 0 0.5px 1.5px rgba(0, 0, 0, 0.25);
+    flex-shrink: 0;
+}
+.rmp-body {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+    overflow: hidden;
+}
+.rmp-number {
+    font-family: 'Plus Jakarta Sans', 'Manrope', 'Montserrat', Arial Black, sans-serif;
+    font-weight: 900;
+    font-size: 24px;
+    letter-spacing: 0.1em;
+    color: #0f172a;
+    line-height: 1;
+    text-transform: uppercase;
+    position: relative;
+    z-index: 2;
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.9), 0 -1px 0 rgba(15, 23, 42, 0.35), 0.5px 0 0 rgba(15, 23, 42, 0.15);
+}
+.rmp-watermark {
+    position: absolute;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 26px;
+    font-weight: 900;
+    color: rgba(148, 163, 184, 0.14);
+    letter-spacing: 0.05em;
+    pointer-events: none;
+    z-index: 1;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+}
+.rmp-seal {
+    position: absolute;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #e2e8f0, #475569);
+    border: 0.5px solid #334155;
+    z-index: 2;
+}
+.rmp-seal--bl { bottom: 3px; left: 4px; }
+.rmp-seal--br { bottom: 3px; right: 4px; }
+
+/* ── Card Styles ── */
+.fd-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 20px;
+}
+.vc {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    text-decoration: none !important;
+    color: var(--text) !important;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 18px;
+    padding: 20px;
+    cursor: pointer;
+    transition: all 0.25s cubic-bezier(.4,0,.2,1);
+    box-shadow: 0 4px 12px -2px rgba(15, 23, 42, 0.03), 0 2px 6px -2px rgba(15, 23, 42, 0.02);
+}
+.vc:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 16px 32px -8px rgba(15, 23, 42, 0.1), 0 4px 8px -2px rgba(15, 23, 42, 0.03);
+    border-color: #cbd5e1;
+}
+.vc:hover .vc-btn-prontuario {
+    background: #0b162c;
+    color: #ffffff;
+    border-color: #0b162c;
+    box-shadow: 0 4px 12px rgba(11, 22, 44, 0.25);
+}
+.vc:hover .vc-btn-prontuario svg {
+    transform: translateX(3px);
+}
+.vc-card-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 14px;
+}
+.vc-status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    padding: 5px 12px;
+    border-radius: 999px;
+    white-space: nowrap;
+    line-height: 1.2;
+}
+.vc-status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+.vc-status-pill--danger {
+    background: #fef2f2;
+    color: #dc2626;
+    border: 1px solid #fecaca;
+}
+.vc-status-pill--danger .vc-status-dot {
+    background: #ef4444;
+    box-shadow: 0 0 0 2px #fee2e2;
+}
+.vc-status-pill--warning {
+    background: #fffbeb;
+    color: #d97706;
+    border: 1px solid #fde68a;
+}
+.vc-status-pill--warning .vc-status-dot {
+    background: #f59e0b;
+}
+.vc-status-pill--purple {
+    background: #f5f3ff;
+    color: #7c3aed;
+    border: 1px solid #ddd6fe;
+}
+.vc-status-pill--purple .vc-status-dot {
+    background: #8b5cf6;
+}
+.vc-status-pill--success {
+    background: #f0fdf4;
+    color: #15803d;
+    border: 1px solid #bbf7d0;
+}
+.vc-status-pill--success .vc-status-dot {
+    background: #22c55e;
+    box-shadow: 0 0 0 2px #dcfce7;
+}
+.vc-status-pill--neutral {
+    background: #f1f5f9;
+    color: #475569;
+    border: 1px solid #e2e8f0;
+}
+.vc-status-pill--neutral .vc-status-dot {
+    background: #94a3b8;
+}
+
+.vc-model-name {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 15px;
+    font-weight: 700;
+    color: #1e293b;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    margin-bottom: 14px;
+    line-height: 1.3;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.vc-stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    background: #f8fafc;
+    border: 1px solid #f1f5f9;
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin-bottom: 14px;
+}
+.vc-stat-col {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+.vc-stat-label {
+    font-size: 10.5px;
+    font-weight: 700;
+    color: #64748b;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin-bottom: 3px;
+    line-height: 1.2;
+}
+.vc-stat-val {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 16.5px;
+    font-weight: 800;
+    color: #0f172a;
+    line-height: 1.2;
+}
+.vc-stat-sub {
+    font-size: 11.5px;
+    color: #64748b;
+    font-weight: 500;
+    margin-top: 3px;
+    line-height: 1.3;
+}
+.vc-stat-sub--danger {
+    color: #dc2626;
+    font-weight: 700;
+}
+.vc-stat-sub--interval {
+    font-size: 10.5px;
+    color: #94a3b8;
+    margin-top: 2px;
+}
+.vc-badges-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+}
+.vc-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11.5px;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 6px;
+    line-height: 1.3;
+}
+.vc-badge--danger {
+    background: #fef2f2;
+    color: #dc2626;
+    border: 1px solid #fecaca;
+}
+.vc-badge--success {
+    background: #f0fdf4;
+    color: #15803d;
+    border: 1px solid #bbf7d0;
+}
+.vc-badge--neutral {
+    background: #f1f5f9;
+    color: #64748b;
+    border: 1px solid #e2e8f0;
+}
+.vc-btn-prontuario {
+    margin-top: auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 10px 16px;
+    font-family: 'Inter', sans-serif;
+    font-size: 13.5px;
+    font-weight: 700;
+    color: #334155;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 10px;
+    transition: all 0.2s ease;
+    text-decoration: none;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+.vc-btn-prontuario svg {
+    transition: transform 0.2s ease;
+}
+
+/* ── Typography Enhancements ── */
+.fd-hero {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 24px;
+    padding: 36px 0 28px;
+}
+.fd-eyebrow {
+    display: block;
+    color: #64748b;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+}
+.fd-title {
+    font: 800 38px/1.1 'Plus Jakarta Sans', Manrope, sans-serif !important;
+    margin: 0 0 10px;
+    letter-spacing: -0.03em;
+    color: #0f172a;
+}
+.fd-subtitle {
+    margin: 0;
+    color: #64748b;
+    font-size: 16px;
+    font-weight: 500;
+    line-height: 1.4;
+}
+.fd-hero-count {
+    text-align: right;
+    flex-shrink: 0;
+    background: #ffffff;
+    padding: 18px 28px;
+    border-radius: 16px;
+    box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.05);
+    border: 1px solid rgba(226, 232, 240, 0.9);
+}
+.fd-hero-count strong {
+    display: block;
+    font: 800 46px/1 'Plus Jakarta Sans', Manrope, sans-serif;
+    letter-spacing: -0.04em;
+    color: #1e3a8a;
+}
+.fd-hero-count span {
+    font-size: 12px;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-weight: 800;
+    margin-top: 5px;
+    display: block;
+}
+.fd-strip {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 24px;
+    padding: 10px 12px;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    box-shadow: 0 4px 16px -2px rgba(15, 23, 42, 0.04);
+}
+.fd-filter-label {
+    padding: 0 8px 0 12px;
+    color: #94a3b8;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+}
+.fd-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid transparent !important;
+    background: transparent !important;
+    color: #64748b !important;
+    border-radius: 12px;
+    padding: 10px 18px !important;
+    font: 600 14px 'Inter', 'DM Sans', sans-serif !important;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s ease;
+}
+.fd-chip:hover {
+    background: #f8fafc !important;
+    color: #0f172a !important;
+}
+.fd-chip.active {
+    background: linear-gradient(135deg, #0b162c 0%, #050c1a 100%) !important;
+    color: #ffffff !important;
+    border-color: #0b162c !important;
+    box-shadow: 0 4px 12px rgba(11, 22, 44, 0.25) !important;
+}
+.fd-chip b {
+    font: 800 14px 'Plus Jakarta Sans', Manrope, sans-serif;
+    color: #0f172a;
+    margin-left: 6px;
+    background: rgba(0, 0, 0, 0.05);
+    padding: 3px 9px;
+    border-radius: 20px;
+}
+.fd-chip.active b {
+    color: #ffffff !important;
+    background: rgba(255, 255, 255, 0.18) !important;
+}
+.fd-search-wrap {
+    margin-left: auto;
+    flex-shrink: 0;
+    position: relative;
+}
+.fd-search-icon {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #94a3b8;
+    font-size: 18px;
+}
+.fd-search {
+    border: 1px solid #cbd5e1;
+    border-radius: 12px;
+    padding: 12px 16px 12px 42px;
+    font: 500 14.5px 'Inter', sans-serif;
+    color: #1e293b;
+    outline-color: #3b82f6;
+    width: 280px;
+    background: #f8fafc;
+    transition: all 0.2s ease;
+}
+.fd-search:focus {
+    border-color: #3b82f6;
+    background: #ffffff;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+.fd-board-title {
+    font: 800 22px 'Plus Jakarta Sans', Manrope, sans-serif;
+    color: #0f172a;
+}
+.fd-board-counter {
+    font-size: 13.5px;
+    color: #64748b;
+    font-weight: 600;
+    background: #ffffff;
+    padding: 7px 16px;
+    border-radius: 20px;
+    border: 1px solid #e2e8f0;
+}
+.fd-board-counter b {
+    font: 800 14.5px 'Plus Jakarta Sans', Manrope, sans-serif;
+    color: #0f172a;
+}
+.fd-calendar-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: linear-gradient(135deg, #0b162c 0%, #050c1a 100%) !important;
+    color: #ffffff !important;
+    padding: 12px 22px !important;
+    border-radius: 12px !important;
+    font-size: 14px !important;
+    font-weight: 700 !important;
+    text-decoration: none;
+    box-shadow: 0 4px 12px rgba(11, 22, 44, 0.25);
+    transition: all 0.2s ease;
+}
+.fd-calendar-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(11, 22, 44, 0.35);
+}
+
+
+/* Compact operational vehicle cards. */
+.fd-board {padding:22px;border:1px solid #e2e8f0;border-radius:20px;background:#f8fafc;}
+.fd-board-head {display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:20px;}
+.fd-board-title {color:#142333;font-size:1.25rem;font-weight:800;}
+.fd-board-counter {padding:7px 12px;border-radius:20px;background:#eef2f7;color:#475569;white-space:nowrap;}
+.fd-board .fd-grid {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;}
+.fd-board .vc {box-sizing:border-box;display:flex;flex-direction:column;min-width:0;padding:16px;border:1px solid #e2e8f0;border-radius:15px;background:#fff;box-shadow:0 2px 5px #0f172a08;color:#17212c;text-decoration:none;transition:box-shadow .18s,border-color .18s;}
+.fd-board .vc[hidden] {display:none!important;}
+.fd-board .vc:before,.fd-board .vc:after {content:none;}
+.fd-board .vc:hover {border-color:#b7c9df;box-shadow:0 4px 12px #0f172a0c;transform:none;}
+.fd-board .vc:focus-visible {outline:3px solid #2563eb;outline-offset:3px;}
+.vc-heading {display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:20px;}
+.vc-identity {min-width:0;}
+.fd-board .vc-plate-text {display:block;color:#1e293b;font-size:1.08rem;line-height:1.3;font-weight:750;letter-spacing:.02em;}
+.fd-board .vc-model {display:block;margin:3px 0 0;color:#64748b;font-size:.74rem;line-height:1.35;overflow-wrap:anywhere;white-space:normal;text-align:left;}
+.fd-board .vc .vc-status {position:static;display:inline-block;width:auto;max-width:48%;flex-shrink:0;margin:0;padding:4px 8px;border:0;border-radius:20px;background:#e5f5ed;box-shadow:none;color:#15803d;font-size:.65rem;font-weight:650;line-height:1.25;text-transform:none;letter-spacing:0;white-space:normal;text-align:center;}
+.fd-board .vc--crlv-vencido .vc-status,.fd-board .vc--revisao-vencida .vc-status {background:#fef2f2;color:#b91c1c;}
+.fd-board .vc--manutencao .vc-status,.fd-board .vc--multa .vc-status,.fd-board .vc--contrato .vc-status,.fd-board .vc--revisao-proxima .vc-status {background:#fff4de;color:#b45309;}
+.vc-facts {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;flex:1;margin-bottom:12px;}
+.vc-label {display:block;margin-bottom:3px;color:#64748b;font-size:.7rem;line-height:1.4;}
+.vc-value {display:block;font-size:.9rem;line-height:1.4;font-weight:700;}
+.vc-facts small {display:block;margin-top:2px;font-size:.68rem;line-height:1.4;}
+.vc-documents {display:flex;flex-wrap:wrap;gap:6px 14px;padding:10px 0;border-top:1px solid #e2e8f0;color:#64748b;font-size:.7rem;line-height:1.5;}
+.vc-documents strong {font-weight:600;}
+.vc-muted {color:#94a3b8;}.vc-good {color:#15803d;}.vc-danger {color:#dc2626;}.vc-warning {color:#b45309;}
+.vc-open {display:block;margin-top:2px;padding:8px;border:1px solid #e2e8f0;border-radius:8px;color:#173358;text-align:center;font-size:.73rem;font-weight:600;}
+.fd-board .fd-empty {grid-column:1/-1;padding:24px;}
+@media(max-width:1200px){.fd-board .fd-grid {grid-template-columns:repeat(3,minmax(0,1fr));}}
+@media(max-width:900px){.fd-board .fd-grid {grid-template-columns:repeat(2,minmax(0,1fr));}}
+@media(max-width:560px){.fd-board {padding:14px;}.fd-board .fd-grid {grid-template-columns:minmax(0,1fr);}}
+
+
+/* Merge seguro: mantém cards compactos do piloto com o visual novo. */
+.fd-board .fd-grid { grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 16px; }
+.fd-board .vc-card-top { align-items: flex-start; }
+.fd-board .vc-status-pill { max-width: 48%; white-space: normal; text-align: center; }
+.fd-board .vc-model-name { white-space: normal; overflow-wrap: anywhere; }
+.fd-board .vc-badge--warning { background:#fffbeb; color:#b45309; border:1px solid #fde68a; }
+.fd-board .vc-badge--muted { background:#f1f5f9; color:#64748b; border:1px solid #e2e8f0; }
+@media(max-width:560px) { .fd-board .fd-grid { grid-template-columns:minmax(0,1fr); } .fd-board .vc-card-top { flex-wrap:wrap; } .fd-board .vc-status-pill { max-width:100%; } }
 </style>
 
 <div id="dashboard-informe-modal">
@@ -72,6 +609,46 @@
     </div>
 </section>
 
+{% if perms.fleet.view_contract %}
+{% if dashboard_alerts.contracts_expired or dashboard_alerts.contracts_expiring %}
+<dialog id="contract-alerts-dialog" aria-labelledby="contract-alerts-title" style="width:min(720px,calc(100vw - 32px));max-height:80vh;overflow:auto;border:1px solid #e2e8f0;border-radius:16px;padding:20px;">
+    <div class="panel-title">
+        <div><h3 id="contract-alerts-title">Vencimento dos contratos</h3></div>
+        <button type="button" class="secondary-action" id="contract-alerts-close" aria-label="Fechar alertas de contratos">Fechar</button>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:16px;">
+        {% if dashboard_alerts.contracts_expired %}
+        <div style="padding:14px;border:1px solid #fecaca;border-radius:12px;background:#fef2f2;">
+            <strong style="color:#b91c1c;">Vencidos — {{ dashboard_alerts.contracts_expired|length }}</strong>
+            <ul style="margin:10px 0 0;padding-left:20px;">
+                {% for c in dashboard_alerts.contracts_expired|dictsort:"ends_on" %}
+                <li style="margin:8px 0;">
+                    <a href="{% url 'contract_detail' c.id %}"><strong>Contrato {{ c.number }}</strong></a>
+                    <span style="display:block;color:#b91c1c;">Vencido em {{ c.ends_on|date:"d/m/Y" }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+        {% if dashboard_alerts.contracts_expiring %}
+        <div style="padding:14px;border:1px solid #fde68a;border-radius:12px;background:#fffbeb;">
+            <strong style="color:#92400e;">A vencer — {{ dashboard_alerts.contracts_expiring|length }}</strong>
+            <ul style="margin:10px 0 0;padding-left:20px;">
+                {% for c in dashboard_alerts.contracts_expiring|dictsort:"ends_on" %}
+                <li style="margin:8px 0;">
+                    <a href="{% url 'contract_detail' c.id %}"><strong>Contrato {{ c.number }}</strong></a>
+                    <span style="display:block;color:#92400e;">Vencimento em {{ c.ends_on|date:"d/m/Y" }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+    </div>
+    <a class="secondary-action" href="{% url 'contract_list' %}">Ver contratos</a>
+</dialog>
+{% endif %}
+{% endif %}
+
 <section class="fd-strip">
     <div class="fd-filter-label">FILTROS</div>
     <button class="fd-chip active" type="button" data-filter="todos">
@@ -86,6 +663,17 @@
         <b>{{ plate_alert_counts.crlv_vencido }}</b>
     </button>
     {% endif %}
+    {% if perms.fleet.view_contract %}
+    {% if dashboard_alerts.contracts_expired or dashboard_alerts.contracts_expiring %}
+    {% with expired=dashboard_alerts.contracts_expired|length upcoming=dashboard_alerts.contracts_expiring|length %}
+    <button class="fd-chip" type="button" id="contract-alerts-open" aria-haspopup="dialog" aria-controls="contract-alerts-dialog">
+        <i class="fd-dot {% if expired %}fd-dot--red{% endif %}" style="{% if not expired %}background:#f59e0b;{% endif %}"></i>
+        <span>Contratos</span>
+        <b>{{ expired|add:upcoming }}</b>
+    </button>
+    {% endwith %}
+    {% endif %}
+    {% endif %}
     <div class="fd-search-wrap">
         <span class="fd-search-icon">⌕</span>
         <input class="fd-search" type="text" id="plateSearch" placeholder="Buscar por placa..." autocomplete="off">
@@ -95,7 +683,7 @@
 
 
 <div style="display:flex;justify-content:flex-end;margin:20px 0;">
-    <a class="primary-action" href="{% url 'licensing_calendar' %}">Gerenciar calendário</a>
+    <a class="fd-calendar-btn" href="{% url 'licensing_calendar' %}"><span>Gerenciar calendário</span></a>
 </div>
 
 <section class="fd-board">
@@ -108,96 +696,94 @@
 
     <div class="fd-grid" id="fdGrid">
         {% for v in plate_rows %}
-        <a class="vc vc--{{ v.priority }}"
-           data-alerts="{{ v.alerts }}"
-           data-plate="{{ v.plate }}"
-           href="{% url 'vehicle_dossier' v.id %}">
-
-            <span class="vc-status">{{ v.priority_label }}</span>
-
-            <div class="vc-plate-wrap">
-                <div class="vl-plate">
-                    <div class="vl-plate-top">
-                        <span>BRASIL</span>
-                        <span>BR</span>
+        <a class="vc vc--{{ v.priority }}" data-alerts="{{ v.alerts }}" data-plate="{{ v.plate }}" href="{% url 'vehicle_dossier' v.id %}">
+            <div class="vc-card-top">
+                <div class="real-mercosul-plate" title="Placa {{ v.plate }}">
+                    <div class="rmp-header">
+                        <svg class="rmp-emblem" viewBox="0 0 16 12" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                            <circle cx="8" cy="2.2" r="1.1" fill="#ffffff"/>
+                            <circle cx="8" cy="9.8" r="1.1" fill="#ffffff"/>
+                            <circle cx="3.2" cy="6" r="1.1" fill="#ffffff"/>
+                            <circle cx="12.8" cy="5.2" r="1.1" fill="#ffffff"/>
+                            <path d="M2 9.5 C5 11 11 11 14 9.5" stroke="#ffffff" stroke-width="0.8" fill="none" opacity="0.65"/>
+                        </svg>
+                        <span class="rmp-country">BRASIL</span>
+                        <svg class="rmp-flag" viewBox="0 0 20 14" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                            <rect width="20" height="14" fill="#009c3b" rx="1"/>
+                            <polygon points="10,1.5 18.5,7 10,12.5 1.5,7" fill="#ffdf00"/>
+                            <circle cx="10" cy="7" r="3.2" fill="#002776"/>
+                            <path d="M6.9 7.2 Q10 5.8 13.1 7.2" stroke="#ffffff" stroke-width="0.8" fill="none"/>
+                        </svg>
                     </div>
-                    <div class="vl-plate-num">
-                        {{ v.plate }}
+                    <div class="rmp-body">
+                        <span class="rmp-watermark">BR</span>
+                        <span class="rmp-number">{{ v.plate }}</span>
+                        <span class="rmp-seal rmp-seal--bl"></span>
+                        <span class="rmp-seal rmp-seal--br"></span>
                     </div>
                 </div>
+                <span class="vc-status-pill {% if 'crlv_vencido' in v.alerts or v.priority == 'revisao-vencida' %}vc-status-pill--danger{% elif v.priority == 'revisao-proxima' or v.priority == 'manutencao' %}vc-status-pill--warning{% elif v.priority == 'normal' %}vc-status-pill--success{% else %}vc-status-pill--neutral{% endif %}">
+                    <span class="vc-status-dot"></span>{{ v.priority_label }}
+                </span>
             </div>
 
-            <div class="vc-model">
-                {% if v.model %}{{ v.model }}{% else %}Modelo não informado{% endif %}
-            </div>
+            <div class="vc-model-name">{% if v.brand %}{{ v.brand }} {% endif %}{% if v.model %}{{ v.model }}{% else %}Modelo não informado{% endif %}</div>
 
-            <div class="vc-details">
-                {% if "crlv_vencido" in v.alerts %}
-                <div class="vc-detail-item" title="Licenciamento anual vencido">
-                    <span class="vc-detail-icon">🚨</span>
-                    <strong style="color:#dc2626;">CRLV VENCIDO — regularização necessária</strong>
+            <div class="vc-stats-grid">
+                <div class="vc-stat-col">
+                    <span class="vc-stat-label">Quilometragem</span>
+                    <span class="vc-stat-val">{% if v.mileage is not None %}{{ v.mileage|floatformat:"0g" }} km{% else %}Não informada{% endif %}</span>
                 </div>
-                {% endif %}
-                <div class="vc-detail-item" title="Quilometragem Atual">
-                    <span class="vc-detail-icon">⏱</span>
-                    <span>{% if v.mileage is not None %}{{ v.mileage }} km{% else %}Sem quilometragem registrada{% endif %}</span>
-                </div>
-                {% if v.revision_info %}
-                    <div class="vc-detail-item" title="Intervalo da revisão preventiva">
-                        <span class="vc-detail-icon">🔧</span>
-                        <span>Revisão a cada {{ v.revision_info.interval_km }} km</span>
-                    </div>
-                    {% if v.revision_info.status == "SEM_HISTORICO" %}
-                    <div class="vc-detail-item" title="Nenhuma revisão concluída e referência inicial ainda não definida">
-                        <span class="vc-detail-icon">⚠️</span>
-                        <span style="color: #b45309;">Sem histórico de revisão</span>
-                    </div>
-                    {% else %}
-                    {% if v.revision_info.km_prox_revisao is not None %}
-                    <div class="vc-detail-item" title="Próxima Revisão">
-                        <span class="vc-detail-icon">🔧</span>
-                        <span>Rev. {{ v.revision_info.km_prox_revisao }} km</span>
-                    </div>
-                    {% endif %}
-                    {% if v.revision_info.km_faltando is not None %}
-                    <div class="vc-detail-item">
-                        <span class="vc-detail-icon">
-                            {% if v.revision_info.status == "DEVIDA" %}🚨{% else %}⏳{% endif %}
-                        </span>
-                        <span>
-                            {% if v.revision_info.status == "DEVIDA" %}
-                                <strong style="color: #dc2626;">Vencida {{ v.revision_info.ultrapassado }} km</strong>
+                <div class="vc-stat-col">
+                    <span class="vc-stat-label">Próxima revisão</span>
+                    {% if v.revision_info %}
+                        {% if v.revision_info.status == "SEM_HISTORICO" %}
+                            <span class="vc-stat-val" style="font-size:14px;color:#b45309;">Sem histórico</span>
+                        {% else %}
+                            {% if v.revision_info.km_prox_revisao is not None %}
+                                <span class="vc-stat-val">{{ v.revision_info.km_prox_revisao|floatformat:"0g" }} km</span>
                             {% else %}
-                                Faltam {{ v.revision_info.km_faltando }} km
+                                <span class="vc-stat-val" style="font-size:14px;color:#64748b;">Não definida</span>
                             {% endif %}
-                        </span>
-                    </div>
+                            {% if v.revision_info.km_faltando is not None %}
+                                {% if v.revision_info.status == "DEVIDA" %}
+                                    <span class="vc-stat-sub vc-stat-sub--danger">Vencida {{ v.revision_info.ultrapassado|floatformat:"0g" }} km</span>
+                                {% else %}
+                                    <span class="vc-stat-sub">faltam {{ v.revision_info.km_faltando|floatformat:"0g" }} km</span>
+                                {% endif %}
+                            {% endif %}
+                            {% if v.revision_info.interval_km %}
+                                <span class="vc-stat-sub vc-stat-sub--interval">Intervalo: {{ v.revision_info.interval_km|floatformat:"0g" }} km</span>
+                            {% endif %}
+                        {% endif %}
                     {% else %}
-                    <div class="vc-detail-item">Faltam: sem quilometragem registrada</div>
+                        <span class="vc-stat-val" style="font-size:14px;color:#94a3b8;">Não definida</span>
                     {% endif %}
-                    {% endif %}
-                {% endif %}
-                {% if v.driver_name %}
-                <div class="vc-detail-item" title="Motorista: {{ v.driver_name }}">
-                    <span class="vc-detail-icon">👤</span>
-                    <span>CNH {% if v.cnh_expiration %}{{ v.cnh_expiration|date:"d/m/Y" }}{% else %}?{% endif %}</span>
                 </div>
+            </div>
+
+            <div class="vc-badges-row">
+                <span class="vc-badge vc-badge--neutral" title="{% if v.driver_name %}Destinado a {{ v.driver_name }}{% else %}À disposição da administração da SEGOV{% endif %}">{% if v.driver_name %}Individual{% else %}Compartilhado{% endif %}</span>
+                <span class="vc-badge {% if v.crlv_tone == 'vc-danger' %}vc-badge--danger{% elif v.crlv_tone == 'vc-warning' %}vc-badge--warning{% elif v.crlv_tone == 'vc-muted' %}vc-badge--muted{% else %}vc-badge--success{% endif %}">CRLV {{ v.crlv_label }}</span>
+                {% if v.driver_name %}
+                <span class="vc-badge {% if v.cnh_tone == 'vc-danger' %}vc-badge--danger{% elif v.cnh_tone == 'vc-warning' %}vc-badge--warning{% elif v.cnh_tone == 'vc-muted' %}vc-badge--muted{% else %}vc-badge--success{% endif %}" title="{% if v.driver_name %}Motorista: {{ v.driver_name }}{% if v.cnh_expiration %} · Validade: {{ v.cnh_expiration|date:'d/m/Y' }}{% endif %}{% else %}Nenhum motorista vinculado{% endif %}">CNH {{ v.cnh_label }}</span>
                 {% endif %}
             </div>
 
-            <div class="vc-footer" style="justify-content: flex-end;">
-                <span class="vc-arrow">→</span>
+            <div class="vc-btn-prontuario">
+                <span>Ver prontuário</span>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
             </div>
         </a>
         {% empty %}
-        <div class="fd-empty">Nenhum veículo com placa atual cadastrada.</div>
+        <div class="fd-empty" style="font-size:16px;">Nenhum veículo com placa atual cadastrada.</div>
         {% endfor %}
     </div>
 </section>
 
 <script>
 (function () {
-    var chips = document.querySelectorAll(".fd-chip");
+    var chips = document.querySelectorAll(".fd-chip[data-filter]");
     var cards = document.querySelectorAll(".vc");
     var counter = document.getElementById("visibleCount");
     var search = document.getElementById("plateSearch");
@@ -225,7 +811,7 @@
         button.addEventListener("click", function () {
             activeFilter = button.dataset.filter;
 
-            document.querySelectorAll(".fd-chip").forEach(function (chip) {
+            document.querySelectorAll(".fd-chip[data-filter]").forEach(function (chip) {
                 chip.classList.toggle("active", chip.dataset.filter === activeFilter);
             });
 
@@ -278,6 +864,16 @@
     modal.addEventListener("click", function (event) {
         if (event.target === modal) modal.style.display = "none";
     });
+})();
+</script>
+<script>
+(function () {
+    const button = document.getElementById("contract-alerts-open");
+    const dialog = document.getElementById("contract-alerts-dialog");
+    const close = document.getElementById("contract-alerts-close");
+    if (!button || !dialog || !close) return;
+    button.addEventListener("click", function () { dialog.showModal(); });
+    close.addEventListener("click", function () { dialog.close(); });
 })();
 </script>
 {% endblock %}

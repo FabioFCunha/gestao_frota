@@ -6,6 +6,7 @@ import secrets
 import uuid
 from datetime import timedelta
 from PIL import Image, UnidentifiedImageError
+from django.conf import settings
 from django.contrib.auth import authenticate
 from django.db import transaction
 from django.http import HttpResponse
@@ -34,6 +35,8 @@ def member_for(request):
     ).first()
     if not member:
         raise PermissionDenied("Usuário sem vínculo ativo com uma empresa.")
+    if getattr(settings, "CENTRAL_USER_MANAGEMENT", False) and getattr(request, "driver_app_surface", False) and member.role != Member.DRIVER:
+        raise PermissionDenied("Gestores devem usar o sistema principal.")
     if member.role == Member.DRIVER and (not member.driver_id or not member.driver.active):
         raise PermissionDenied("Motorista sem cadastro ativo.")
     from apps.fleet.tenant_scope import set_scope, Scope
@@ -51,6 +54,7 @@ def trip_data(trip):
         "exit_order": str(trip.exit_order_id) if trip.exit_order_id else None,
         "legs": [{
             "id": str(leg.pk), "position": leg.position, "destination": leg.destination,
+            "destination_latitude": leg.destination_latitude, "destination_longitude": leg.destination_longitude,
             "started_at": leg.started_at, "ended_at": leg.ended_at,
             "started_km": leg.started_km, "ended_km": leg.ended_km,
             "distance_km": leg.ended_km - leg.started_km if leg.ended_km is not None else None,
@@ -63,7 +67,7 @@ def trip_data(trip):
 
 def owned_trip(member, pk, lock=False):
     query = Trip.objects.filter(company=member.company)
-    if member.role != Member.MANAGER:
+    if member.role not in Member.DESKTOP_ROLES:
         query = query.filter(member=member)
     if lock:
         query = query.select_for_update()
@@ -136,10 +140,19 @@ def login(request):
     username, password = request.data.get("username", ""), request.data.get("password", "")
     if not isinstance(username, str) or not isinstance(password, str):
         raise ValidationError("Credenciais inválidas.")
+    if getattr(settings, 'CENTRAL_USER_MANAGEMENT', False):
+        from django.contrib.auth import get_user_model
+        username = username.strip().lower()
+        matches = get_user_model().objects.filter(email__iexact=username)
+        if matches.count() != 1:
+            return Response({'detail': 'E-mail ou senha inválidos.'}, status=401)
+        username = matches.get().username
     user = authenticate(request, username=username, password=password)
     if not user:
         return Response({"detail": "Usuário ou senha inválidos."}, status=401)
     member = Member.objects.filter(user=user, active=True, company__active=True).first()
+    if getattr(settings, "CENTRAL_USER_MANAGEMENT", False) and member and member.role != Member.DRIVER:
+        return Response({"detail": "Gestores usam o sistema principal."}, status=403)
     if not member or user.must_change_password:
         return Response({"detail": "Acesso indisponível. Verifique o vínculo e atualize a senha no portal."}, status=403)
     token = secrets.token_urlsafe(48)
@@ -162,12 +175,17 @@ def logout(request):
 def bootstrap(request):
     member = member_for(request)
     vehicles = CompanyVehicle.objects.filter(company=member.company, active=True, vehicle__active=True)
-    if member.role != Member.MANAGER:
-        vehicles = vehicles.filter(drivers=member)
+    if member.role == Member.DRIVER:
+        if getattr(settings, 'CENTRAL_USER_MANAGEMENT', False):
+            vehicles = vehicles.filter(vehicle_id__in=VehicleExitOrder.objects.filter(
+                driver_id=member.driver_id, state='PENDING').values('vehicle_id'))
+        else:
+            vehicles = vehicles.filter(drivers=member)
     return Response({
         "member_id": member.pk,
         "name": request.user.get_full_name() or request.user.username,
         "company": member.company.name, "role": member.role,
+        "requires_exit_order": getattr(settings, "CENTRAL_USER_MANAGEMENT", False),
         "checklist_items": CHECKS,
         "vehicles": [{"id": v.pk, "label": v.label,
                       "suggested_km": VehicleMileage.objects.filter(vehicle=v.vehicle).order_by("-date", "-created_at").values_list("mileage", flat=True).first()}
@@ -190,7 +208,7 @@ def trips(request):
     member = member_for(request)
     if request.method == "GET":
         query = Trip.objects.filter(company=member.company).select_related("vehicle").prefetch_related("legs")
-        if member.role != Member.MANAGER:
+        if member.role not in Member.DESKTOP_ROLES:
             query = query.filter(member=member)
         return Response([trip_data(t) for t in query.order_by("-opened_at")[:100]])
     return execute(request, member, "create")
@@ -226,7 +244,8 @@ def execute(request, member, action, pk=None):
                 offset = trip.legs.count()
                 if offset + len(values) > 30:
                     raise ValidationError("Limite de 30 destinos por BDT.")
-                Leg.objects.bulk_create([Leg(trip=trip, position=offset+i+1, destination=v) for i, v in enumerate(values)])
+                from .addresses import leg_destinations
+                Leg.objects.bulk_create([Leg(trip=trip, position=offset+i+1, **v) for i, v in enumerate(leg_destinations(request, values))])
                 audit(request, trip, "destinos_adicionados", {"destinations": values})
             elif action == "close":
                 if trip.legs.filter(started_at__isnull=False, ended_at__isnull=True).exists():
@@ -247,10 +266,13 @@ def execute(request, member, action, pk=None):
 
 
 def create_trip(request, member):
-    vehicle = CompanyVehicle.objects.select_for_update().filter(
+    vehicle_query = CompanyVehicle.objects.select_for_update().filter(
         pk=positive_id(request.data.get("vehicle")), company=member.company, active=True,
-        vehicle__active=True, drivers=member
-    ).first()
+        vehicle__active=True)
+    central = getattr(settings, 'CENTRAL_USER_MANAGEMENT', False)
+    if not central:
+        vehicle_query = vehicle_query.filter(drivers=member)
+    vehicle = vehicle_query.first()
     if not vehicle:
         raise PermissionDenied("Veículo não atribuído a este motorista.")
     Vehicle.objects.select_for_update().get(pk=vehicle.vehicle_id)
@@ -258,13 +280,16 @@ def create_trip(request, member):
         raise ValidationError("Já existe BDT aberto para este motorista ou veículo.")
     values = destinations(request.data.get("destinations"))
     order = None
+    if central and not request.data.get('exit_order'):
+        raise ValidationError('Selecione a OS pendente atribuída a você para abrir o BDT.')
     if request.data.get("exit_order"):
-        order = VehicleExitOrder.objects.filter(pk=identifier(request.data["exit_order"]), vehicle=vehicle.vehicle,
+        order = VehicleExitOrder.objects.select_for_update().filter(pk=identifier(request.data["exit_order"]), vehicle=vehicle.vehicle,
                                                driver=member.driver, state="PENDING").first()
         if not order:
             raise ValidationError("OS incompatível com o veículo, motorista ou situação.")
     trip = Trip.objects.create(company=member.company, member=member, vehicle=vehicle, exit_order=order)
-    Leg.objects.bulk_create([Leg(trip=trip, position=i+1, destination=v) for i, v in enumerate(values)])
+    from .addresses import leg_destinations
+    Leg.objects.bulk_create([Leg(trip=trip, position=i+1, **v) for i, v in enumerate(leg_destinations(request, values))])
     audit(request, trip, "bdt_aberto", {"destinations": values})
     return trip
 
@@ -443,7 +468,7 @@ def upload_photo(request, pk, leg_id):
 def photo(request, photo_id):
     member = member_for(request)
     obj = InspectionPhoto.objects.select_related("leg__trip").filter(pk=photo_id, leg__trip__company=member.company).first()
-    if not obj or (member.role != Member.MANAGER and obj.leg.trip.member_id != member.pk):
+    if not obj or (member.role not in Member.DESKTOP_ROLES and obj.leg.trip.member_id != member.pk):
         raise PermissionDenied()
     response = HttpResponse(bytes(obj.image), content_type=obj.content_type)
     response["Cache-Control"] = "private, no-store"

@@ -1,0 +1,36 @@
+{% if bdt.incident_alert or bdt.followup %}
+<div class="bdt-followup">
+    <span class="bdt-followup-status bdt-followup-status--{{ bdt.followup.status|default:'PENDING' }}">{% if bdt.followup %}{{ bdt.followup.get_status_display }}{% else %}Pendente{% endif %}</span>
+    <small style="display:block;margin-top:4px;">{{ bdt.followup.responsible|default:'Sem responsável definido' }}</small>
+    <details {% if bdt.incident_form_has_errors %}open{% endif %}>
+        <summary>{% if can_manage_bdt_incidents %}Acompanhar{% else %}Ver acompanhamento{% endif %}</summary>
+        <p>Relato original: {{ bdt.note|default:'Não informado' }}</p>
+        {% if can_manage_bdt_incidents %}
+        <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="update_bdt_incident">
+            <input type="hidden" name="bdt_id" value="{{ bdt.pk }}">
+            {{ bdt.incident_form.expected_revision }}
+            {{ bdt.incident_form.non_field_errors }}
+            <p>{{ bdt.incident_form.status.label_tag }}{{ bdt.incident_form.status }}{{ bdt.incident_form.status.errors }}</p>
+            <p>{{ bdt.incident_form.responsible.label_tag }}{{ bdt.incident_form.responsible }}{{ bdt.incident_form.responsible.errors }}</p>
+            <p>{{ bdt.incident_form.note.label_tag }}{{ bdt.incident_form.note }}{{ bdt.incident_form.note.errors }}</p>
+            <button type="submit" class="primary-action">Salvar providência</button>
+        </form>
+        {% endif %}
+        {% if bdt.followup %}
+        <details>
+            <summary>Histórico de providências</summary>
+            <ol class="bdt-followup-history">
+            {% for item in bdt.followup.history.all %}
+                <li><strong>{{ item.get_status_display }}</strong> — {{ item.responsible }}<br>
+                    <small>{{ item.created_at|date:'d/m/Y H:i' }} · {{ item.author.get_full_name|default:item.author.username }}</small>
+                    <div>{{ item.note|linebreaksbr }}</div>
+                </li>
+            {% endfor %}
+            </ol>
+        </details>
+        {% endif %}
+    </details>
+</div>
+{% else %}—{% endif %}

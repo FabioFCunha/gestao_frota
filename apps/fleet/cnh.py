@@ -47,10 +47,10 @@ def _cnh_ocr(image, *, data=False):
 
 def _all_text(raw):
     """Extrai texto nativo e usa OCR quando o PDF só contém cabeçalhos/QR."""
+    from .pdf_validation import identification_pdf_reader
+    reader = identification_pdf_reader(raw)
     text = ""
     try:
-        from pypdf import PdfReader
-        reader = PdfReader(io.BytesIO(raw))
         text = "\n".join(page.extract_text() or "" for page in reader.pages)
     except Exception:
         text = ""
@@ -75,7 +75,7 @@ def _all_text(raw):
 
     try:
         from pdf2image import convert_from_bytes
-        pages = convert_from_bytes(raw, dpi=300)
+        pages = convert_from_bytes(raw, dpi=300, timeout=30)
         ocr_text = "\n".join(
             _cnh_ocr(page)
             for page in pages
@@ -443,6 +443,7 @@ def extract_cnh_data(file_obj):
     if nationality_match:
         nationality = nationality_match.group(1).replace(" ", "")
     parents = []
+    filiation_tail = ""
     filiation_match = re.search(r"FILIA[CÇ][AÃ]O", upper, re.IGNORECASE)
     if filiation_match:
         filiation_tail = upper[filiation_match.end():filiation_match.end() + 240]
@@ -484,8 +485,21 @@ def extract_cnh_data(file_obj):
             ]
             if len(parts) >= 2:
                 parents = parts[:2]
-    father = _clean(parents[0]) if parents else ""
-    mother = _clean(parents[1]) if len(parents) > 1 else ""
+    # Um único nome sem rótulo não informa se é pai ou mãe. Não atribua
+    # automaticamente à primeira posição, inclusive quando o pai não consta.
+    father = _clean(parents[0]) if len(parents) == 2 else ""
+    mother = _clean(parents[1]) if len(parents) == 2 else ""
+    for label, field in ((r"PAI", "father"), (r"M[AÃ]E", "mother")):
+        explicit = re.search(
+            rf"(?:^|\n)\s*{label}\s*[:.-]?\s*([^\n]+)", filiation_tail,
+        )
+        if explicit:
+            value = _clean(explicit.group(1))
+            if re.fullmatch(r"[A-ZÀ-ÖØ-Þ'’.-]+(?:\s+[A-ZÀ-ÖØ-Þ'’.-]+){1,7}", value):
+                if field == "father":
+                    father = value
+                else:
+                    mother = value
 
     if not father or not mother or not re.fullmatch(
         r"BRASILEIR[OA](?:\([A-Z]\))?", nationality,
@@ -574,4 +588,109 @@ def extract_cnh_data(file_obj):
         "text_extracted": text,
         "text_extraction_succeeded": bool(name or _cpf(upper) or cnh_number or category or _date_field(upper, [r"DATA\s+NASCIMENTO", r"NASCIMENTO"]) or _date_field(upper, [r"VALIDADE"])),
     }
+    return data
+
+
+_CNH_VALID_CATEGORIES = {
+    "ACC", "A", "B", "C", "D", "E", "AB", "AC", "AD", "AE",
+}
+_CNH_STATES = set(
+    "AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO RR SC SP SE TO".split()
+)
+
+
+def _cnh_front_identity_category(raw):
+    from pypdf import PdfReader
+    result = {}
+
+    def read_region(image, bounds):
+        box = tuple(
+            round(v * (image.width if i % 2 == 0 else image.height))
+            for i, v in enumerate(bounds)
+        )
+        crop = image.crop(box)
+        crop = crop.resize((crop.width * 3, crop.height * 3))
+        return _cnh_ocr(crop).upper()
+
+    try:
+        for page in PdfReader(io.BytesIO(raw)).pages:
+            for embedded in page.images:
+                image = embedded.image.convert("RGB")
+                if image.width < 500 or not 1.35 < image.width / image.height < 1.5:
+                    continue
+
+                header = read_region(image, (.16, .24, 1., .35))
+                if not (
+                    re.search(r"\bNOME\b", header)
+                    and re.search(r"HABILITA", header)
+                ):
+                    continue
+
+                block = read_region(image, (.45, .50, .99, .58))
+                found = re.search(
+                    r"(?m)^[ |]*(\d[\d.\- ]{4,19})\s+"
+                    r"([A-Z][A-Z./-]{1,19})\s+([A-Z]{2})[ |]*$",
+                    block,
+                )
+                if found and found.group(3) in _CNH_STATES:
+                    result.update(
+                        identity_document=_clean(found.group(1)),
+                        issuing_authority=found.group(2),
+                        issuing_state=found.group(3),
+                    )
+
+                category = _clean(
+                    read_region(image, (.85, .607, .975, .645))
+                ).strip(" |[]")
+                if category in _CNH_VALID_CATEGORIES:
+                    result["cnh_category"] = category
+
+                from .cnh_front import extract_front_fields
+                result.update(extract_front_fields(image, read_region))
+                return result
+    except Exception:
+        return result
+    return result
+
+
+_extract_cnh_data_before_field_validation = extract_cnh_data
+
+
+def extract_cnh_data(file_obj):
+    if hasattr(file_obj, "seek"):
+        file_obj.seek(0)
+    raw = file_obj.read() if hasattr(file_obj, "read") else bytes(file_obj)
+    if hasattr(file_obj, "seek"):
+        file_obj.seek(0)
+
+    data = _extract_cnh_data_before_field_validation(io.BytesIO(raw))
+    text = str(data.get("text_extracted") or "").upper()
+
+    if not re.fullmatch(
+        r"\d[\d .-]{4,19}", str(data.get("identity_document") or "")
+    ):
+        data["identity_document"] = ""
+
+    if data.get("issuing_state") not in _CNH_STATES:
+        data["issuing_state"] = ""
+
+    if not re.fullmatch(
+        r"[A-Z][A-Z./-]{1,19}", str(data.get("issuing_authority") or "")
+    ):
+        data["issuing_authority"] = ""
+
+    # Categoria precisa estar associada ao próprio rótulo.
+    category = re.search(
+        r"(?:CAT\.?\s*HAB\.?|CATEGORIA)\s*[:|\-]?\s*"
+        r"(ACC|A[BCDE]?|[BCDE])(?=\s|$)",
+        text,
+    )
+    # A leitura anterior também associa o campo ao rótulo e cobre colunas.
+    previous_category = data.get("cnh_category", "")
+    data["cnh_category"] = category.group(1) if category else (
+        previous_category if previous_category in _CNH_VALID_CATEGORIES else ""
+    )
+    data.update(_cnh_front_identity_category(raw))
+    from .cnh_legacy import extract_legacy_cnh_data
+    data.update(extract_legacy_cnh_data(raw))
     return data

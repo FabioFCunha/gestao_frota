@@ -16,10 +16,13 @@ class Company(models.Model):
 class Member(models.Model):
     DRIVER = "driver"
     MANAGER = "manager"
+    OPERATOR = "operator"
+    VIEWER = "viewer"
+    DESKTOP_ROLES = (MANAGER, OPERATOR, VIEWER)
     company = models.ForeignKey(Company, on_delete=models.PROTECT)
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
     driver = models.OneToOneField("fleet.Driver", null=True, blank=True, on_delete=models.PROTECT)
-    role = models.CharField(max_length=10, choices=[(DRIVER, "Motorista"), (MANAGER, "Gestor")])
+    role = models.CharField(max_length=10, choices=[(DRIVER, "Motorista"), (MANAGER, "Gestor"), (OPERATOR, "Operador"), (VIEWER, "Consulta")])
     active = models.BooleanField(default=True)
 
 
@@ -33,6 +36,10 @@ class CompanyVehicle(models.Model):
     label = models.CharField(max_length=100, help_text="Placa e identificação para o aplicativo")
     drivers = models.ManyToManyField(Member, blank=True)
     active = models.BooleanField(default=True)
+
+
+    def __str__(self):
+        return self.label
 
 
     @transaction.atomic
@@ -68,6 +75,8 @@ class Leg(models.Model):
     trip = models.ForeignKey(Trip, related_name="legs", on_delete=models.PROTECT)
     position = models.PositiveIntegerField()
     destination = models.CharField(max_length=300)
+    destination_latitude = models.FloatField(null=True, blank=True)
+    destination_longitude = models.FloatField(null=True, blank=True)
     started_at = models.DateTimeField(null=True, blank=True)
     ended_at = models.DateTimeField(null=True, blank=True)
     started_km = models.PositiveIntegerField(null=True, blank=True)

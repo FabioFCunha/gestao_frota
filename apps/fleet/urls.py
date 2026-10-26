@@ -5,13 +5,12 @@ from .sync_vehicle_views import VehicleSyncAPIView
 from .sync_driver_views import DriverSyncAPIView
 from .geocoding import geocode_bdt
 from rest_framework.routers import DefaultRouter
-from .views import MaintenanceViewSet, VehicleViewSet, VehicleCustodyViewSet, VehicleInspectionViewSet, VehicleFineViewSet, SEIProcessViewSet, DocumentViewSet, DashboardAPIView, LicensingCalendarViewSet
+from .views import MaintenanceViewSet, VehicleViewSet, VehicleCustodyViewSet, VehicleFineViewSet, SEIProcessViewSet, DocumentViewSet, DashboardAPIView, LicensingCalendarViewSet
 
 router = DefaultRouter()
 router.register("vehicles", VehicleViewSet)
 router.register("vehicle-custodies", VehicleCustodyViewSet)
 router.register("maintenances", MaintenanceViewSet)
-router.register("vehicle-inspections", VehicleInspectionViewSet)
 router.register("vehicle-fines", VehicleFineViewSet)
 router.register("sei-processes", SEIProcessViewSet)
 router.register("documents", DocumentViewSet)

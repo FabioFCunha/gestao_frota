@@ -1,10 +1,19 @@
+import {attachAddresses} from './addresses.mjs';
 import {activeLeg,nextLeg,parseKM,destinations,canSend,googleURL,wazeURL} from './rules.mjs';
 const $=id=>document.getElementById(id), API='/api/driver/';
 let boot=null,trip=null,busy=false,watch=null,trackingConsent=false,formKey='',lastFix=0,installPrompt=null;
 const date=v=>v?new Date(v).toLocaleString('pt-BR'):'—';
+async function searchAddresses(query,signal){
+ const response=await fetch(API+'addresses/?q='+encodeURIComponent(query),{credentials:'same-origin',cache:'no-store',signal,headers:{Accept:'application/json'}});
+ if(!response.ok)throw Error('Busca indisponível');
+ return response.json();
+}
+const addressPickers=Object.fromEntries(['destinations','append'].map(id=>[id,attachAddresses($(id),searchAddresses)]));
+
 function message(text){$('message').textContent=text;}
 function lockScreen(){
  stopGPS();trip=null;boot=null;
+ Object.values(addressPickers).forEach(p=>p.clear());
  $('identity').textContent='Confirme sua sessão para continuar.';
  for(const id of ['create','trip','transition','extra'])$(id).hidden=true;
  $('history').replaceChildren();$('history-detail').replaceChildren();
@@ -105,7 +114,10 @@ function showLegs(target,legs){
 }
 function orders(){
  const current=$('order').value;
- $('order').replaceChildren(new Option('Sem OS',''));
+ $('order').replaceChildren(new Option(boot.requires_exit_order?'Selecione a OS':'Sem OS',''));
+ $('order').required=!!boot.requires_exit_order;
+ $('order-label').textContent=boot.requires_exit_order?'Ordem de saída atribuída a você':'Ordem de saída (opcional)';
+ $('os-help').textContent=boot.requires_exit_order&&!boot.exit_orders.length?'Nenhuma OS pendente atribuída a você. Solicite a saída ao gestor ou operador.':'';
  for(const o of boot.exit_orders.filter(o=>String(o.vehicle)===$('vehicle').value))$('order').add(new Option(o.number+' · '+o.destination,o.id));
  if([...$('order').options].some(o=>o.value===current))$('order').value=current;
 }
@@ -121,7 +133,7 @@ function render(){
  $('transition-title').textContent=active?'Registrar chegada':'Iniciar próximo trecho';
  $('destination').textContent=next.destination;
  $('navigation').hidden=!active;
- $('google').href=googleURL(next.destination);$('waze').href=wazeURL(next.destination);
+ $('google').href=googleURL(next.destination,next.destination_latitude,next.destination_longitude);$('waze').href=wazeURL(next.destination,next.destination_latitude,next.destination_longitude);
  $('km-label').textContent=active?'KM final do painel':'Confirme o KM inicial do painel';
  $('transition-submit').textContent=active?'Concluir trecho':'Iniciar trecho';
  $('gps-start').hidden=!active;
@@ -134,12 +146,16 @@ function render(){
  $('notes').value='';$('photo').value='';
  $('checklist').replaceChildren();
  for(const [index,name] of boot.checklist_items.entries()){
- const row=el('div',undefined,'check'),label=el('label',name),select=el('select'),noteLabel=el('label','Descreva o problema'),note=el('textarea');
- select.id='check-'+index;label.htmlFor=select.id;select.name=name;select.required=true;
- for(const [text,value] of [['Selecione…',''],['Conforme','ok'],['Problema','problem'],['Não aplicável','na']])select.add(new Option(text,value));
- note.maxLength=2000;note.rows=2;noteLabel.hidden=true;noteLabel.append(note);
- select.addEventListener('change',()=>{noteLabel.hidden=select.value!=='problem';note.required=select.value==='problem';});
- row.append(label,select,noteLabel);$('checklist').append(row);
+ const row=el('fieldset',undefined,'check'),legend=el('legend',name),options=el('div',undefined,'check-options'),noteLabel=el('label','Descreva o problema'),note=el('textarea');
+ row.dataset.item=name;
+ for(const [text,value] of [['Conforme','ok'],['Problema','problem'],['Não aplicável','na']]){
+ const option=el('label',undefined,'check-option'),input=el('input'),caption=el('span',text);
+ input.type='radio';input.name='check-'+index;input.value=value;input.required=true;input.className='check-option-input';
+ input.addEventListener('change',()=>{noteLabel.hidden=input.value!=='problem';note.required=input.value==='problem';});
+ option.append(input,caption);options.append(option);
+ }
+ note.id='check-note-'+index;noteLabel.htmlFor=note.id;note.maxLength=2000;note.rows=2;noteLabel.hidden=true;noteLabel.append(note);
+ row.append(legend,options,noteLabel);$('checklist').append(row);
  }
  }
  if(!active)stopGPS();
@@ -192,17 +208,19 @@ $('order').addEventListener('change',()=>{
  if(order&&!$('destinations').value.trim())$('destinations').value=order.destination;
 });
 $('create-form').addEventListener('submit',event=>{event.preventDefault();void run(async()=>{
- const body={vehicle:Number($('vehicle').value),destinations:destinations($('destinations').value)};
+ const labels=destinations($('destinations').value);
+ const body={vehicle:Number($('vehicle').value),destinations:labels,destination_points:addressPickers.destinations.points(labels)};
+ if(boot.requires_exit_order&&!$('order').value)throw Error('Selecione a OS atribuída a você.');
  if($('order').value)body.exit_order=$('order').value;
- await command('trips/',body);$('destinations').value='';await refresh();message('BDT aberto. Confira a vistoria e inicie o primeiro trecho.');
+ await command('trips/',body);$('destinations').value='';addressPickers.destinations.clear();await refresh();message('BDT aberto. Confira a vistoria e inicie o primeiro trecho.');
 });});
 $('transition-form').addEventListener('submit',event=>{event.preventDefault();void run(async()=>{
  const leg=nextLeg(trip),active=activeLeg(trip);if(!leg)throw Error('Nenhum trecho pendente.');
  const checklist={};
- for(const row of $('checklist').children){const select=row.querySelector('select'),note=row.querySelector('textarea');
- if(!select.value)throw Error('Confira todos os itens da vistoria.');
- if(select.value==='problem'&&!note.value.trim())throw Error('Descreva cada problema.');
- checklist[select.name]={status:select.value,note:select.value==='problem'?note.value:''};
+ for(const row of $('checklist').children){const selected=row.querySelector('input[type="radio"]:checked'),note=row.querySelector('textarea');
+ if(!selected)throw Error('Confira todos os itens da vistoria.');
+ if(selected.value==='problem'&&!note.value.trim())throw Error('Descreva cada problema.');
+ checklist[row.dataset.item]={status:selected.value,note:selected.value==='problem'?note.value:''};
  }
  const result=await command('trips/'+trip.id+'/'+(active?'finish':'start')+'/',{leg:leg.id,km:parseKM($('km').value),checklist,notes:$('notes').value});
  if(active)stopGPS();
@@ -212,7 +230,8 @@ $('transition-form').addEventListener('submit',event=>{event.preventDefault();vo
  message(active?(result.closed_at?'BDT encerrado com sucesso.':'Chegada salva. Inicie o próximo trecho quando estiver pronto.'):'Trecho iniciado. Volte à PWA para registrar a chegada.');
 });});
 $('append-form').addEventListener('submit',event=>{event.preventDefault();void run(async()=>{
- await command('trips/'+trip.id+'/append/',{destinations:destinations($('append').value)});$('append').value='';await refresh();message('Destinos adicionados.');
+ const labels=destinations($('append').value);
+ await command('trips/'+trip.id+'/append/',{destinations:labels,destination_points:addressPickers.append.points(labels)});$('append').value='';addressPickers.append.clear();await refresh();message('Destinos adicionados.');
 });});
 $('close-form').addEventListener('submit',event=>{event.preventDefault();void run(async()=>{
  if(!confirm('Encerrar o BDT sem realizar os destinos restantes?'))return;

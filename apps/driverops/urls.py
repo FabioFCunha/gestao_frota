@@ -1,5 +1,6 @@
 from django.urls import path
 from . import views, pwa
+from .addresses import suggestions
 from .portal import dashboard
 from .management import management
 
@@ -15,6 +16,7 @@ urlpatterns = [
     path("login/", views.login),
     path("logout/", views.logout),
     path("bootstrap/", views.bootstrap),
+    path("addresses/", suggestions),
     path("trips/", views.trips),
     path("trips/<uuid:pk>/", views.detail),
     path("trips/<uuid:pk>/tracking/", views.tracking),

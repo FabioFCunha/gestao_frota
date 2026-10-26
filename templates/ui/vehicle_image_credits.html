@@ -1,0 +1,18 @@
+{% extends 'ui/base.html' %}
+{% load static %}
+{% block title %}Créditos das fotos | Gestão de Frotas{% endblock %}
+{% block heading %}Créditos das fotos{% endblock %}
+{% block content %}
+<article class="panel" style="max-width:1000px;margin:auto;">
+  <p>Fotografias ilustrativas dos modelos, provenientes do Wikimedia Commons. Ano, cor, acabamento e mercado podem diferir do veículo cadastrado.</p>
+  {% for photo in photos %}
+  <section style="padding:20px 0;border-bottom:1px solid #e2e8f0;">
+    <img src="{% static photo.image %}" alt="{{ photo.title }}" loading="lazy" style="height:110px;max-width:100%;object-fit:contain;">
+    <h3>{{ photo.title }}</h3>
+    <p>Autor: {{ photo.author }} · <a href="{{ photo.source }}" target="_blank" rel="noopener">Arquivo original no Wikimedia Commons</a> · <a href="{{ photo.license_url }}" target="_blank" rel="noopener">{{ photo.license }}</a></p>
+    <p>{{ photo.changes }}</p>
+  </section>
+  {% endfor %}
+  <p><a href="{% url 'dashboard' %}">Voltar ao dashboard</a></p>
+</article>
+{% endblock %}

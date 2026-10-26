@@ -101,6 +101,7 @@ class Driver(NamedModel):
     cnh_expiration = models.DateField("Validade CNH", null=True, blank=True)
 
     class Meta(NamedModel.Meta):
+        permissions = [("correct_driver_identity", "Pode corrigir CPF com documento e auditoria")]
         constraints = [
             models.UniqueConstraint(
                 models.Func(models.F("cpf"), models.Value(r"[^0-9]"), models.Value(""), models.Value("g"), function="REGEXP_REPLACE", output_field=models.CharField()),
@@ -114,6 +115,23 @@ class Driver(NamedModel):
             ),
         ]
 
+    @property
+    def whatsapp_url(self):
+        """Link para telefone brasileiro com DDD, sem alterar o cadastro."""
+        import re
+
+        raw_phone = (self.phone or "").strip()
+        if re.search(r"[^0-9+().\s-]", raw_phone):
+            return ""
+        digits = re.sub(r"[^0-9]", "", raw_phone)
+        if digits.startswith("0055"):
+            digits = digits[2:]
+        if len(digits) in (10, 11) and not raw_phone.startswith("+"):
+            digits = "55" + digits
+        if not re.fullmatch(r"55[1-9][0-9](?:[2-5][0-9]{7}|9[0-9]{8})", digits):
+            return ""
+        return "https://wa.me/" + digits
+
     def save(self, *args, **kwargs):
         import re
         from django.db import transaction
@@ -122,7 +140,7 @@ class Driver(NamedModel):
             if not self._state.adding:
                 previous = type(self).objects.using(using).select_for_update().get(pk=self.pk)
                 fields = kwargs.get("update_fields")
-                for field in ("cpf", "cnh_number"):
+                for field in ("cpf",):
                     if fields is not None and field not in fields:
                         continue
                     old = re.sub(r"[^0-9]", "", getattr(previous, field) or "")
@@ -390,6 +408,29 @@ class BDT(BaseModel):
         return normalize_km(self.ended_km) - normalize_km(self.started_km)
 
 
+class BDTIncidentFollowUp(BaseModel):
+    class Status(models.TextChoices):
+        PENDING = "PENDING", "Pendente"
+        IN_REVIEW = "IN_REVIEW", "Em análise"
+        RESOLVED = "RESOLVED", "Resolvido"
+
+    bdt = models.OneToOneField(BDT, on_delete=models.PROTECT, related_name="incident_followup")
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.PENDING)
+    responsible = models.CharField(max_length=150)
+    revision = models.PositiveIntegerField(default=0)
+
+
+class BDTIncidentUpdate(BaseModel):
+    followup = models.ForeignKey(BDTIncidentFollowUp, on_delete=models.PROTECT, related_name="history")
+    status = models.CharField(max_length=12, choices=BDTIncidentFollowUp.Status.choices)
+    responsible = models.CharField(max_length=150)
+    note = models.TextField()
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+
+
 class VehicleMileage(BaseModel):
     MANUAL = "MANUAL"
     INTEGRACAO = "INTEGRACAO"
@@ -616,3 +657,45 @@ class AuditLog(TenantModel):
     reason = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
+
+
+class DriverCNHPhoto(BaseModel):
+    driver = models.OneToOneField(
+        Driver, on_delete=models.CASCADE, related_name="cnh_photo",
+    )
+    document = models.ForeignKey(
+        Document, on_delete=models.PROTECT, related_name="driver_photos",
+    )
+    image = models.BinaryField(editable=False)
+    confirmed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL,
+        related_name="confirmed_driver_photos",
+    )
+
+
+class CNHImportJob(BaseModel):
+    class State(models.TextChoices):
+        PENDING = "pending", "Na fila"
+        RUNNING = "running", "Lendo documento"
+        READY = "ready", "Pronto para conferir"
+        CONFIRMED = "confirmed", "Conferência concluída"
+        FAILED = "failed", "Falha na leitura"
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    driver = models.ForeignKey(Driver, null=True, blank=True, on_delete=models.PROTECT)
+    document = models.ForeignKey(Document, null=True, blank=True, on_delete=models.PROTECT)
+    company_uuid = models.UUIDField(null=True, blank=True)
+    sector = models.CharField(max_length=40, blank=True)
+    file = models.FileField(upload_to="cnh_imports/%Y/%m/")
+    sha256 = models.CharField(max_length=64)
+    original_filename = models.CharField(max_length=255, blank=True)
+    photo = models.BinaryField(null=True, blank=True, editable=False)
+    state = models.CharField(max_length=12, choices=State.choices, default=State.PENDING, db_index=True)
+    attempts = models.PositiveSmallIntegerField(default=0)
+    error = models.CharField(max_length=500, blank=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+    duration_ms = models.PositiveIntegerField(null=True, blank=True)
+
+    @property
+    def duration_seconds(self):
+        return round(self.duration_ms / 1000, 1) if self.duration_ms is not None else None

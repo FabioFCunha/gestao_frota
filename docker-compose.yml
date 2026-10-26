@@ -31,11 +31,35 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('127.0.0.1',8000),timeout=2).close()"]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 12
     ports:
       - "127.0.0.1:8002:8000"
     volumes:
       - frota_media:/app/media
       - frota_static:/app/staticfiles
+
+  cnh_worker:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+    command: python manage.py cnh_import_worker
+    depends_on:
+      backend:
+        condition: service_healthy
+    volumes:
+      - frota_media:/app/media
+    mem_limit: 768m
+    cpus: 1.0
+
 
 volumes:
   frota_postgres_data:
