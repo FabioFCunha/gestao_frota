@@ -110,7 +110,7 @@
             <div class="dossier-driver-identity">
                 <span>Motorista</span>
                 <strong>{% if active_driver %}{{ active_driver.name }}{% else %}{{ motorista|default:"Não informado" }}{% endif %}</strong>
-                {% if active_driver.phone %}<span>{{ active_driver.phone }}</span>{% endif %}
+                {% if active_driver.phone %}<span>{% if active_driver.whatsapp_url %}<a href="{{ active_driver.whatsapp_url }}" target="_blank" rel="noopener noreferrer" aria-label="Abrir WhatsApp de {{ active_driver.name }}" title="Abrir WhatsApp">{{ active_driver.phone }}</a>{% else %}{{ active_driver.phone }}{% endif %}</span>{% endif %}
                 {% if vehicle.unit %}<span class="dossier-driver-unit">{{ vehicle.unit.name }}</span>{% endif %}
             </div>
         </div>

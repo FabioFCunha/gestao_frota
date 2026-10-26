@@ -42,7 +42,7 @@
      style="width:44px;height:58px;object-fit:cover;border-radius:6px;vertical-align:middle;margin-right:10px;">
 {% endif %}
 <strong>{{ d.name }}</strong>{% if not d.active %} <span class="tag">Inativo</span>{% endif %}</td>
-                    <td>{{ d.phone|default:"-" }}</td>
+                    <td>{% if d.whatsapp_url %}<a href="{{ d.whatsapp_url }}" target="_blank" rel="noopener noreferrer" aria-label="Abrir WhatsApp de {{ d.name }}" title="Abrir WhatsApp">{{ d.phone }}</a>{% else %}{{ d.phone|default:"-" }}{% endif %}</td>
                     <td>{{ d.cnh_number|default:"-" }} {{ d.cnh_category }}</td>
                     <td>
                         {% if d.cnh_expiration %}

@@ -115,6 +115,23 @@ class Driver(NamedModel):
             ),
         ]
 
+    @property
+    def whatsapp_url(self):
+        """Link para telefone brasileiro com DDD, sem alterar o cadastro."""
+        import re
+
+        raw_phone = (self.phone or "").strip()
+        if re.search(r"[^0-9+().\s-]", raw_phone):
+            return ""
+        digits = re.sub(r"[^0-9]", "", raw_phone)
+        if digits.startswith("0055"):
+            digits = digits[2:]
+        if len(digits) in (10, 11) and not raw_phone.startswith("+"):
+            digits = "55" + digits
+        if not re.fullmatch(r"55[1-9][0-9](?:[2-5][0-9]{7}|9[0-9]{8})", digits):
+            return ""
+        return "https://wa.me/" + digits
+
     def save(self, *args, **kwargs):
         import re
         from django.db import transaction
