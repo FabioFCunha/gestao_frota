@@ -996,12 +996,18 @@ def contract_edit(request, pk):
 def contract_detail(request, pk):
     from apps.fleet.models import Contract, Vehicle, VehicleDriverAssignment, VehicleCustody, VehiclePlate
 
-    from apps.fleet.sector_scope import apply_sector_scope
-    scoped_vehicle_ids = apply_sector_scope(Vehicle.objects.all(), request.user, request.GET.get("sector")).values_list("id", flat=True)
-    contract = get_object_or_404(
-        Contract.objects.select_related('renter').filter(vehicles__in=scoped_vehicle_ids).distinct(),
-        pk=pk,
+    from apps.fleet.sector_scope import apply_sector_scope, is_general_admin
+    from apps.fleet.tenant_scope import company_id
+
+    scoped_vehicles = apply_sector_scope(
+        Vehicle.objects.all(), request.user, request.GET.get("sector")
     )
+    contracts = Contract.objects.all()
+    if not company_id() and not is_general_admin(request.user):
+        contracts = contracts.filter(vehicles__in=scoped_vehicles).distinct()
+    # O contrato é autorizado pelo próprio cadastro/empresa. Não exigir
+    # veículos nem um JOIN obrigatório com a locadora para abrir o detalhe.
+    contract = get_object_or_404(contracts, pk=pk)
 
     active_assignments = (
         VehicleDriverAssignment.objects
@@ -1017,7 +1023,7 @@ def contract_detail(request, pk):
     )
 
     vehicles = (
-        Vehicle.objects
+        scoped_vehicles
         .filter(contract=contract)
         .select_related('brand', 'model', 'status')
         .prefetch_related(
