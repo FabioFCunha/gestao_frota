@@ -1,10 +1,12 @@
 from rest_framework import serializers
 
+from .bdt_incidents import detect_bdt_incident
 from .models import BDT
 from .utils import normalize_km
 
 
 class BDTSerializer(serializers.ModelSerializer):
+    incident_alert = serializers.SerializerMethodField()
     vehicle_plate = serializers.SerializerMethodField()
     driver_name = serializers.SerializerMethodField()
     km_status_display = serializers.SerializerMethodField()
@@ -43,6 +45,7 @@ class BDTSerializer(serializers.ModelSerializer):
             "latitude_retreat",
             "longitude_retreat",
             "note",
+            "incident_alert",
             "horus_active",
             "source_status",
             "source_created_at",
@@ -51,6 +54,9 @@ class BDTSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+
+    def get_incident_alert(self, obj):
+        return detect_bdt_incident(obj.note)
 
     def get_vehicle_plate(self, obj):
         if not obj.vehicle:
