@@ -2,4 +2,17 @@
 
 .address-suggestions ul{list-style:none;padding:0;margin:0}.address-suggestions button{display:block;text-align:left;width:100%;white-space:normal;overflow-wrap:anywhere}.address-suggestions p:empty{display:none}
 
+fieldset.check{min-width:0;margin:16px 0;padding:0 0 14px;border:0;border-bottom:1px solid #e2e8f0}
+.check legend{font-weight:600;padding:0;margin-bottom:10px}
+.check-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.check-option{position:relative;margin:0;font-size:14px}
+.check-option input.check-option-input{position:absolute;opacity:0;width:1px;height:1px;min-height:0;padding:0;margin:0;outline:0}
+.check-option span{display:flex;align-items:center;justify-content:center;text-align:center;min-height:52px;height:100%;padding:10px 6px;border:1px solid #94a3b8;border-radius:9px;background:#fff;color:#334155;cursor:pointer;overflow-wrap:anywhere}
+.check-option input:checked+span{border-width:2px;border-color:#0f766e;background:#ecfdf5;color:#065f46}
+.check-option input[value="problem"]:checked+span{border-color:#9f1239;background:#fff1f2;color:#9f1239}
+.check-option input[value="na"]:checked+span{border-color:#475569;background:#e2e8f0;color:#0f172a}
+.check-option input:checked+span:before{content:'✓';margin-right:5px}
+.check-option input:focus-visible+span{outline:3px solid #5eead4;outline-offset:2px}
+.check-option input:disabled+span{opacity:.5;cursor:wait}
+
 .brand-logo{display:block;width:150px;max-width:100%;height:auto;object-fit:contain;background:transparent;filter:brightness(0) invert(1) drop-shadow(0 0 1px #0b1e35) drop-shadow(0 0 6px rgba(56,189,248,.65)) drop-shadow(0 0 14px rgba(56,189,248,.25))}

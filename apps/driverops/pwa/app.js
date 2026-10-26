@@ -146,12 +146,16 @@ function render(){
  $('notes').value='';$('photo').value='';
  $('checklist').replaceChildren();
  for(const [index,name] of boot.checklist_items.entries()){
- const row=el('div',undefined,'check'),label=el('label',name),select=el('select'),noteLabel=el('label','Descreva o problema'),note=el('textarea');
- select.id='check-'+index;label.htmlFor=select.id;select.name=name;select.required=true;
- for(const [text,value] of [['Selecione…',''],['Conforme','ok'],['Problema','problem'],['Não aplicável','na']])select.add(new Option(text,value));
- note.maxLength=2000;note.rows=2;noteLabel.hidden=true;noteLabel.append(note);
- select.addEventListener('change',()=>{noteLabel.hidden=select.value!=='problem';note.required=select.value==='problem';});
- row.append(label,select,noteLabel);$('checklist').append(row);
+ const row=el('fieldset',undefined,'check'),legend=el('legend',name),options=el('div',undefined,'check-options'),noteLabel=el('label','Descreva o problema'),note=el('textarea');
+ row.dataset.item=name;
+ for(const [text,value] of [['Conforme','ok'],['Problema','problem'],['Não aplicável','na']]){
+ const option=el('label',undefined,'check-option'),input=el('input'),caption=el('span',text);
+ input.type='radio';input.name='check-'+index;input.value=value;input.required=true;input.className='check-option-input';
+ input.addEventListener('change',()=>{noteLabel.hidden=input.value!=='problem';note.required=input.value==='problem';});
+ option.append(input,caption);options.append(option);
+ }
+ note.id='check-note-'+index;noteLabel.htmlFor=note.id;note.maxLength=2000;note.rows=2;noteLabel.hidden=true;noteLabel.append(note);
+ row.append(legend,options,noteLabel);$('checklist').append(row);
  }
  }
  if(!active)stopGPS();
@@ -213,10 +217,10 @@ $('create-form').addEventListener('submit',event=>{event.preventDefault();void r
 $('transition-form').addEventListener('submit',event=>{event.preventDefault();void run(async()=>{
  const leg=nextLeg(trip),active=activeLeg(trip);if(!leg)throw Error('Nenhum trecho pendente.');
  const checklist={};
- for(const row of $('checklist').children){const select=row.querySelector('select'),note=row.querySelector('textarea');
- if(!select.value)throw Error('Confira todos os itens da vistoria.');
- if(select.value==='problem'&&!note.value.trim())throw Error('Descreva cada problema.');
- checklist[select.name]={status:select.value,note:select.value==='problem'?note.value:''};
+ for(const row of $('checklist').children){const selected=row.querySelector('input[type="radio"]:checked'),note=row.querySelector('textarea');
+ if(!selected)throw Error('Confira todos os itens da vistoria.');
+ if(selected.value==='problem'&&!note.value.trim())throw Error('Descreva cada problema.');
+ checklist[row.dataset.item]={status:selected.value,note:selected.value==='problem'?note.value:''};
  }
  const result=await command('trips/'+trip.id+'/'+(active?'finish':'start')+'/',{leg:leg.id,km:parseKM($('km').value),checklist,notes:$('notes').value});
  if(active)stopGPS();
