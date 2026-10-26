@@ -63,22 +63,6 @@
         <a class="primary-action" href="{% url 'vehicle_list' %}">← Voltar</a>
     </div>
 </section>
-{% if bdt_incident_count %}
-<section class="panel" role="status" style="margin-bottom:20px;border:1px solid #fbbf24;background:#fffbeb;color:#92400e;">
-    <h3 style="margin:0 0 8px;color:#92400e;">Atenção — possíveis sinistros / avarias em BDTs</h3>
-    <p>{{ bdt_incident_count }} BDT{{ bdt_incident_count|pluralize:"s" }} com indícios nas observações do motorista. Histórico para conferência; não indica pendência atual nem sinistro confirmado.</p>
-    {% for bdt in bdt_incident_alerts %}
-    <div style="padding:12px 0;border-top:1px solid #fde68a;">
-        <strong>{{ bdt.started_at|date:"d/m/Y H:i"|default:"Data não informada" }} — {{ bdt.incident_alert.categories|join:" · " }}</strong>
-        <p style="margin:6px 0;">{{ bdt.note|truncatechars:240 }}</p>
-        <a class="secondary-action" href="{% url 'bdt_list' %}?vehicle={{ vehicle.id }}&bdt={{ bdt.id }}">Conferir relato do BDT</a>
-    </div>
-    {% endfor %}
-    {% if bdt_incident_count > 5 %}<p>Exibidos os 5 relatos mais recentes. <a href="{% url 'bdt_list' %}?vehicle={{ vehicle.id }}">Consultar todos os BDTs do veículo</a>.</p>{% endif %}
-</section>
-{% endif %}
-
-
 <!-- KM E REVISÃO -->
 <section class="grid dossier-operational-grid">
     <article class="panel dossier-revision-card {% if revisao_status == 'DEVIDA' or revisao_status == 'VENCIDA' %}dossier-revision-card--due{% elif revisao_status == 'PROXIMA' %}dossier-revision-card--near{% endif %}">
@@ -288,16 +272,6 @@
             {% if bdt_page.has_next %}<a class="secondary-action" href="?bdt_page={{ bdt_page.next_page_number }}">Próxima</a>{% endif %}
         </div>
         {% endif %}
-        {% if bdt_operational_km is not None %}
-            <div style="margin-top:14px;padding:10px;background:#eef6ff;border-radius:4px;">
-                <strong>BDT Hórus — KM inicial → KM final</strong><br>
-            {{ bdt_latest_started_km }} km → {{ bdt_latest_ended_km }} km
-            ({{ bdt_latest_distance }} km percorridos)
-            — {{ bdt_latest_date|date:"d/m/Y H:i"|default:"Não informado" }}
-            — {{ bdt_latest_external_id }}
-            — {{ bdt_latest_operational.driver.name|default:"Não informado" }}
-        </div>
-        {% endif %}
     </article>
 </section>
 
@@ -343,8 +317,6 @@
         <div class="empty">Nenhuma manutenção registrada para este veículo.</div>
             {% endif %}
             {% if bdt_operational_km is not None %}
-            <li><strong>KM operacional BDT mais recente:</strong> {{ bdt_operational_km }} km</li>
-            <li><strong>Último BDT encerrado:</strong> {{ bdt_latest_date|date:"d/m/Y H:i"|default:"Não informado" }} ({{ bdt_latest_external_id }})</li>
             {% if bdt_revision_due %}<li style="color:#c0392b;"><strong>Alerta:</strong> KM operacional atingiu/superou o intervalo da revisão.</li>{% endif %}
             {% endif %}
             {% if bdt_inconsistencies %}<li style="color:#c0392b;"><strong>BDTs inconsistentes:</strong> {{ bdt_inconsistencies }} (indicador operacional; não é revisão mecânica).</li>{% endif %}
