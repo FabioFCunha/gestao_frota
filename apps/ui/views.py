@@ -743,6 +743,17 @@ def vehicle_dossier(request, pk):
     from django.core.paginator import Paginator
 
     bdt_qs = BDT.objects.filter(vehicle=vehicle).select_related('driver').order_by('-started_at', '-created_at')
+    from apps.fleet.bdt_incidents import detect_bdt_incident
+
+    bdt_incident_count = 0
+    bdt_incident_alerts = []
+    for bdt in bdt_qs:
+        bdt.incident_alert = detect_bdt_incident(bdt.note)
+        if bdt.incident_alert:
+            bdt_incident_count += 1
+            if len(bdt_incident_alerts) < 5:
+                bdt_incident_alerts.append(bdt)
+
     bdt_page = Paginator(bdt_qs, 3).get_page(request.GET.get('bdt_page', 1))
     bdt_total_km = 0
     bdt_total_valid = True
@@ -906,6 +917,8 @@ def vehicle_dossier(request, pk):
         'revisao_status': revisao_status,
         'obs_list': obs_list,
         'bdt_page': bdt_page,
+        'bdt_incident_count': bdt_incident_count,
+        'bdt_incident_alerts': bdt_incident_alerts,
         'bdt_summary': bdt_summary,
         'bdt_latest_operational': bdt_latest_operational,
         'bdt_latest_distance': bdt_latest_distance,
