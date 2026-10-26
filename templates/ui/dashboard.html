@@ -609,6 +609,45 @@
     </div>
 </section>
 
+{% if perms.fleet.view_contract %}
+{% if dashboard_alerts.contracts_expired or dashboard_alerts.contracts_expiring %}
+<section class="panel" aria-labelledby="contract-alerts-title" style="margin-bottom:24px;">
+    <div class="panel-title">
+        <div><h3 id="contract-alerts-title">Vencimento dos contratos</h3></div>
+        <a class="secondary-action" href="{% url 'contract_list' %}">Ver contratos</a>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:16px;">
+        {% if dashboard_alerts.contracts_expired %}
+        <div style="padding:14px;border:1px solid #fecaca;border-radius:12px;background:#fef2f2;">
+            <strong style="color:#b91c1c;">Vencidos — {{ dashboard_alerts.contracts_expired|length }}</strong>
+            <ul style="margin:10px 0 0;padding-left:20px;">
+                {% for c in dashboard_alerts.contracts_expired|dictsort:"ends_on" %}
+                <li style="margin:8px 0;">
+                    <a href="{% url 'contract_detail' c.id %}"><strong>Contrato {{ c.number }}</strong></a>
+                    <span style="display:block;color:#b91c1c;">Vencido em {{ c.ends_on|date:"d/m/Y" }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+        {% if dashboard_alerts.contracts_expiring %}
+        <div style="padding:14px;border:1px solid #fde68a;border-radius:12px;background:#fffbeb;">
+            <strong style="color:#92400e;">A vencer — {{ dashboard_alerts.contracts_expiring|length }}</strong>
+            <ul style="margin:10px 0 0;padding-left:20px;">
+                {% for c in dashboard_alerts.contracts_expiring|dictsort:"ends_on" %}
+                <li style="margin:8px 0;">
+                    <a href="{% url 'contract_detail' c.id %}"><strong>Contrato {{ c.number }}</strong></a>
+                    <span style="display:block;color:#92400e;">Vencimento em {{ c.ends_on|date:"d/m/Y" }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+    </div>
+</section>
+{% endif %}
+{% endif %}
+
 <section class="fd-strip">
     <div class="fd-filter-label">FILTROS</div>
     <button class="fd-chip active" type="button" data-filter="todos">
