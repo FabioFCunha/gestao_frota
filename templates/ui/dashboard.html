@@ -611,10 +611,10 @@
 
 {% if perms.fleet.view_contract %}
 {% if dashboard_alerts.contracts_expired or dashboard_alerts.contracts_expiring %}
-<section class="panel" aria-labelledby="contract-alerts-title" style="margin-bottom:24px;">
+<dialog id="contract-alerts-dialog" aria-labelledby="contract-alerts-title" style="width:min(720px,calc(100vw - 32px));max-height:80vh;overflow:auto;border:1px solid #e2e8f0;border-radius:16px;padding:20px;">
     <div class="panel-title">
         <div><h3 id="contract-alerts-title">Vencimento dos contratos</h3></div>
-        <a class="secondary-action" href="{% url 'contract_list' %}">Ver contratos</a>
+        <button type="button" class="secondary-action" id="contract-alerts-close" aria-label="Fechar alertas de contratos">Fechar</button>
     </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:16px;">
         {% if dashboard_alerts.contracts_expired %}
@@ -644,7 +644,8 @@
         </div>
         {% endif %}
     </div>
-</section>
+    <a class="secondary-action" href="{% url 'contract_list' %}">Ver contratos</a>
+</dialog>
 {% endif %}
 {% endif %}
 
@@ -661,6 +662,17 @@
         <span>CRLV vencido</span>
         <b>{{ plate_alert_counts.crlv_vencido }}</b>
     </button>
+    {% endif %}
+    {% if perms.fleet.view_contract %}
+    {% if dashboard_alerts.contracts_expired or dashboard_alerts.contracts_expiring %}
+    {% with expired=dashboard_alerts.contracts_expired|length upcoming=dashboard_alerts.contracts_expiring|length %}
+    <button class="fd-chip" type="button" id="contract-alerts-open" aria-haspopup="dialog" aria-controls="contract-alerts-dialog">
+        <i class="fd-dot {% if expired %}fd-dot--red{% endif %}" style="{% if not expired %}background:#f59e0b;{% endif %}"></i>
+        <span>Contratos</span>
+        <b>{{ expired|add:upcoming }}</b>
+    </button>
+    {% endwith %}
+    {% endif %}
     {% endif %}
     <div class="fd-search-wrap">
         <span class="fd-search-icon">⌕</span>
@@ -771,7 +783,7 @@
 
 <script>
 (function () {
-    var chips = document.querySelectorAll(".fd-chip");
+    var chips = document.querySelectorAll(".fd-chip[data-filter]");
     var cards = document.querySelectorAll(".vc");
     var counter = document.getElementById("visibleCount");
     var search = document.getElementById("plateSearch");
@@ -799,7 +811,7 @@
         button.addEventListener("click", function () {
             activeFilter = button.dataset.filter;
 
-            document.querySelectorAll(".fd-chip").forEach(function (chip) {
+            document.querySelectorAll(".fd-chip[data-filter]").forEach(function (chip) {
                 chip.classList.toggle("active", chip.dataset.filter === activeFilter);
             });
 
@@ -852,6 +864,16 @@
     modal.addEventListener("click", function (event) {
         if (event.target === modal) modal.style.display = "none";
     });
+})();
+</script>
+<script>
+(function () {
+    const button = document.getElementById("contract-alerts-open");
+    const dialog = document.getElementById("contract-alerts-dialog");
+    const close = document.getElementById("contract-alerts-close");
+    if (!button || !dialog || !close) return;
+    button.addEventListener("click", function () { dialog.showModal(); });
+    close.addEventListener("click", function () { dialog.close(); });
 })();
 </script>
 {% endblock %}
