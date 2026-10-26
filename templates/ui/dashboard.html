@@ -712,6 +712,7 @@
             </div>
 
             <div class="vc-badges-row">
+                <span class="vc-badge vc-badge--neutral" title="{% if v.driver_name %}Destinado a {{ v.driver_name }}{% else %}À disposição da administração da SEGOV{% endif %}">{% if v.driver_name %}Individual{% else %}Compartilhado{% endif %}</span>
                 <span class="vc-badge {% if v.crlv_tone == 'vc-danger' %}vc-badge--danger{% elif v.crlv_tone == 'vc-warning' %}vc-badge--warning{% elif v.crlv_tone == 'vc-muted' %}vc-badge--muted{% else %}vc-badge--success{% endif %}">CRLV {{ v.crlv_label }}</span>
                 <span class="vc-badge {% if v.cnh_tone == 'vc-danger' %}vc-badge--danger{% elif v.cnh_tone == 'vc-warning' %}vc-badge--warning{% elif v.cnh_tone == 'vc-muted' %}vc-badge--muted{% else %}vc-badge--success{% endif %}" title="{% if v.driver_name %}Motorista: {{ v.driver_name }}{% if v.cnh_expiration %} · Validade: {{ v.cnh_expiration|date:'d/m/Y' }}{% endif %}{% else %}Nenhum motorista vinculado{% endif %}">CNH {{ v.cnh_label }}</span>
             </div>
