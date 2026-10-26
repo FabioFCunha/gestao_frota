@@ -25,8 +25,8 @@ class BDTIncidentFollowUpTests(TestCase):
         self.user.user_permissions.add(*Permission.objects.filter(
             content_type__app_label='fleet', codename__in=['change_bdt', 'view_vehicle'],
         ))
-        self.adm = Sector.objects.get(slug='adm')
-        self.other_sector = Sector.objects.get(slug='lei-seca')
+        self.adm, _ = Sector.objects.get_or_create(slug='adm', defaults={'name': 'ADM'})
+        self.other_sector, _ = Sector.objects.get_or_create(slug='lei-seca', defaults={'name': 'Lei Seca'})
         self.user.sectors.add(self.adm)
         self.vehicle = Vehicle.objects.create(status=VehicleStatus.objects.create(name='Operacional'), sector=self.adm)
         self.bdt = BDT.objects.create(vehicle=self.vehicle, external_id=uuid.uuid4(),
