@@ -1,0 +1,25 @@
+from django.urls import path
+from . import views, pwa
+from .portal import dashboard
+from .management import management
+
+app_name = "driverops"
+urlpatterns = [
+    path("management/", management, name="management"),
+    path("app/", pwa.app),
+    path("app/manifest.webmanifest", pwa.manifest),
+    path("app/icon-<int:size>.png", pwa.icon),
+    path("app/signout/", pwa.signout),
+    path("app/<str:name>", pwa.asset),
+    path("panel/", dashboard),
+    path("login/", views.login),
+    path("logout/", views.logout),
+    path("bootstrap/", views.bootstrap),
+    path("trips/", views.trips),
+    path("trips/<uuid:pk>/", views.detail),
+    path("trips/<uuid:pk>/tracking/", views.tracking),
+    path("trips/<uuid:pk>/legs/<uuid:leg_id>/locations/", views.locations),
+    path("trips/<uuid:pk>/legs/<uuid:leg_id>/photos/", views.upload_photo),
+    path("trips/<uuid:pk>/<str:action>/", views.operation),
+    path("photos/<uuid:photo_id>/", views.photo),
+]

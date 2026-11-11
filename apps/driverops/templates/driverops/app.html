@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0f766e"><meta name="apple-mobile-web-app-capable" content="yes">
+<title>Transfrota Motorista</title><link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png"><link rel="stylesheet" href="style.css">
+<script type="module" src="app.js"></script></head>
+<body><main><header><div><small>TRANSFROTA</small><h1>Motorista</h1></div><button id="install" hidden>Instalar</button></header>
+<p id="identity">Conectando à empresa…</p>
+<aside class="notice"><strong>Teste pelo navegador</strong><p>O GPS funciona enquanto esta página estiver ativa. Ao abrir Maps/Waze, trocar de aplicativo ou bloquear a tela, a coleta pode parar. Volte aqui para registrar a chegada.</p></aside>
+<p id="message" role="status" aria-live="polite"></p>
+<section class="card"><h2>Conexão e localização</h2><p id="connection">Verificando sessão…</p><p id="gps">GPS parado</p>
+<p id="queue"></p><button id="sync">Sincronizar</button><button id="reload">Atualizar BDT</button><p id="pending" class="warning" hidden>Há uma operação aguardando confirmação. Sincronize antes de continuar.</p></section>
+<section id="create" class="card" hidden><h2>Abrir BDT</h2>
+<form id="create-form"><label>Veículo<select id="vehicle" required></select></label>
+<label>Ordem de saída (opcional)<select id="order"></select></label>
+<label>Destinos na ordem da viagem<textarea id="destinations" rows="4" placeholder="Um endereço completo por linha" required></textarea></label>
+<p class="muted">Inclua o retorno à base como último destino, se fizer parte desta viagem.</p><button type="submit">Abrir BDT</button></form></section>
+<section id="trip" class="card" hidden><h2 id="trip-title"></h2><p id="trip-opened"></p><div id="legs"></div></section>
+<section id="transition" class="card" hidden><h2 id="transition-title"></h2><p id="destination"></p>
+<div id="navigation" hidden><a id="google" class="button" target="_blank" rel="noopener">Google Maps</a><a id="waze" class="button secondary" target="_blank" rel="noopener">Waze</a></div>
+<form id="transition-form"><label id="km-label" for="km">KM do painel</label><input id="km" inputmode="numeric" pattern="[0-9]+" required autocomplete="off">
+<h3>Vistoria</h3><p class="muted">Confira cada item. N/A significa não aplicável.</p><div id="checklist"></div>
+<label>Observações<textarea id="notes" maxlength="2000" rows="2"></textarea></label><button id="transition-submit" type="submit"></button></form>
+<h3>Foto da vistoria</h3><form id="photo-form"><label>Fotografar ou escolher imagem<input id="photo" type="file" accept="image/jpeg,image/png" capture="environment" required></label><button type="submit">Salvar foto</button></form><p class="muted">As fotos precisam de conexão. O envio será confirmado na tela.</p>
+<button id="gps-start">Ativar localização nesta página</button>
+</section>
+<section id="extra" class="card" hidden><h2>Próximos destinos e retorno</h2><form id="append-form"><label>Um endereço completo por linha<textarea id="append" rows="2" required></textarea></label><button type="submit">Adicionar destinos</button></form>
+<form id="close-form"><h3>Encerrar antecipadamente</h3><label>Justificativa<textarea id="reason" minlength="5" maxlength="2000" required></textarea></label><button class="danger" type="submit">Encerrar BDT</button></form></section>
+<section class="card"><h2>Histórico</h2><div id="history"></div><div id="history-detail"></div></section>
+<footer><button id="signout" class="secondary">Sair da conta</button><p>Versão de homologação · confira o KM no painel do veículo.</p><p id="install-help">No Android, use o menu do navegador → Instalar aplicativo ou Adicionar à tela inicial. No iPhone, use Compartilhar → Adicionar à Tela de Início.</p></footer>
+</main></body></html>

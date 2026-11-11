@@ -1,0 +1,79 @@
+name: Driver app checks
+on:
+  pull_request:
+    paths:
+      - "apps/driverops/**"
+      - "config/driver*"
+      - "mobile/driver/**"
+      - ".github/workflows/driver-app.yml"
+permissions:
+  contents: read
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: driverops_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DJANGO_SETTINGS_MODULE: config.driver_settings
+      POSTGRES_DB: driverops_test
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_HOST: 127.0.0.1
+      DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1,testserver
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - run: python manage.py check
+      - run: python manage.py makemigrations driverops --check --dry-run
+      - run: python manage.py test apps.driverops --verbosity 2
+      - run: pip install playwright
+      - run: playwright install --with-deps chromium
+      - run: python manage.py test apps.driverops.tests_pwa_browser --verbosity 2
+        env:
+          PWA_BROWSER_TESTS: "1"
+  pwa:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: docker compose --env-file deploy/pwa/.env.example -f deploy/pwa/compose.yaml config --quiet
+        env:
+          PWA_SECRET_KEY: ci-placeholder-not-for-deployment
+          PWA_DB_PASSWORD: ci-placeholder-not-for-deployment
+      - run: node --check apps/driverops/pwa/app.js
+      - run: node --check apps/driverops/pwa/sw.js
+      - run: node --test apps/driverops/pwa/rules.test.mjs
+  mobile:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile/driver
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci --ignore-scripts
+      - name: Report dependency advisories (not a release approval)
+        run: |
+          npm audit --omit=dev --json > audit.json || true
+          node -e "const a=require('./audit.json'); console.log(JSON.stringify({metadata:a.metadata,vulnerabilities:a.vulnerabilities},null,2))"
+      - run: npx expo install --check
+      - run: npm run typecheck
+      - run: npx expo export --platform android --output-dir dist
+        env:
+          EXPO_PUBLIC_API_URL: https://homologacao.example.com/api/driver/
