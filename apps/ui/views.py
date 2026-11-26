@@ -2487,16 +2487,12 @@ def exit_order_create(request):
 @login_required
 @module_permission("fleet.view_vehicleexitorder")
 def exit_order_detail(request, pk):
-    from apps.fleet.models import AuditLog, VehicleExitOrder
+    from apps.fleet.models import VehicleExitOrder
     order = get_object_or_404(VehicleExitOrder.objects.select_related('vehicle__brand', 'vehicle__model', 'driver', 'opened_by', 'closed_by').prefetch_related('vehicle__plate_history'), pk=pk)
     validate_vehicle_scope(request.user, order.vehicle, request.GET.get("sector"))
-    audits = AuditLog.objects.filter(
-        entity_type='vehicle_exit_order', entity_id=order.id
-    ).select_related('user').order_by('created_at')
     return render(request, 'ui/exit_order_detail.html', {
         'order': order,
         'plate': _exit_order_plate(order.vehicle),
-        'audits': audits,
         'bdt_rows': exit_order_bdt_rows(order),
         'can_close': order.state == VehicleExitOrder.State.PENDING and can_close_vehicle_exit_order(request.user),
     })

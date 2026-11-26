@@ -83,6 +83,10 @@ class VehicleExitOrderTests(TestCase):
         self.assertEqual(order.closed_by_id, self.other.pk)
         from apps.fleet.models import AuditLog
         self.assertEqual(AuditLog.objects.get(action='ENCERRAMENTO OS SAÍDA', entity_id=order.pk).user_id, self.other.pk)
+        detail = self.client.get(reverse('exit_order_detail', args=[order.pk]))
+        self.assertContains(detail, 'BDT — abertura e fechamento')
+        self.assertContains(detail, 'Imprimir')
+        self.assertNotContains(detail, 'Log de auditoria')
         self.assertEqual(self.client.post(reverse('exit_order_return', args=[order.id]), {'returned_at': timezone.localtime(timezone.now()).strftime('%Y-%m-%dT%H:%M')}).status_code, 200)
 
     def test_required_fields_and_permissions(self):
