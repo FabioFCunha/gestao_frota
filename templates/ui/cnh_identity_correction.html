@@ -1,0 +1,16 @@
+{% extends 'ui/base.html' %}
+{% block heading %}Corrigir CPF com documento{% endblock %}
+{% block content %}
+<section class="panel" style="padding:24px;max-width:1000px;margin:auto;">
+<h2>{{ driver.name }}</h2>
+<p>CPF atual: <strong>{{ driver.cpf|default:"Não informado" }}</strong>. A correção preserva o motorista, BDTs, documentos e vínculos e registra quem alterou e a justificativa.</p>
+{% if form %}
+{% if document %}<a href="{% url 'cnh_original' document.pk %}" target="_blank" rel="noopener">Abrir PDF original para conferir</a>{% endif %}
+<p>Nome lido: {{ preview.name|default:"Não identificado" }} · CPF lido: {{ preview.cpf|default:"Não identificado" }}</p>
+<form method="post">{% csrf_token %}{{ form.as_p }}<button class="primary-action">Confirmar correção com auditoria</button></form>
+{% else %}
+<form method="post" enctype="multipart/form-data">{% csrf_token %}<input type="hidden" name="step" value="upload">{{ upload_form.as_p }}<button class="primary-action">Enviar CNH para conferir</button></form>
+{% endif %}
+<p><a href="{% url 'driver_cnh' driver.pk %}">Voltar à CNH do motorista</a></p>
+</section>
+{% endblock %}

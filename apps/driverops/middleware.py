@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.http import HttpResponseForbidden
 from django.db import transaction
 from django.utils.cache import add_never_cache_headers
@@ -20,20 +21,26 @@ class CompanyBoundaryMiddleware:
                 member=Member.objects.filter(user=user,active=True,company__active=True).select_related('company').first()
                 if member:
                     scope=Scope(company_id=member.company_id,actor_id=user.pk)
+        request.central_user_management = getattr(settings, "CENTRAL_USER_MANAGEMENT", False)
         request.company_mode=True
         request.company_member=member
         request.company=member.company if member else None
         request.company_manager=bool(member and member.role=='manager')
+        request.company_desktop=bool(member and member.role in Member.DESKTOP_ROLES)
+        request.company_horus = bool(member and str(member.company_id) in getattr(settings, 'HORUS_COMPANY_IDS', ()))
         token=set_scope(scope)
         try:
             common=('/entrar/','/sair/','/logout/','/minha-senha/','/static/')
             if not user.is_superuser:
-                if request.path.startswith(('/admin/','/usuarios/','/perfis/','/api/sync/','/media/')):
+                if request.path.startswith(('/admin/','/perfis/','/api/sync/','/media/')) or (request.path.startswith('/usuarios/') and not (getattr(settings, 'CENTRAL_USER_MANAGEMENT', False) and member and member.role == Member.MANAGER)):
                     return HttpResponseForbidden('Acesso exclusivo à administração da plataforma.')
                 if user.is_authenticated and not member and not request.path.startswith(common):
                     return HttpResponseForbidden('Usuário sem empresa ativa.')
                 if member and member.role=='driver' and not request.path.startswith(('/api/driver/',*common)):
                     return HttpResponseForbidden('Use o aplicativo do motorista.')
+            if (member and member.role == Member.VIEWER and request.method not in ('GET', 'HEAD', 'OPTIONS')
+                    and not request.path.startswith(common)):
+                return HttpResponseForbidden('Perfil Consulta permite somente leitura.')
             response=self.get_response(request)
             if member:
                 if "no-store" not in response.get("Cache-Control", ""):

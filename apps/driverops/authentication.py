@@ -19,6 +19,9 @@ class DeviceAuthentication(BaseAuthentication):
         ).first()
         if not session or not session.member.active or not session.member.company.active:
             raise AuthenticationFailed("Sessão expirada ou acesso desativado.")
+        from django.conf import settings
+        if getattr(settings, 'CENTRAL_USER_MANAGEMENT', False) and session.member.role != 'driver':
+            raise AuthenticationFailed('Use o sistema principal para este perfil.')
         from apps.fleet.tenant_scope import Scope, set_scope
         set_scope(Scope(company_id=session.member.company_id,actor_id=session.member.user_id))
         user = session.member.user

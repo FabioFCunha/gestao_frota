@@ -208,7 +208,8 @@ class CRLVTests(TestCase):
         self.assertEqual(extracted["bytes_read"], len(b"%PDF-1.4 CRLV TEST DATA"))
         self.assertTrue(document.versions.exists())
 
-    def test_create_vehicle_from_crlv_persists_technical_mapping_and_document_snapshot(self):
+    @patch("apps.fleet.crlv.extract_crlv_data", return_value={})
+    def test_create_vehicle_from_crlv_persists_technical_mapping_and_document_snapshot(self, _extract):
         document, _ = stage_crlv_document_for_creation(
             file_obj=SimpleUploadedFile("crlv.pdf", b"%PDF placeholder", content_type="application/pdf"),
             user=self.user,
@@ -323,7 +324,8 @@ class CRLVTests(TestCase):
         self.assertEqual(self.vehicle.crlvs.get(document=document1).exercise, 2025)
         self.assertEqual(self.vehicle.crlvs.get(document=document2).owner_name, "CS BRASIL FROTAS SA")
 
-    def test_create_vehicle_from_crlv_preserves_document_history(self):
+    @patch("apps.fleet.crlv.extract_crlv_data", return_value={})
+    def test_create_vehicle_from_crlv_preserves_document_history(self, _extract):
         document, extracted = stage_crlv_document_for_creation(
             file_obj=SimpleUploadedFile("crlv.pdf", b"%PDF placeholder", content_type="application/pdf"),
             user=self.user,

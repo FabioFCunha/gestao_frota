@@ -787,8 +787,9 @@ class VehicleInspectionTests(TestCase):
             vehicle=self.vehicle, type=self.type, status=self.status, user=self.user
         )
         serializer = VehicleSerializer(self.vehicle)
-        self.assertEqual(serializer.data["latest_inspection_status"], "Aprovada")
-        self.assertIsNotNone(serializer.data["latest_inspection_date"])
+        self.assertNotIn("latest_inspection_status", serializer.data)
+        self.assertNotIn("latest_inspection_date", serializer.data)
+        self.assertEqual(self.vehicle.inspections.count(), 1)
 
     def test_inspection_audit_log(self):
         from .services import record_vehicle_inspection
@@ -819,19 +820,20 @@ class VehicleInspectionTests(TestCase):
             "mileage": 30000
         }
         response = self.client.post("/api/vehicle-inspections/", payload)
-        self.assertEqual(response.status_code, 201)
-        self.assertEqual(self.vehicle.inspections.count(), 1)
-        self.assertEqual(self.vehicle.mileage_history.count(), 1)
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(self.vehicle.inspections.count(), 0)
+        self.assertEqual(self.vehicle.mileage_history.count(), 0)
 
     def test_api_readonly_user_cannot_delete(self):
-        # ViewSet uses permission_classes (IsAuthenticated). Deletion should be denied manually in perform_destroy.
+        # The retired endpoint must not delete historical records.
         from .services import record_vehicle_inspection
         insp = record_vehicle_inspection(
             vehicle=self.vehicle, type=self.type, status=self.status, user=self.user
         )
         self.client.force_authenticate(user=self.user)
         response = self.client.delete(f"/api/vehicle-inspections/{insp.id}/")
-        self.assertEqual(response.status_code, 403) # PermissionDenied
+        self.assertEqual(response.status_code, 404)
+        self.assertTrue(self.vehicle.inspections.filter(pk=insp.pk).exists())
 
 
 class VehicleFineTests(TestCase):
@@ -1254,7 +1256,7 @@ class DashboardTests(TestCase):
         data = response.json()
         self.assertIn("vehicle", data)
         self.assertIn("history", data)
-        self.assertIn("inspections", data)
+        self.assertNotIn("inspections", data)
         self.assertIn("maintenances", data)
         self.assertIn("fines", data)
         self.assertIn("documents", data)

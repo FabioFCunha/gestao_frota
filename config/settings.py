@@ -75,3 +75,6 @@ SYSTEM_CREATOR_EMAIL = os.getenv("SYSTEM_CREATOR_EMAIL", "fabiocunhaosp@gmail.co
 FLEET_SYNC_TOKEN = os.getenv("FLEET_SYNC_TOKEN", "")
 LOGIN_URL = "/entrar/"
 LOGIN_REDIRECT_URL = "/"
+
+# Photon-compatible address lookup; configure a dedicated instance for larger fleets.
+DRIVER_GEOCODER_URL = os.getenv("DRIVER_GEOCODER_URL", "https://photon.komoot.io/api/")

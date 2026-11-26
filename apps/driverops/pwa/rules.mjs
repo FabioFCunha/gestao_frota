@@ -10,5 +10,6 @@ export function destinations(text) {
   return items;
 }
 export function canSend(owner, current) { return String(owner)===String(current); }
-export function googleURL(destination) { return 'https://www.google.com/maps/dir/?api=1&travelmode=driving&dir_action=navigate&destination='+encodeURIComponent(destination); }
-export function wazeURL(destination) { return 'https://waze.com/ul?q='+encodeURIComponent(destination)+'&navigate=yes'; }
+function coordinates(latitude,longitude){return typeof latitude==='number'&&typeof longitude==='number'&&Number.isFinite(latitude)&&Number.isFinite(longitude)&&Math.abs(latitude)<=90&&Math.abs(longitude)<=180?latitude+','+longitude:null;}
+export function googleURL(destination,latitude,longitude) { return 'https://www.google.com/maps/dir/?api=1&travelmode=driving&dir_action=navigate&destination='+encodeURIComponent(coordinates(latitude,longitude)??destination); }
+export function wazeURL(destination,latitude,longitude) { const point=coordinates(latitude,longitude);return 'https://waze.com/ul?'+(point?'ll='+encodeURIComponent(point):'q='+encodeURIComponent(destination))+'&navigate=yes'; }

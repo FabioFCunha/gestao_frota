@@ -2,6 +2,7 @@
 {% block title %}{{ title }} · Gestão de Frotas{% endblock %}
 {% block heading %}{{ title }}{% endblock %}
 {% block content %}
+{% if request.central_user_management %}<p>Defina o perfil de acesso. Para Motorista, selecione o cadastro correspondente. O veículo será escolhido na criação da OS.</p>{% endif %}
 <section class="accounts-form-page">
   <div class="form-card">
     <p class="section-eyebrow">ACESSO AO SISTEMA</p>

@@ -59,27 +59,6 @@ class DossierActionsTests(TestCase):
             "notes": "Teste",
         }
 
-    def inspection_payload(self):
-        kind, _ = VehicleInspectionType.objects.get_or_create(name="Teste")
-        status, _ = VehicleInspectionStatus.objects.get_or_create(name="Aprovada")
-        return {
-            "vehicle": str(self.other.pk),
-            "type": str(kind.pk),
-            "status": str(status.pk),
-            "date": timezone.localtime().strftime("%Y-%m-%dT%H:%M"),
-            "inspector_name": "Responsável teste",
-            "inspection_moment": "AVULSA",
-            **{
-                "check_" + code: "CONFORME"
-                for code in (
-                    "pneus", "luzes", "vidros", "carroceria",
-                    "interior", "equipamentos", "vazamentos", "painel",
-                )
-            },
-            "mileage": "100",
-            "notes": "Teste",
-        }
-
     def test_maintenance_post_preserves_vehicle(self):
         url = reverse("maintenance_create") + "?vehicle=" + str(self.vehicle.pk)
         response = self.client.post(url, self.maintenance_payload())
@@ -97,103 +76,27 @@ class DossierActionsTests(TestCase):
         )
         self.assertFalse(Maintenance.objects.filter(vehicle=self.other).exists())
 
-    def test_inspection_post_preserves_vehicle(self):
-        response = self.client.post(
-            reverse("inspection_create", args=[self.vehicle.pk]),
-            self.inspection_payload(),
-        )
-        self.assertEqual(response.status_code, 302)
-        item = VehicleInspection.objects.get(vehicle=self.vehicle)
-        self.assertEqual(item.inspection_moment, "AVULSA")
-        self.assertEqual(item.checklist["version"], 1)
-        self.assertEqual(len(item.checklist["items"]), 8)
-        self.assertEqual(item.inspector_name, "Dossier Teste")
-        self.assertEqual(item.created_by, self.user)
-        self.assertEqual(response.url, reverse("inspection_list"))
-        self.assertFalse(VehicleInspection.objects.filter(vehicle=self.other).exists())
+    def test_retired_routes_cannot_read_or_create_inspections(self):
+        before = VehicleInspection.objects.count()
+        for url in ("/vistorias/", f"/vistorias/nova/{self.vehicle.pk}/",
+                    "/api/vehicle-inspections/"):
+            self.assertEqual(self.client.get(url).status_code, 404)
+            self.assertEqual(self.client.post(url, {}).status_code, 404)
+        self.assertEqual(VehicleInspection.objects.count(), before)
 
-    def test_other_sector_and_inactive_vehicle_are_blocked(self):
-        for vehicle in (self.other,):
-            self.assertEqual(self.client.get(
-                reverse("inspection_create", args=[vehicle.pk]),
-            ).status_code, 404)
-            self.assertEqual(self.client.get(
-                reverse("maintenance_create") + "?vehicle=" + str(vehicle.pk),
-            ).status_code, 404)
-        self.vehicle.active = False
-        self.vehicle.save()
-        self.assertEqual(self.client.get(
-            reverse("inspection_create", args=[self.vehicle.pk]),
-        ).status_code, 404)
-
-    def test_missing_permission_is_blocked(self):
-        self.user.user_permissions.clear()
-        self.assertEqual(self.client.get(
-            reverse("inspection_create", args=[self.vehicle.pk]),
-        ).status_code, 403)
-        self.assertEqual(self.client.get(
-            reverse("maintenance_create") + "?vehicle=" + str(self.vehicle.pk),
-        ).status_code, 403)
-
-    def test_invalid_forms_do_not_create_records(self):
-        self.assertEqual(self.client.post(
-            reverse("inspection_create", args=[self.vehicle.pk]), {},
-        ).status_code, 200)
-        self.assertEqual(self.client.post(
-            reverse("maintenance_create") + "?vehicle=" + str(self.vehicle.pk), {},
-        ).status_code, 200)
-        self.assertFalse(VehicleInspection.objects.filter(vehicle=self.vehicle).exists())
-        self.assertFalse(Maintenance.objects.filter(vehicle=self.vehicle).exists())
-
-
-    def test_problem_requires_observation(self):
-        payload = self.inspection_payload()
-        payload["check_pneus"] = "PROBLEMA"
-        response = self.client.post(
-            reverse("inspection_create", args=[self.vehicle.pk]), payload,
-        )
-        self.assertEqual(response.status_code, 200)
-        self.assertIn("note_pneus", response.context["form"].errors)
-        self.assertFalse(VehicleInspection.objects.filter(vehicle=self.vehicle).exists())
-
-
-    def test_operational_group_can_register_inspection(self):
-        from django.contrib.auth.models import Group
-        self.user.user_permissions.clear()
-        self.user.groups.add(Group.objects.get(name="Operacional"))
-        self.assertEqual(self.client.get(
-            reverse("inspection_create", args=[self.vehicle.pk]),
-        ).status_code, 200)
-        response = self.client.post(
-            reverse("inspection_create", args=[self.vehicle.pk]),
-            self.inspection_payload(),
-        )
-        self.assertEqual(response.status_code, 302)
-        item = VehicleInspection.objects.get(vehicle=self.vehicle)
-        self.assertEqual(item.created_by, self.user)
-        self.assertEqual(len(item.checklist["items"]), 8)
-        self.assertEqual(self.client.get(
-            reverse("inspection_create", args=[self.other.pk]),
-        ).status_code, 404)
-
-    def test_checklist_history_renders_and_escapes_observations(self):
-        from django.template.loader import render_to_string
-        payload = self.inspection_payload()
-        payload["check_pneus"] = "PROBLEMA"
-        payload["note_pneus"] = "<script>alert(1)</script>"
-        response = self.client.post(
-            reverse("inspection_create", args=[self.vehicle.pk]), payload,
-        )
-        self.assertEqual(response.status_code, 302)
-        inspection = VehicleInspection.objects.get(vehicle=self.vehicle)
-        html = render_to_string(
-            "ui/inspection_checklist.html", {"inspection": inspection},
-        )
-        self.assertIn("Ver checklist", html)
-        self.assertIn("Com problema", html)
-        self.assertIn("&lt;script&gt;", html)
-        self.assertNotIn("<script>", html)
-        inspection.checklist = {}
-        self.assertNotIn("Ver checklist", render_to_string(
-            "ui/inspection_checklist.html", {"inspection": inspection},
+    def test_menu_and_dossier_omit_retired_section(self):
+        self.user.user_permissions.add(*Permission.objects.filter(
+            content_type__app_label="fleet", codename="view_vehicle",
         ))
+        response = self.client.get(reverse("vehicle_dossier", args=[self.vehicle.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "Vistorias")
+        self.assertNotContains(response, "/vistorias/")
+        self.assertContains(response, "Multas")
+
+    def test_legacy_operational_group_has_no_new_access(self):
+        from django.contrib.auth.models import Group
+        self.user.groups.add(Group.objects.get(name="Operacional"))
+        response = self.client.get("/")
+        self.assertEqual(response.status_code, 403)
+        self.assertNotIn("Location", response)

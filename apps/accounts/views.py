@@ -4,7 +4,7 @@ from django.contrib.auth.views import PasswordChangeView
 from django.core.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404, redirect, render
 
-from .decorators import system_creator_required
+from .decorators import system_creator_required, user_management_required
 from .forms import FleetPasswordChangeForm, GroupForm, UserForm
 from .models import User
 
@@ -15,15 +15,23 @@ def _ensure_default_groups():
         Group.objects.get_or_create(name=name)
 
 
-@system_creator_required
+@user_management_required
 def user_list(request):
+    from django.conf import settings
+    if getattr(settings, 'CENTRAL_USER_MANAGEMENT', False) and getattr(request, 'company_manager', False):
+        from apps.driverops import accounts as central_accounts
+        return central_accounts.user_list(request)
     _ensure_default_groups()
     users = User.objects.prefetch_related("groups").order_by("first_name", "last_name", "email")
     return render(request, "accounts/user_list.html", {"users": users})
 
 
-@system_creator_required
+@user_management_required
 def user_create(request):
+    from django.conf import settings
+    if getattr(settings, 'CENTRAL_USER_MANAGEMENT', False) and getattr(request, 'company_manager', False):
+        from apps.driverops import accounts as central_accounts
+        return central_accounts.user_form(request)
     _ensure_default_groups()
     if request.method == "POST":
         form = UserForm(request.POST)
@@ -44,8 +52,12 @@ def user_create(request):
     return render(request, "accounts/user_form.html", {"form": form, "title": "Cadastrar usuário"})
 
 
-@system_creator_required
+@user_management_required
 def user_edit(request, pk):
+    from django.conf import settings
+    if getattr(settings, 'CENTRAL_USER_MANAGEMENT', False) and getattr(request, 'company_manager', False):
+        from apps.driverops import accounts as central_accounts
+        return central_accounts.user_form(request, pk)
     user = get_object_or_404(User, pk=pk)
     if user.is_system_creator and user.pk != request.user.pk:
         raise PermissionDenied
@@ -112,6 +124,20 @@ class FleetPasswordChangeView(PasswordChangeView):
     template_name = "accounts/password_change.html"
     form_class = FleetPasswordChangeForm
     success_url = "/"
+
+    def get_template_names(self):
+        if getattr(self.request, 'driver_app_surface', False):
+            return ['driverops/password_change.html']
+        return super().get_template_names()
+
+    def get_success_url(self):
+        from django.conf import settings
+        if getattr(settings, 'CENTRAL_USER_MANAGEMENT', False):
+            from apps.driverops.models import Member
+            from apps.driverops.surfaces import app_url, management_url
+            member = Member.objects.filter(user=self.request.user, active=True, company__active=True).first()
+            return app_url() if member and member.role == Member.DRIVER else management_url('/')
+        return super().get_success_url()
 
     def form_valid(self, form):
         response = super().form_valid(form)

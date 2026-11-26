@@ -15,7 +15,9 @@ class FleetAuthenticationForm(AuthenticationForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         company_mode = getattr(self.request, 'company_mode', False)
-        if company_mode:
+        if getattr(settings, 'CENTRAL_USER_MANAGEMENT', False):
+            self.fields['username'] = forms.EmailField(label='E-mail (login)', widget=forms.EmailInput(attrs={'autocomplete': 'username'}))
+        elif company_mode:
             self.fields['username'].label = 'Login ou e-mail'
             self.fields['username'].widget = forms.TextInput(attrs={'autocomplete': 'username'})
         if settings.DEBUG and not company_mode:
@@ -34,6 +36,12 @@ class FleetAuthenticationForm(AuthenticationForm):
 
     def clean(self):
         email = self.cleaned_data.get("username", "").strip()
+        if getattr(settings, 'CENTRAL_USER_MANAGEMENT', False):
+            matches = User.objects.filter(email__iexact=email)
+            if matches.count() != 1:
+                raise ValidationError('E-mail ou senha inválidos.')
+            self.cleaned_data['username'] = matches.get().username
+            return super().clean()
         if getattr(self.request, 'company_mode', False):
             if not User.objects.filter(username=email).exists():
                 matches = User.objects.filter(email__iexact=email)

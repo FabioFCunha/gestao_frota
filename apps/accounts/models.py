@@ -19,3 +19,12 @@ class User(AbstractUser):
     def is_system_creator(self):
         creator_email = getattr(settings, "SYSTEM_CREATOR_EMAIL", "fabiocunhaosp@gmail.com")
         return bool(self.email) and self.email.strip().casefold() == creator_email.strip().casefold()
+
+    def has_perm(self, perm, obj=None):
+        # Company roles take precedence over permissions left in legacy groups.
+        if getattr(settings, 'CENTRAL_USER_MANAGEMENT', False) and not self.is_superuser:
+            from apps.fleet.tenant_scope import company_id
+            if company_id():
+                from apps.driverops.backends import CompanyManagerBackend
+                return CompanyManagerBackend().has_perm(self, perm, obj)
+        return super().has_perm(perm, obj)

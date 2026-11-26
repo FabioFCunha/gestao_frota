@@ -67,12 +67,14 @@ class TenantTests(TestCase):
         self.assertIsNone(current_scope())
 
     def test_original_ui_all_modules_open_and_foreign_details_are_hidden(self):
-        for path in ('/', '/veiculos/', '/motoristas/', '/manutencoes/', '/multas/', '/vistorias/', '/contratos/', '/ordens-saida/'):
+        for path in ('/', '/veiculos/', '/motoristas/', '/manutencoes/', '/multas/', '/contratos/', '/ordens-saida/'):
             with self.subTest(path=path):
                 response = self.client.get(path)
                 self.assertEqual(response.status_code, 200)
                 self.assertNotContains(response, 'XYZ9Z99')
                 self.assertContains(response, 'Transportes Alfa')
+        self.assertEqual(self.client.get('/vistorias/').status_code, 404)
+        self.assertEqual(self.client.post('/api/vehicle-inspections/', {}).status_code, 404)
         response = self.client.get(reverse('vehicle_dossier', kwargs={'pk': self.va.pk}))
         self.assertEqual(response.status_code, 200)
         vehicle_list = self.client.get('/veiculos/')
@@ -151,7 +153,9 @@ class TenantTests(TestCase):
         extracted = {'name': 'Motorista Alfa', 'cpf': '12345678901', 'cnh_number': '12345678902', 'raw_text': 'CNH teste'}
         with scope(self.a, self.ua), patch('apps.fleet.cnh.extract_cnh_data', return_value=extracted):
             document, values = stage_cnh_document_for_creation(file_obj=SimpleUploadedFile('cnh.pdf', b'%PDF-1.4 teste'), user=self.ua)
-            self.assertEqual(values, extracted)
+            self.assertEqual({key:values[key] for key in extracted}, extracted)
+            self.assertIsInstance(values['_duration_ms'], int)
+            self.assertIn('_read_issues', values)
             self.assertEqual(document.versions.count(), 1)
             self.assertTrue(AuditLog.objects.filter(entity_id=document.pk).exists())
         with scope(self.b, self.ub):

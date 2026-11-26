@@ -47,24 +47,6 @@ urlpatterns = [
 ]
 
 
-from .dossier_actions import inspection_create
-
-urlpatterns += [
-    path(
-        "vistorias/nova/<uuid:vehicle_id>/",
-        inspection_create,
-        name="inspection_create",
-    ),
-]
-
-
-from .inspection_views import inspection_list
-
-urlpatterns += [
-    path("vistorias/", inspection_list, name="inspection_list"),
-]
-
-
 from django.urls import path as workshop_path
 from .views import workshop_quick_create
 
@@ -75,3 +57,47 @@ urlpatterns += [
         name="workshop_quick_create",
     ),
 ]
+
+urlpatterns += [
+    path(
+        "manutencoes/tipos/cadastro-rapido/",
+        views.maintenance_type_quick_create,
+        name="maintenance_type_quick_create",
+    ),
+]
+
+from .exit_order_edit import exit_order_edit
+
+urlpatterns += [
+    path(
+        "ordens-saida/<uuid:pk>/editar/",
+        exit_order_edit,
+        name="exit_order_edit",
+    ),
+]
+
+
+from .cnh_photo import cnh_photo_preview, driver_cnh_photo
+
+urlpatterns += [
+    path("cnh/<uuid:pk>/foto-previa/", cnh_photo_preview, name="cnh_photo_preview"),
+    path("motoristas/<uuid:pk>/foto-cnh/", driver_cnh_photo, name="driver_cnh_photo"),
+]
+
+from .cnh_safety import cnh_original, identity_correction
+urlpatterns += [
+    path("cnh/<uuid:pk>/original/", cnh_original, name="cnh_original"),
+    path("motoristas/<uuid:pk>/corrigir-cpf/", identity_correction, name="driver_identity_correction"),
+]
+
+from .cnh_imports import import_status, import_monitor
+urlpatterns += [
+    path("cnh/importacoes/", import_monitor, name="cnh_import_monitor"),
+    path("cnh/importacoes/<uuid:pk>/", import_status, name="cnh_import_status"),
+]
+
+from .driver_delete import driver_delete
+urlpatterns += [path("motoristas/<uuid:pk>/excluir/", driver_delete, name="driver_delete")]
+
+from .vehicle_images import vehicle_image_credits
+urlpatterns += [path('creditos-imagens-veiculos/', vehicle_image_credits, name='vehicle_image_credits')]

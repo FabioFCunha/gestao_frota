@@ -57,7 +57,6 @@ class VehicleViewSet(viewsets.ModelViewSet):
         models.Prefetch("driver_assignments", queryset=VehicleDriverAssignment.objects.filter(is_active=True)),
         "plate_history",
         "mileage_history",
-        "inspections"
     ).all()
     serializer_class = VehicleSerializer
     search_fields = ["plate_history__plate", "renavam", "contract__number"]
@@ -150,7 +149,7 @@ class VehicleViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["get"])
     def dossier(self, request, pk=None):
         from .serializers import (
-            VehicleHistorySerializer, MaintenanceSerializer, VehicleInspectionSerializer,
+            VehicleHistorySerializer, MaintenanceSerializer,
             VehicleFineSerializer, SEIProcessSerializer, DocumentSerializer
         )
         
@@ -159,8 +158,6 @@ class VehicleViewSet(viewsets.ModelViewSet):
             'plate_history',
             'mileage_history',
             'history',
-            'inspections__type',
-            'inspections__status',
             'maintenances__status',
             'maintenances__type',
             'fines__status',
@@ -192,7 +189,6 @@ class VehicleViewSet(viewsets.ModelViewSet):
                 {"mileage": m.mileage, "date": m.date, "origin": m.origin, "is_correction": m.is_correction}
                 for m in vehicle.mileage_history.order_by('-date')
             ],
-            "inspections": VehicleInspectionSerializer(vehicle.inspections.all(), many=True).data,
             "maintenances": MaintenanceSerializer(vehicle.maintenances.all(), many=True).data,
             "fines": VehicleFineSerializer(vehicle.fines.all(), many=True).data,
             "history": VehicleHistorySerializer(vehicle.history.order_by('-created_at'), many=True).data,
@@ -273,47 +269,6 @@ class MaintenanceViewSet(viewsets.ModelViewSet):
         except ValueError as e:
             return Response({"error": str(e)}, status=400)
             
-from .models import VehicleInspection
-from .serializers import VehicleInspectionSerializer
-
-class VehicleInspectionViewSet(viewsets.ModelViewSet):
-    queryset = VehicleInspection.objects.select_related("vehicle", "type", "status").filter(vehicle__active=True)
-
-    def get_queryset(self):
-        queryset = super().get_queryset()
-        return apply_sector_scope(queryset, self.request.user, self.request.query_params.get("sector"), "vehicle__sector")
-    serializer_class = VehicleInspectionSerializer
-    filterset_fields = ["vehicle", "type", "status"]
-
-    def perform_create(self, serializer):
-        from .services import record_vehicle_inspection
-        
-        validate_vehicle_scope(self.request.user, serializer.validated_data.get("vehicle"), self.request.query_params.get("sector"))
-
-        # intercept to use the service
-        try:
-            record_vehicle_inspection(
-                vehicle=serializer.validated_data["vehicle"],
-                type=serializer.validated_data["type"],
-                status=serializer.validated_data["status"],
-                user=self.request.user,
-                inspector_name=serializer.validated_data.get("inspector_name", ""),
-                mileage=serializer.validated_data.get("mileage"),
-                notes=serializer.validated_data.get("notes", ""),
-                date=serializer.validated_data.get("date")
-            )
-            # DRF requires setting an instance to serializer.instance for 201 response.
-            # But the service creates the instance. Let's just fetch it.
-            serializer.instance = VehicleInspection.objects.filter(vehicle=serializer.validated_data["vehicle"]).first()
-        except ValueError as e:
-            from rest_framework.exceptions import ValidationError
-            raise ValidationError(str(e))
-            
-    def perform_destroy(self, instance):
-        from rest_framework.exceptions import PermissionDenied
-        raise PermissionDenied("Vistorias não podem ser excluídas fisicamente para preservar o histórico.")
-
-
 from .models import VehicleFine
 from .serializers import VehicleFineSerializer
 

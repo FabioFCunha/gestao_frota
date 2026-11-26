@@ -1,0 +1,17 @@
+<style>
+.cnh-progress {display:flex;list-style:none;padding:0;margin:28px 0;color:#64748b;}
+.cnh-progress li {flex:1;position:relative;text-align:center;min-width:0;font-size:13px;}
+.cnh-progress li:not(:last-child):after {content:'';position:absolute;left:calc(50% + 20px);right:calc(-50% + 20px);top:16px;height:2px;background:#e2e8f0;}
+.cnh-progress li.is-done:after {background:#16894e;}
+.cnh-progress-circle {box-sizing:border-box;display:grid;place-items:center;position:relative;z-index:1;width:33px;height:33px;margin:0 auto 10px;border:2px solid #e2e8f0;border-radius:50%;background:#f4f6f8;font-weight:600;}
+.cnh-progress .is-done .cnh-progress-circle {background:#16894e;border-color:#16894e;color:#fff;}
+.cnh-progress .is-current .cnh-progress-circle {border-color:#2563eb;background:#e8f0ff;color:#2563eb;}
+.cnh-progress .is-current {color:#1d4ed8;font-weight:600;}
+@media(max-width:600px) {.cnh-progress li {font-size:11px;}}
+</style>
+<ol class="cnh-progress" aria-label="Etapas da CNH" data-cnh-progress>
+  <li class="{% if cnh_stage == 'upload' %}is-current{% else %}is-done{% endif %}" {% if cnh_stage == 'upload' %}aria-current="step"{% endif %}><span class="cnh-progress-circle" aria-hidden="true">{% if cnh_stage == 'upload' %}1{% else %}✓{% endif %}</span>Enviado</li>
+  <li class="{% if cnh_stage == 'reading' %}is-current{% elif cnh_stage == 'review' or cnh_stage == 'confirmed' %}is-done{% endif %}" {% if cnh_stage == 'reading' %}aria-current="step"{% endif %}><span class="cnh-progress-circle" aria-hidden="true">{% if cnh_stage == 'review' or cnh_stage == 'confirmed' %}✓{% else %}2{% endif %}</span>Leitura</li>
+  <li class="{% if cnh_stage == 'review' %}is-current{% elif cnh_stage == 'confirmed' %}is-done{% endif %}" {% if cnh_stage == 'review' %}aria-current="step"{% endif %}><span class="cnh-progress-circle" aria-hidden="true">{% if cnh_stage == 'confirmed' %}✓{% else %}3{% endif %}</span>Conferência</li>
+  <li class="{% if cnh_stage == 'confirmed' %}is-done{% endif %}"><span class="cnh-progress-circle" aria-hidden="true">{% if cnh_stage == 'confirmed' %}✓{% else %}4{% endif %}</span>Confirmação</li>
+</ol>

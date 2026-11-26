@@ -9,29 +9,26 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
-  <link rel="stylesheet" href="{% static 'ui/app.css' %}?v=36">
+  <link rel="stylesheet" href="{% static 'ui/app.css' %}?v=46">
 </head>
 <body>
   <aside class="sidebar">
 
     <!-- Brand -->
     <div class="sb-brand">
+      {% if request.company_mode %}
+      <img src="{% static 'images/transfrota-logo.png' %}" alt="Transfrota" class="tf-brand-logo">
+      {% else %}
       <div class="sb-brand-icon">
         {% if request.company %}<i data-lucide="truck" style="width:44px;height:44px;color:#fff"></i>{% else %}<img src="{% static 'images/operacao-lei-seca-logo.png' %}" alt="Logo" style="width:56px; height:56px; object-fit:contain; filter: drop-shadow(0 0 12px rgba(37, 99, 235, 0.5)) drop-shadow(0 0 4px rgba(255,255,255,0.2));">
       {% endif %}</div>
       <span class="brand-name" style="font-size: 13px !important; color: #94a3b8 !important; letter-spacing: 0.15em; margin-top: 8px;">{% if request.company %}TRANSFROTA{% else %}GESTÃO DE FROTAS{% endif %}</span>
+      {% endif %}
       {% if request.company %}<span style="color:#fff;text-align:center;margin-top:8px">{{ request.company.name }}</span>{% endif %}
     </div>
 
     <!-- Navigation -->
     <nav class="sb-nav">
-      {% if request.user.is_system_creator or perms.fleet.add_vehicleinspection or perms.fleet.view_vehicleinspection %}
-      <a class="sb-link {% if '/vistorias/' in request.path %}active{% endif %}" href="{% url 'inspection_list' %}">
-        <i data-lucide="clipboard-check" class="sb-icon"></i>
-        <span>Vistorias</span>
-      </a>
-      {% endif %}
-      {% if not request.inspection_only %}
       <a class="sb-link {% if request.path == '/' %}active{% endif %}" href="/">
         <i data-lucide="layout-dashboard" class="sb-icon"></i>
         <span>Dashboard</span>
@@ -40,7 +37,7 @@
         <i data-lucide="car" class="sb-icon"></i>
         <span>Veículos</span>
       </a>
-      <a class="sb-link {% if '/bdts/' in request.path %}active{% endif %}" href="{% if request.company %}/api/driver/panel/{% else %}/bdts/{% endif %}">
+      <a class="sb-link {% if '/bdts/' in request.path %}active{% endif %}" href="{% if request.company_horus %}/bdts/{% elif request.company %}{% if request.central_user_management %}/gestao/bdts/{% else %}/api/driver/panel/{% endif %}{% else %}/bdts/{% endif %}">
         <i data-lucide="route" class="sb-icon"></i>
         <span>BDTs</span>
       </a>
@@ -65,14 +62,16 @@
         <span>Ordens de saída</span>
       </a>
       {% if request.company_manager %}
-      <a class="sb-link" href="/api/driver/management/"><i data-lucide="shield-check" class="sb-icon"></i><span>Acessos e motoristas</span></a>
+      <a class="sb-link" href="{% if request.central_user_management %}/usuarios/{% else %}/api/driver/management/{% endif %}"><i data-lucide="shield-check" class="sb-icon"></i><span>Usuários</span></a>
       {% elif request.user.is_system_creator %}
       <a class="sb-link {% if '/usuarios/' in request.path or '/perfis/' in request.path %}active{% endif %}" href="{% url 'user_list' %}">
         <i data-lucide="shield-check" class="sb-icon"></i>
         <span>Usuários e permissões</span>
       </a>
       {% endif %}
-    {% endif %}
+      {% if request.company_desktop and request.central_user_management and not request.company_horus %}
+      <a class="sb-link" href="/gestao/bdts/"><span>Acompanhamento de BDTs</span></a>
+      {% endif %}
     </nav>
 
     <!-- Footer do usuário -->
@@ -81,7 +80,7 @@
         <div class="sb-avatar">{{ request.user.username|first|upper }}</div>
         <div class="sb-user-info">
           <span class="sb-user-email">{{ request.user.username }}</span>
-          <span class="sb-user-status"><span class="sb-online-dot"></span> Operador Conectado</span>
+          <span class="sb-user-status"><span class="sb-online-dot"></span> {% if request.company_member %}{{ request.company_member.get_role_display }} conectado{% else %}Operador conectado{% endif %}</span>
         </div>
       </div>
       <div class="sb-user-actions">

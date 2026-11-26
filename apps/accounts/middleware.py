@@ -3,7 +3,7 @@ from django.shortcuts import redirect
 
 class ForcePasswordChangeMiddleware:
     def process_view(self, request, view_func, view_args, view_kwargs):
-        return OperationalInspectionMiddleware(
+        return LegacyOperationalAccessMiddleware(
             self.get_response
         ).process_view(request, view_func, view_args, view_kwargs)
 
@@ -27,7 +27,7 @@ class ForcePasswordChangeMiddleware:
         return self.get_response(request)
 
 
-def is_inspection_only(user):
+def is_legacy_operational(user):
     if not user or not user.is_authenticated:
         return False
     if user.is_system_creator or user.is_superuser:
@@ -37,7 +37,9 @@ def is_inspection_only(user):
     return user.groups.filter(name="Operacional").exists()
 
 
-class OperationalInspectionMiddleware:
+class LegacyOperationalAccessMiddleware:
+    """Keep former inspection-only accounts restricted until their role is reassigned."""
+
     def __init__(self, get_response):
         self.get_response = get_response
 
@@ -47,8 +49,10 @@ class OperationalInspectionMiddleware:
     def process_view(self, request, view_func, view_args, view_kwargs):
         from django.core.exceptions import PermissionDenied
 
-        request.inspection_only = is_inspection_only(request.user)
-        if not request.inspection_only:
+        from django.conf import settings
+        if getattr(settings, 'CENTRAL_USER_MANAGEMENT', False) and getattr(request, 'company_member', None):
+            return None
+        if not is_legacy_operational(request.user):
             return None
 
         match = request.resolver_match
@@ -56,12 +60,9 @@ class OperationalInspectionMiddleware:
         namespace = match.namespace if match else ""
         allowed = {
             "login", "logout", "password_change",
-            "inspection_list", "inspection_create",
         }
         if not namespace and name in allowed:
             return None
-        if not namespace and name == "dashboard":
-            return redirect("inspection_list")
         raise PermissionDenied(
-            "Seu perfil permite acesso somente à seção Vistorias."
+            "Solicite ao gestor a atualização do seu perfil de acesso."
         )
