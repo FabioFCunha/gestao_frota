@@ -1,18 +1,40 @@
 from django import forms
+from django.apps import apps
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
+from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
-from apps.fleet.models import AuditLog, VehicleExitOrder
-from apps.fleet.sector_scope import validate_vehicle_scope
 from apps.accounts.decorators import module_permission
+from apps.fleet.driver_scope import apply_driver_sector_scope
+from apps.fleet.models import AuditLog, Driver, Vehicle, VehicleExitOrder
+from apps.fleet.sector_scope import apply_sector_scope, sector_filter_q, validate_vehicle_scope
 from .forms import VehicleExitOrderForm
+
+
+class ExitOrderEditForm(VehicleExitOrderForm):
+    version = forms.CharField(widget=forms.HiddenInput)
+
+    def __init__(self, *args, user, sector, **kwargs):
+        super().__init__(*args, **kwargs)
+        vehicle_scope = sector_filter_q(user, sector)
+        if vehicle_scope:
+            self.fields["vehicle"].queryset = self.fields["vehicle"].queryset.filter(
+                Q(pk=self.instance.vehicle_id) | vehicle_scope,
+            )
+        eligible_drivers = apply_driver_sector_scope(Driver.objects.filter(active=True), user, sector)
+        self.fields["driver"].queryset = Driver.objects.filter(
+            Q(pk=self.instance.driver_id) | Q(pk__in=eligible_drivers.values("pk")),
+        ).order_by("name")
 
 
 def _snapshot(order):
     return {
+        "vehicle_id": str(order.vehicle_id),
+        "vehicle": VehicleExitOrderForm.label_from_instance(order.vehicle),
         "driver_id": str(order.driver_id),
         "driver": order.driver.name,
         "departed_at": order.departed_at.isoformat(),
@@ -22,47 +44,60 @@ def _snapshot(order):
     }
 
 
+def _validate_assignment(form, order, changed):
+    vehicle_changed = "vehicle_id" in changed
+    if vehicle_changed and order.state == VehicleExitOrder.State.PENDING:
+        if VehicleExitOrder.objects.filter(
+            vehicle_id=order.vehicle_id, state=VehicleExitOrder.State.PENDING,
+        ).exclude(pk=order.pk).exists():
+            form.add_error("vehicle", "Esta viatura já possui uma OS pendente de retorno.")
+
+    if apps.is_installed("apps.driverops"):
+        trips = apps.get_model("driverops", "Trip").objects.filter(exit_order=order)
+        if vehicle_changed and trips.exists():
+            form.add_error("vehicle", "Esta OS possui um BDT vinculado à viatura atual.")
+        if (
+            "driver_id" in changed
+            and getattr(settings, "CENTRAL_USER_MANAGEMENT", False)
+            and trips.filter(closed_at=None).exists()
+        ):
+            form.add_error("driver", "Encerre o BDT vinculado antes de trocar o motorista da OS.")
+
+
 @login_required
 @module_permission("fleet.change_vehicleexitorder")
 def exit_order_edit(request, pk):
-    from .forms import VehicleExitOrderForm
-
-    # Reutiliza os widgets e validações sem executar o __init__ que exige vehicle.
-    class EditForm(forms.ModelForm):
-        version = forms.CharField(widget=forms.HiddenInput)
-
-        class Meta(VehicleExitOrderForm.Meta):
-            fields = ["driver", "departed_at", "destination", "reason", "notes"]
-
-        def __init__(self, *args, **kwargs):
-            super().__init__(*args, **kwargs)
-            from apps.fleet.driver_scope import apply_driver_sector_scope
-            from apps.fleet.models import Driver
-            from django.db.models import Q
-
-            self.fields["driver"].queryset = apply_driver_sector_scope(
-                Driver.objects.filter(
-                    Q(active=True) | Q(pk=self.instance.driver_id)
-                ),
-                request.user,
-                request.GET.get("sector"),
-            ).order_by("name")
-
+    sector = request.GET.get("sector")
+    data = request.POST if request.method == "POST" else None
     with transaction.atomic():
         queryset = VehicleExitOrder.objects.all()
-        if request.method == "POST":
+        locked_vehicle_id = None
+        if data is not None:
+            try:
+                vehicle_id = forms.UUIDField(required=False).clean(data.get("vehicle"))
+            except forms.ValidationError:
+                vehicle_id = None
+            if vehicle_id is not None:
+                # A abertura de OS e a abertura de BDT pelo app bloqueiam a viatura primeiro.
+                locked_vehicle_id = apply_sector_scope(
+                    Vehicle.objects.filter(pk=vehicle_id), request.user, sector,
+                ).select_for_update(of=("self",)).values_list("pk", flat=True).first()
             queryset = queryset.select_for_update()
         order = get_object_or_404(queryset, pk=pk)
-        validate_vehicle_scope(
-            request.user, order.vehicle, request.GET.get("sector")
-        )
+        validate_vehicle_scope(request.user, order.vehicle, sector)
         version = order.updated_at.isoformat()
         before = _snapshot(order)
 
-        form = EditForm(
-            request.POST if request.method == "POST" else None,
+        if data is not None and "vehicle" not in data:
+            data = data.copy()
+            data["vehicle"] = order.vehicle_id
+
+        form = ExitOrderEditForm(
+            data,
             instance=order,
             initial={"version": version},
+            user=request.user,
+            sector=sector,
         )
 
         if request.method == "POST" and form.is_valid():
@@ -85,17 +120,18 @@ def exit_order_edit(request, pk):
                     key for key in before if before[key] != after[key]
                 ]
                 if changed:
-                    from django.conf import settings
-                    if getattr(settings, 'CENTRAL_USER_MANAGEMENT', False) and 'driver_id' in changed:
-                        from apps.driverops.models import Trip
-                        if Trip.objects.filter(exit_order=order, closed_at=None).exists():
-                            form.add_error('driver', 'Encerre o BDT vinculado antes de trocar o motorista da OS.')
-                            return render(request, 'ui/exit_order_edit.html', {'form': form, 'order': order})
+                    if "vehicle_id" in changed and order.vehicle_id != locked_vehicle_id:
+                        form.add_error("vehicle", "Selecione novamente uma viatura do setor autorizado.")
+                    else:
+                        _validate_assignment(form, order, changed)
+                    if form.errors:
+                        return render(request, "ui/exit_order_edit.html", {"form": form, "order": order})
                     order.save(update_fields=[
-                        "driver", "departed_at", "destination",
+                        "vehicle", "driver", "departed_at", "destination",
                         "reason", "notes", "updated_at",
                     ])
                     labels = {
+                        "vehicle_id": "Viatura",
                         "driver": "Motorista",
                         "departed_at": "Data/hora da saída",
                         "destination": "Destino",
@@ -106,7 +142,8 @@ def exit_order_edit(request, pk):
                     for key, label in labels.items():
                         if key not in changed:
                             continue
-                        old, new = before[key], after[key]
+                        display_key = "vehicle" if key == "vehicle_id" else key
+                        old, new = before[display_key], after[display_key]
                         if key == "departed_at":
                             from django.utils.dateparse import parse_datetime
                             def display(value):

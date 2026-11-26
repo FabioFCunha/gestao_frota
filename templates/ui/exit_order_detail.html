@@ -71,7 +71,5 @@
     {% endfor %}
     <p>Informações do Hórus, disponíveis somente para consulta.</p>
   </article>
-
-  <article class="os-audit-card"><h3>Log de auditoria</h3><div class="os-audit-list">{% for audit in audits %}<div class="os-audit-entry"><span class="os-audit-avatar">{{ audit.user.username|default:"S"|first|upper }}</span><p><strong>{{ audit.action|capfirst }}</strong> por {{ audit.user.get_full_name|default:audit.user.username|default:"Sistema" }} em {{ audit.created_at|date:"d/m/Y H:i" }}</p>{% if audit.action == "EDIÇÃO OS SAÍDA" %}<div style="white-space:pre-wrap;overflow-wrap:anywhere;">{{ audit.reason }}</div>{% endif %}</div>{% empty %}<p class="os-audit-empty">Nenhum registro de auditoria encontrado.</p>{% endfor %}</div></article>
 </section>
 {% endblock %}

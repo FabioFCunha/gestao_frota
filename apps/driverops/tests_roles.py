@@ -3,7 +3,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
 from django.test import TestCase, Client, override_settings
 from django.utils import timezone
-from apps.fleet.models import Driver, VehicleExitOrder
+from apps.fleet.models import Driver, Vehicle, VehicleExitOrder
 from apps.fleet.tenant_scope import Scope, set_scope, reset_scope
 from .models import Member, Trip
 from . import tests_integration as integration
@@ -130,6 +130,43 @@ class CompanyRolesTests(TestCase):
                 close_vehicle_exit_order(order_id=order.pk, returned_at=timezone.now(), return_notes='', user=order.opened_by)
         finally:
             reset_scope(token)
+
+    def test_replacing_vehicle_updates_app_authorization_and_preserves_linked_bdt(self):
+        client, _ = self.driver_client()
+        order = self.open_os()
+        token = set_scope(Scope(company_id=self.company.pk))
+        try:
+            replacement = Vehicle.objects.create(status=self.vehicle.vehicle.status)
+        finally:
+            reset_scope(token)
+
+        url = f'/ordens-saida/{order.pk}/editar/'
+        payload = {
+            'driver': str(order.driver_id),
+            'departed_at': timezone.localtime(order.departed_at).strftime('%Y-%m-%dT%H:%M'),
+            'destination': order.destination,
+            'reason': order.reason,
+        }
+        response = self.client.post(url, {
+            **payload, 'vehicle': str(replacement.pk), 'version': order.updated_at.isoformat(),
+        }, HTTP_HOST='gestao.test')
+        self.assertEqual(response.status_code, 302, response.context and response.context['form'].errors)
+        order.refresh_from_db()
+        self.assertEqual(order.vehicle_id, replacement.pk)
+        boot = client.get('/api/driver/bootstrap/', HTTP_HOST='app.test').json()
+        self.assertEqual(len(boot['vehicles']), 1)
+        replacement_id = boot['vehicles'][0]['id']
+        self.assertNotEqual(replacement_id, self.vehicle.pk)
+        self.assertEqual(self.post_trip(client, exit_order=str(order.pk)).status_code, 400)
+        self.assertEqual(self.post_trip(client, vehicle=replacement_id, exit_order=str(order.pk)).status_code, 200)
+
+        response = self.client.post(url, {
+            **payload, 'vehicle': str(self.vehicle.vehicle_id), 'version': order.updated_at.isoformat(),
+        }, HTTP_HOST='gestao.test')
+        self.assertContains(response, 'Esta OS possui um BDT vinculado')
+        order.refresh_from_db()
+        self.assertEqual(order.vehicle_id, replacement.pk)
+        self.assertEqual(Trip.objects.get(exit_order=order).vehicle_id, replacement_id)
 
     def test_another_operator_can_close_company_order_but_foreign_operator_cannot(self):
         order = self.open_os()

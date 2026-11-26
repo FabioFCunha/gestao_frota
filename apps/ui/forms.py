@@ -1,4 +1,5 @@
 from django import forms
+from django.db.models import Q
 from apps.fleet.models import (
     Driver, Vehicle, VehicleFine, VehicleFineStatus,
     VehicleStatus, Brand, VehicleModel, Contract, Renter,
@@ -358,7 +359,12 @@ class VehicleExitOrderForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["vehicle"].queryset = Vehicle.objects.filter(active=True).select_related("brand", "model").prefetch_related("plate_history").order_by("brand__name", "model__name")
+        self.fields["vehicle"].queryset = (
+            Vehicle.objects.filter(Q(active=True) | Q(pk=self.instance.vehicle_id))
+            .select_related("brand", "model")
+            .prefetch_related("plate_history")
+            .order_by("brand__name", "model__name")
+        )
         self.fields["vehicle"].label_from_instance = self.label_from_instance
         self.fields["driver"].queryset = Driver.objects.filter(active=True).order_by("name")
 

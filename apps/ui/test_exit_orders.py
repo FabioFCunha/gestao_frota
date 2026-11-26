@@ -1,4 +1,5 @@
 from datetime import timedelta
+from uuid import uuid4
 
 from django.contrib.auth.models import Permission
 from django.test import TestCase
@@ -6,7 +7,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.accounts.models import User
-from apps.fleet.models import Driver, Vehicle, VehicleExitOrder, VehiclePlate, VehicleStatus, Sector
+from apps.fleet.models import AuditLog, BDT, Driver, Sector, Vehicle, VehicleExitOrder, VehiclePlate, VehicleStatus
 
 
 class VehicleExitOrderTests(TestCase):
@@ -81,9 +82,74 @@ class VehicleExitOrderTests(TestCase):
         self.assertEqual(order.state, VehicleExitOrder.State.CLOSED)
         self.assertEqual(order.opened_by_id, self.user.pk)
         self.assertEqual(order.closed_by_id, self.other.pk)
-        from apps.fleet.models import AuditLog
         self.assertEqual(AuditLog.objects.get(action='ENCERRAMENTO OS SAÍDA', entity_id=order.pk).user_id, self.other.pk)
+        detail = self.client.get(reverse('exit_order_detail', args=[order.pk]))
+        self.assertContains(detail, 'BDT — abertura e fechamento')
+        self.assertContains(detail, 'Imprimir')
+        self.assertNotContains(detail, 'Log de auditoria')
         self.assertEqual(self.client.post(reverse('exit_order_return', args=[order.id]), {'returned_at': timezone.localtime(timezone.now()).strftime('%Y-%m-%dT%H:%M')}).status_code, 200)
+
+    def test_edit_closed_order_changes_vehicle_and_preserves_return(self):
+        VehiclePlate.objects.create(vehicle=self.other_vehicle, plate='DEF4G56', kind=VehiclePlate.CURRENT)
+        payload = self.payload()
+        self.client.post(reverse('exit_order_create'), payload)
+        order = VehicleExitOrder.objects.get()
+        self.client.post(reverse('exit_order_return', args=[order.pk]), {
+            'returned_at': payload['departed_at'], 'return_notes': 'Retorno registrado',
+        })
+        order.refresh_from_db()
+        returned_at = order.returned_at
+        previous_bdt = BDT.objects.create(
+            external_id=uuid4(), vehicle=self.vehicle, driver=self.driver,
+            started_at=order.departed_at, started_km='321',
+        )
+        BDT.objects.create(
+            external_id=uuid4(), vehicle=self.other_vehicle, driver=self.driver,
+            started_at=order.departed_at, started_km='654',
+        )
+        url = reverse('exit_order_edit', args=[order.pk])
+        edit = self.client.get(url)
+        form = edit.context['form']
+        self.assertEqual(str(form['vehicle'].value()), str(self.vehicle.pk))
+        self.assertContains(edit, 'DEF4G56')
+
+        response = self.client.post(url, {
+            **payload, 'vehicle': str(self.other_vehicle.pk), 'version': order.updated_at.isoformat(),
+        })
+        self.assertRedirects(response, reverse('exit_order_detail', args=[order.pk]))
+        order.refresh_from_db()
+        self.assertEqual(order.vehicle_id, self.other_vehicle.pk)
+        self.assertEqual(order.state, VehicleExitOrder.State.CLOSED)
+        self.assertEqual(order.returned_at, returned_at)
+        self.assertEqual(order.return_notes, 'Retorno registrado')
+        detail = self.client.get(response.url)
+        self.assertContains(detail, 'DEF4G56')
+        self.assertContains(detail, '<strong>654</strong>', html=True)
+        self.assertNotContains(detail, '<strong>321</strong>', html=True)
+        previous_bdt.refresh_from_db()
+        self.assertEqual(previous_bdt.vehicle_id, self.vehicle.pk)
+        audit = AuditLog.objects.get(action='EDIÇÃO OS SAÍDA', entity_id=order.pk)
+        self.assertEqual(audit.old_values['vehicle_id'], str(self.vehicle.pk))
+        self.assertEqual(audit.new_values['vehicle_id'], str(self.other_vehicle.pk))
+        self.assertIn('ABC1D23', audit.reason)
+        self.assertIn('DEF4G56', audit.reason)
+
+    def test_edit_pending_order_rejects_occupied_and_out_of_scope_vehicles(self):
+        payload = self.payload()
+        self.client.post(reverse('exit_order_create'), payload)
+        order = VehicleExitOrder.objects.get()
+        url = reverse('exit_order_edit', args=[order.pk])
+        self.client.post(reverse('exit_order_create'), {**payload, 'vehicle': str(self.other_vehicle.pk)})
+        data = {**payload, 'vehicle': str(self.other_vehicle.pk), 'version': order.updated_at.isoformat()}
+        response = self.client.post(url, data)
+        self.assertIn('Esta viatura já possui uma OS pendente de retorno.', response.context['form'].errors['vehicle'])
+
+        Vehicle.objects.filter(pk=self.other_vehicle.pk).update(sector=Sector.objects.get(slug='lei-seca'))
+        response = self.client.post(url, data)
+        self.assertIn('vehicle', response.context['form'].errors)
+        order.refresh_from_db()
+        self.assertEqual(order.vehicle_id, self.vehicle.pk)
+        self.assertFalse(AuditLog.objects.filter(action='EDIÇÃO OS SAÍDA', entity_id=order.pk).exists())
 
     def test_required_fields_and_permissions(self):
         self.assertEqual(self.client.post(reverse('exit_order_create'), {}).status_code, 200)
